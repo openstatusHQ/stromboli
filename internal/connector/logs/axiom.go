@@ -113,6 +113,29 @@ func (a *Axiom) Count(ctx context.Context, q Query) (int64, error) {
 	return int64(f), nil
 }
 
+func (a *Axiom) Histogram(ctx context.Context, q Query, step time.Duration) ([]Bucket, error) {
+	msgField := ""
+	if q.Filter != "" {
+		var err error
+		if msgField, err = a.messageField(ctx, q.Selector); err != nil {
+			return nil, err
+		}
+	}
+	apl := fmt.Sprintf("%s | summarize n = count() by t = bin(_time, %ds)", a.withFilter(q, msgField), int64(step/time.Second))
+	res, err := a.query(ctx, apl, q.Start, q.End)
+	if err != nil {
+		return nil, err
+	}
+	var out []Bucket
+	for _, row := range res.rows() {
+		n, _ := row["n"].(float64)
+		if t := parseAxiomTime(row["t"]); !t.IsZero() {
+			out = append(out, Bucket{Start: t, Count: int64(n)})
+		}
+	}
+	return out, nil
+}
+
 // maxDiscoverDatasets bounds discovery on large organizations.
 const maxDiscoverDatasets = 50
 

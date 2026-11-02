@@ -166,3 +166,22 @@ func TestAxiomError(t *testing.T) {
 		t.Fatalf("err = %v", err)
 	}
 }
+
+func TestAxiomHistogram(t *testing.T) {
+	start := time.Date(2026, 11, 2, 10, 0, 0, 0, time.UTC)
+	f := &fakeAxiom{answer: func(apl string) string {
+		return table([]string{"t", "n"}, []any{start.Add(5 * time.Minute).Format(time.RFC3339)}, []any{3})
+	}}
+	ax, _ := NewAxiom(AxiomConfig{URL: f.server(t).URL, Token: "xaat-test", MessageField: "message"})
+	got, err := ax.Histogram(context.Background(), Query{Selector: "['logs']", Filter: "err", Start: start, End: start.Add(time.Hour)}, 5*time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || got[0].Count != 3 || !got[0].Start.Equal(start.Add(5*time.Minute)) {
+		t.Fatalf("buckets = %+v", got)
+	}
+	want := `['logs'] | where tostring(['message']) matches regex "err" | summarize n = count() by t = bin(_time, 300s)`
+	if len(f.queries) != 1 || f.queries[0] != want {
+		t.Fatalf("queries = %q", f.queries)
+	}
+}

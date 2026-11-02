@@ -64,6 +64,9 @@ func NewCloudWatch(ctx context.Context, cfg CloudWatchConfig) (*CloudWatch, erro
 	return &CloudWatch{client: client, poll: 500 * time.Millisecond}, nil
 }
 
+// insightsTime is the format of @timestamp and bin() values, in UTC.
+const insightsTime = "2006-01-02 15:04:05.000"
+
 // maxLogGroups is the Insights limit per query.
 const maxLogGroups = 50
 
@@ -118,7 +121,7 @@ func (c *CloudWatch) Query(ctx context.Context, q Query) ([]Line, error) {
 	lines := make([]Line, 0, len(rows))
 	for _, r := range rows {
 		l := Line{Text: r["@message"], Labels: map[string]string{}}
-		if t, err := time.Parse("2006-01-02 15:04:05.000", r["@timestamp"]); err == nil {
+		if t, err := time.Parse(insightsTime, r["@timestamp"]); err == nil {
 			l.Time = t.UTC()
 		}
 		if v := r["@log"]; v != "" {
@@ -152,6 +155,28 @@ func (c *CloudWatch) Count(ctx context.Context, q Query) (int64, error) {
 		return 0, fmt.Errorf("cloudwatch: unexpected count value %q", rows[0]["n"])
 	}
 	return int64(n), nil
+}
+
+func (c *CloudWatch) Histogram(ctx context.Context, q Query, step time.Duration) ([]Bucket, error) {
+	groups, commands, err := parseCloudWatchSelector(q.Selector)
+	if err != nil {
+		return nil, err
+	}
+	bin := fmt.Sprintf("bin(%ds)", int64(step/time.Second))
+	rows, err := c.run(ctx, groups, insightsQuery("", commands, q.Filter, "stats count(*) as n by "+bin), q.Start, q.End, 1000)
+	if err != nil {
+		return nil, err
+	}
+	var out []Bucket
+	for _, r := range rows {
+		t, err := time.Parse(insightsTime, r[bin])
+		if err != nil {
+			continue
+		}
+		n, _ := strconv.ParseFloat(r["n"], 64)
+		out = append(out, Bucket{Start: t.UTC(), Count: int64(n)})
+	}
+	return out, nil
 }
 
 // maxDiscoverGroups bounds discovery on large accounts.

@@ -3,10 +3,8 @@ package agent
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/anthropics/anthropic-sdk-go/v2"
@@ -196,27 +194,18 @@ var tools = []tool{
 			if filter == "" {
 				filter = logs.ErrorFilter
 			}
-			n := clamp(args.Buckets, 12, 24)
-			step := w.End.Sub(w.Start) / time.Duration(n)
+			q := logs.Query{Selector: sel, Filter: filter, Start: w.Start, End: w.End}
+			buckets, step, err := logs.Timeline(ctx, src, q, clamp(args.Buckets, 12, 24))
+			if err != nil {
+				return nil, err
+			}
 			type bucket struct {
 				Start string `json:"start"`
 				Count int64  `json:"count"`
 			}
-			out := make([]bucket, n)
-			errs := make([]error, n)
-			var wg sync.WaitGroup
-			for i := range n {
-				wg.Add(1)
-				go func() {
-					defer wg.Done()
-					start := w.Start.Add(time.Duration(i) * step)
-					c, err := src.Count(ctx, logs.Query{Selector: sel, Filter: filter, Start: start, End: start.Add(step)})
-					out[i], errs[i] = bucket{start.Format(time.RFC3339), c}, err
-				}()
-			}
-			wg.Wait()
-			if err := errors.Join(errs...); err != nil {
-				return nil, err
+			out := make([]bucket, len(buckets))
+			for i, b := range buckets {
+				out[i] = bucket{b.Start.Format(time.RFC3339), b.Count}
 			}
 			return map[string]any{"bucket_size": step.String(), "buckets": out}, nil
 		},

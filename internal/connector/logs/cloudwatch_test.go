@@ -152,3 +152,27 @@ func TestCloudWatchSelector(t *testing.T) {
 		t.Fatalf("got %v %q %v", groups, cmds, err)
 	}
 }
+
+func TestCloudWatchHistogram(t *testing.T) {
+	f := &fakeCloudWatch{answer: func(q string) string {
+		return "[[" + field("bin(300s)", "2026-11-02 10:05:00.000") + "," + field("n", "4") + "]]"
+	}}
+	cw := newTestCloudWatch(t, f)
+	start := time.Date(2026, 11, 2, 10, 0, 0, 0, time.UTC)
+	got, err := cw.Histogram(context.Background(), Query{Selector: "/ecs/api", Filter: "err", Start: start, End: start.Add(time.Hour)}, 5*time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || got[0].Count != 4 || !got[0].Start.Equal(start.Add(5*time.Minute)) {
+		t.Fatalf("buckets = %+v", got)
+	}
+	if q := f.started[0]["queryString"]; q != "filter @message like /err/ | stats count(*) as n by bin(300s)" {
+		t.Fatalf("query = %q", q)
+	}
+}
+
+// Both backends must be usable by investigations' log_timeline in one query.
+var (
+	_ Histogrammer = (*Axiom)(nil)
+	_ Histogrammer = (*CloudWatch)(nil)
+)
