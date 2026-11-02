@@ -14,6 +14,7 @@ import (
 	"sigs.k8s.io/yaml"
 
 	opensrev1 "github.com/openstatushq/opensre/gen/opensre/v1"
+	"github.com/openstatushq/opensre/internal/connector/logs"
 )
 
 var (
@@ -127,7 +128,7 @@ func Validate(services []*opensrev1.Service, opts ValidateOptions) []*opensrev1.
 		} else if opts.Connectors != nil {
 			if kind, ok := opts.Connectors[s.Logs.Source]; !ok {
 				add(s.Name, "logs.source", fmt.Sprintf("unknown connector %q", s.Logs.Source), true)
-			} else if kind != "loki" {
+			} else if !slices.Contains(logs.Kinds, kind) {
 				add(s.Name, "logs.source", fmt.Sprintf("connector %q is a %s connector, not a log connector", s.Logs.Source, kind), false)
 			}
 		}

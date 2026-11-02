@@ -1,6 +1,6 @@
 # opensre — plan
 
-> **Status (2026-11-02):** milestones 0–3 are built: skeleton, catalog, context (Loki + GitHub), and agent v1 with webhooks, Slack and the audit trail. See README.md. Remaining differences from this plan:
+> **Status (2026-11-02):** milestones 0–3 are built: skeleton, catalog, context (Loki, Axiom and CloudWatch Logs + GitHub), and agent v1 with webhooks, Slack and the audit trail. See README.md. Remaining differences from this plan:
 > - `protovalidate` is not wired yet; validation is in Go.
 > - The openstatus API connector (as a source of context) is not built; only the openstatus webhook trigger is.
 > - Slack steering is not built yet (milestone 5).
@@ -88,7 +88,7 @@ web/                    React app (later) – Vite + TypeScript, connect-es clie
 internal/secrets/       encryption of connector credentials at rest
 internal/knowledge/     runbooks, past incidents, memory notes (+ search)
 internal/connector/     interfaces + implementations
-    logs/  loki.go clickhouse.go cloudwatch.go
+    logs/  loki.go axiom.go cloudwatch.go clickhouse.go
     metrics/ prometheus.go
     deploys/ github.go
     openstatus/ client.go
@@ -154,7 +154,7 @@ Stored in opensre's DB and edited through the API (and later the UI). The YAML f
 ```
 
 - Validation runs on every API write and on import: it checks the schema, flags unknown dependencies and cycles, confirms that runbooks exist, and runs a test query against the log selector.
-- **Onboarding helper:** `CatalogService.DiscoverServices` lists the distinct `service_name` / `app` label values from the connected Loki and proposes one catalog entry per value. Users then only fill in owners and dependencies. The wizard will use it later. This is cheap discovery without taking on full auto-discovery.
+- **Onboarding helper:** `CatalogService.DiscoverServices` asks a log connector for the services it can see and proposes one catalog entry per service, with its selector filled in: Loki `service_name` / `app` label values, Axiom `service.name` / `app` field values per dataset (or one entry per dataset), and one entry per CloudWatch log group. Users then only fill in owners and dependencies. The wizard will use it later. This is cheap discovery without taking on full auto-discovery.
 - Load it into memory as a graph (`catalog.Graph`) with `Upstream(svc)`, `Downstream(svc)`, and `BlastRadius(svc)`.
 - Map alerts to services through `monitors:` (openstatus IDs) and alert labels (`service=`).
 
@@ -215,7 +215,8 @@ opensre does **not** ingest or store logs. It queries the customer's backend whe
    - It covers the OTel collector ClickHouse exporter, SigNoz, HyperDX/ClickStack, and Tinybird-style setups.
    - SQL is ideal for "error count vs baseline, grouped by message" queries.
    - Targeting the standard `otel_logs` table means one connector serves many stacks.
-3. **CloudWatch Logs, Elasticsearch/OpenSearch, Axiom, Datadog** later, ordered by user demand. Axiom and Datadog are SaaS, so they matter less for a self-hosted-first audience.
+3. **Axiom and CloudWatch Logs (built).** Axiom is queried with APL, CloudWatch with Logs Insights (async: start the query, then poll). Both filter on the message field with the same RE2 regexes as Loki.
+4. **Elasticsearch/OpenSearch, Datadog** later, ordered by user demand.
 
 The `LogSource` interface stays backend-neutral (service, window, filter, limit), so each new backend is just one file plus a fixture-based test.
 

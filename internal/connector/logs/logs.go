@@ -24,13 +24,23 @@ type Line struct {
 	Text   string            `json:"text"`
 }
 
+// Service is a service discovered in a log backend, with the selector that
+// returns its logs.
+type Service struct {
+	Name     string
+	Selector string
+}
+
+// Kinds lists the connector kinds that are log sources.
+var Kinds = []string{"loki", "axiom", "cloudwatch"}
+
 // Source is a log backend. Implementations must bound their responses.
 type Source interface {
 	Query(ctx context.Context, q Query) ([]Line, error)
 	// Count returns the number of lines matching q in [Start, End].
 	Count(ctx context.Context, q Query) (int64, error)
-	// Services lists candidate service names, for catalog onboarding.
-	Services(ctx context.Context) ([]string, error)
+	// Services proposes catalog services found in the backend, for onboarding.
+	Services(ctx context.Context) ([]Service, error)
 	// Check verifies connectivity and credentials.
 	Check(ctx context.Context) error
 }

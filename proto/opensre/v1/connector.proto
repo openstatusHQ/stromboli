@@ -6,7 +6,7 @@ package opensre.v1;
 // returned by the API.
 message Connector {
   string name = 1;
-  // One of: "loki", "github".
+  // One of: "loki", "axiom", "cloudwatch", "github".
   string kind = 2;
   // Non-secret config keys and values. Secret keys are listed with an empty value.
   map<string, string> config = 3;
@@ -16,6 +16,8 @@ message CreateConnectorRequest {
   string name = 1;
   string kind = 2;
   // loki: url, tenant_id, username, password, bearer_token
+  // axiom: token, url, org_id, message_field
+  // cloudwatch: region, access_key_id, secret_access_key, session_token, endpoint
   // github: token, base_url
   map<string, string> config = 3;
   // Replace an existing connector with the same name.

@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"slices"
+	"strings"
 
 	"github.com/openstatushq/opensre/internal/connector/deploys"
 	"github.com/openstatushq/opensre/internal/connector/logs"
@@ -28,10 +29,29 @@ var Kinds = map[string]kindSpec{
 		optional: []string{"tenant_id", "username", "password", "bearer_token"},
 		secret:   []string{"password", "bearer_token"},
 	},
+	"axiom": {
+		required: []string{"token"},
+		optional: []string{"url", "org_id", "message_field"},
+		secret:   []string{"token"},
+	},
+	"cloudwatch": {
+		optional: []string{"region", "access_key_id", "secret_access_key", "session_token", "endpoint"},
+		secret:   []string{"secret_access_key", "session_token"},
+	},
 	"github": {
 		optional: []string{"token", "base_url"},
 		secret:   []string{"token"},
 	},
+}
+
+// KindNames returns the supported kinds, sorted.
+func KindNames() []string {
+	names := make([]string, 0, len(Kinds))
+	for k := range Kinds {
+		names = append(names, k)
+	}
+	slices.Sort(names)
+	return names
 }
 
 // IsSecret reports whether key holds a secret for the given kind.
@@ -41,7 +61,7 @@ func IsSecret(kind, key string) bool { return slices.Contains(Kinds[kind].secret
 func Validate(kind string, config map[string]string) error {
 	spec, ok := Kinds[kind]
 	if !ok {
-		return fmt.Errorf("unknown connector kind %q (supported: loki, github)", kind)
+		return fmt.Errorf("unknown connector kind %q (supported: %s)", kind, strings.Join(KindNames(), ", "))
 	}
 	for _, k := range spec.required {
 		if config[k] == "" {
@@ -133,6 +153,15 @@ func (r *Registry) Logs(ctx context.Context, name string) (logs.Source, error) {
 			URL: cfg["url"], TenantID: cfg["tenant_id"], Username: cfg["username"],
 			Password: cfg["password"], BearerToken: cfg["bearer_token"],
 		})
+	case "axiom":
+		return logs.NewAxiom(logs.AxiomConfig{
+			URL: cfg["url"], Token: cfg["token"], OrgID: cfg["org_id"], MessageField: cfg["message_field"],
+		})
+	case "cloudwatch":
+		return logs.NewCloudWatch(ctx, logs.CloudWatchConfig{
+			Region: cfg["region"], AccessKeyID: cfg["access_key_id"], SecretAccessKey: cfg["secret_access_key"],
+			SessionToken: cfg["session_token"], Endpoint: cfg["endpoint"],
+		})
 	default:
 		return nil, fmt.Errorf("connector %q (%s) is not a log source", name, c.Kind)
 	}
@@ -159,14 +188,14 @@ func (r *Registry) Check(ctx context.Context, name string) error {
 		}
 		return err
 	}
-	switch c.Kind {
-	case "loki":
+	switch {
+	case slices.Contains(logs.Kinds, c.Kind):
 		src, err := r.Logs(ctx, name)
 		if err != nil {
 			return err
 		}
 		return src.Check(ctx)
-	case "github":
+	case c.Kind == "github":
 		gh, err := r.GitHub(ctx, name)
 		if err != nil {
 			return err

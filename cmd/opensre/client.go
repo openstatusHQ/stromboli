@@ -194,7 +194,7 @@ func connectorCmd(ctx context.Context, c clients, args []string) error {
 	switch args[0] {
 	case "add":
 		if len(pos) < 2 {
-			return errors.New("usage: opensre connector add <name> <kind> key=value... (kinds: loki, github)")
+			return errors.New("usage: opensre connector add <name> <kind> key=value... (kinds: loki, axiom, cloudwatch, github)")
 		}
 		cfg := map[string]string{}
 		for _, kv := range pos[2:] {

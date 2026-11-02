@@ -41,7 +41,7 @@ export OPENSRE_URL=http://localhost:8080 OPENSRE_API_TOKEN=...
 
 opensre connector add loki loki url=http://loki:3100            # + tenant_id, username, password, bearer_token
 opensre connector add github github token=ghp_...                # for deploys and commits
-opensre catalog discover loki > services.yaml                    # proposes one service per Loki service_name/app label
+opensre catalog discover loki > services.yaml                    # proposes one service per log stream/dataset/group (see below)
 opensre catalog import services.yaml --runbooks runbooks/        # add --prune to make the file authoritative
 opensre brief api --since 1h                                     # the context brief, no LLM involved
 opensre investigate api --description "5xx on /v1/monitors"      # streams the investigation live
@@ -73,6 +73,18 @@ Point your alerts at it:
   runbooks: [runbooks/api-5xx.md]
   monitors: ["openstatus:1234"]        # alert → service mapping
 ```
+
+### Log connectors
+
+| Kind | Add it | `logs.selector` | `catalog discover` proposes |
+|---|---|---|---|
+| `loki` | `connector add loki loki url=http://loki:3100` (+ `tenant_id`, `username`, `password`, `bearer_token`) | LogQL stream selector: `{service_name="api"}` | one service per `service_name` / `service` / `app` / `job` / `container` label value |
+| `axiom` | `connector add axiom axiom token=xaat-...` (+ `url` for other regions, `org_id` for personal tokens, `message_field`) | Start of an APL query: `['logs']` or `['logs'] \| where ['service.name'] == "api"` | one service per `service.name` / `service` / `app` value in each log dataset, or one per dataset |
+| `cloudwatch` | `connector add cw cloudwatch region=eu-west-1` (+ `access_key_id`, `secret_access_key`, `session_token`, `endpoint`) | Log group(s), optionally followed by Insights commands: `/ecs/api` or `/ecs/prod, /ecs/worker \| filter service = "api"` | one service per log group, named after its last path segment |
+
+Error filters are RE2 regexes applied to the log line: Loki's line, Axiom's message field (detected from `message`, `msg`, `body`, `log`, ... or set with `message_field`), CloudWatch's `@message`.
+
+Without `access_key_id`/`secret_access_key`, the CloudWatch connector uses the default AWS credential chain of the opensre server (environment, shared config, IAM role). It needs `logs:DescribeLogGroups`, `logs:StartQuery`, `logs:GetQueryResults` and `logs:StopQuery`.
 
 The catalog lives in opensre's database. YAML is its import/export format, so you can keep it in git and sync it from CI with `opensre catalog import --prune`.
 

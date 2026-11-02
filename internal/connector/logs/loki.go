@@ -113,7 +113,7 @@ func (l *Loki) Count(ctx context.Context, q Query) (int64, error) {
 // serviceLabels are checked in order when discovering services.
 var serviceLabels = []string{"service_name", "service", "app", "job", "container"}
 
-func (l *Loki) Services(ctx context.Context) ([]string, error) {
+func (l *Loki) Services(ctx context.Context) ([]Service, error) {
 	end := time.Now()
 	start := end.Add(-24 * time.Hour)
 	params := url.Values{
@@ -137,9 +137,9 @@ func (l *Loki) Services(ctx context.Context) ([]string, error) {
 			if err := l.get(ctx, "/loki/api/v1/label/"+url.PathEscape(name)+"/values", params, &values); err != nil {
 				return nil, err
 			}
-			out := make([]string, 0, len(values.Data))
+			out := make([]Service, 0, len(values.Data))
 			for _, v := range values.Data {
-				out = append(out, name+"="+v)
+				out = append(out, Service{Name: v, Selector: fmt.Sprintf("{%s=%q}", name, v)})
 			}
 			return out, nil
 		}

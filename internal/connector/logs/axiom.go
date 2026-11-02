@@ -1,0 +1,365 @@
+package logs
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"net/url"
+	"sort"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
+)
+
+// AxiomConfig configures an Axiom connector.
+type AxiomConfig struct {
+	// URL defaults to https://api.axiom.co.
+	URL   string
+	Token string
+	// OrgID is only needed for personal access tokens.
+	OrgID string
+	// MessageField is the field that holds the log line. When empty it is
+	// detected per selector from common names (message, msg, body, ...).
+	MessageField string
+}
+
+// Axiom queries Axiom with APL. A selector is the start of an APL query: a
+// dataset, optionally followed by operators, e.g.
+//
+//	['logs'] | where ['service.name'] == "api"
+type Axiom struct {
+	cfg  AxiomConfig
+	http *http.Client
+}
+
+func NewAxiom(cfg AxiomConfig) (*Axiom, error) {
+	if cfg.Token == "" {
+		return nil, fmt.Errorf("axiom: token is required")
+	}
+	if cfg.URL == "" {
+		cfg.URL = "https://api.axiom.co"
+	}
+	if _, err := url.Parse(cfg.URL); err != nil {
+		return nil, fmt.Errorf("axiom: invalid url: %w", err)
+	}
+	cfg.URL = strings.TrimRight(cfg.URL, "/")
+	return &Axiom{cfg: cfg, http: &http.Client{Timeout: 30 * time.Second}}, nil
+}
+
+// axiomMessageFields are tried in order to find the field holding the log line.
+var axiomMessageFields = []string{"message", "msg", "body", "log", "text", "_raw"}
+
+// axiomServiceFields are tried in order when discovering services.
+var axiomServiceFields = []string{"service.name", "resource.service.name", "service_name", "service", "app", "job", "container"}
+
+// axiomLabelFields are copied into Line.Labels when present.
+var axiomLabelFields = []string{"service.name", "service", "app", "level", "severity", "severity_text", "host", "kubernetes.pod.name"}
+
+func (a *Axiom) Query(ctx context.Context, q Query) ([]Line, error) {
+	limit := q.Limit
+	if limit <= 0 || limit > maxLines {
+		limit = maxLines
+	}
+	msgField, err := a.messageField(ctx, q.Selector)
+	if err != nil {
+		return nil, err
+	}
+	apl := a.withFilter(q, msgField) + fmt.Sprintf(" | sort by _time desc | take %d", limit)
+	res, err := a.query(ctx, apl, q.Start, q.End)
+	if err != nil {
+		return nil, err
+	}
+	var lines []Line
+	for _, row := range res.rows() {
+		l := Line{Time: parseAxiomTime(row["_time"]), Text: axiomText(row, msgField)}
+		for _, f := range axiomLabelFields {
+			if s, ok := row[f].(string); ok && s != "" {
+				if l.Labels == nil {
+					l.Labels = map[string]string{}
+				}
+				l.Labels[f] = s
+			}
+		}
+		lines = append(lines, l)
+	}
+	sort.SliceStable(lines, func(i, j int) bool { return lines[i].Time.After(lines[j].Time) })
+	return lines, nil
+}
+
+func (a *Axiom) Count(ctx context.Context, q Query) (int64, error) {
+	msgField := ""
+	if q.Filter != "" {
+		var err error
+		if msgField, err = a.messageField(ctx, q.Selector); err != nil {
+			return 0, err
+		}
+	}
+	res, err := a.query(ctx, a.withFilter(q, msgField)+" | summarize n = count()", q.Start, q.End)
+	if err != nil {
+		return 0, err
+	}
+	rows := res.rows()
+	if len(rows) == 0 {
+		return 0, nil
+	}
+	f, ok := rows[0]["n"].(float64)
+	if !ok {
+		return 0, fmt.Errorf("axiom: unexpected count value %v", rows[0]["n"])
+	}
+	return int64(f), nil
+}
+
+// maxDiscoverDatasets bounds discovery on large organizations.
+const maxDiscoverDatasets = 50
+
+// Services proposes one service per value of a service field (service.name,
+// app, ...) in each log dataset, or one per dataset when there is none.
+func (a *Axiom) Services(ctx context.Context) ([]Service, error) {
+	var datasets []struct {
+		Name string `json:"name"`
+		Kind string `json:"kind"`
+	}
+	if err := a.do(ctx, http.MethodGet, "/v2/datasets", nil, &datasets); err != nil {
+		return nil, err
+	}
+	end := time.Now()
+	start := end.Add(-24 * time.Hour)
+	var out []Service
+	n := 0
+	for _, ds := range datasets {
+		if strings.Contains(ds.Kind, "metrics") || strings.Contains(ds.Kind, "traces") {
+			continue
+		}
+		if n++; n > maxDiscoverDatasets {
+			break
+		}
+		sel := aplIdent(ds.Name)
+		fields, err := a.fields(ctx, sel, start, end)
+		if err != nil {
+			return nil, err
+		}
+		if len(fields) == 0 {
+			continue // no events in the last 24h
+		}
+		field := ""
+		for _, f := range axiomServiceFields {
+			if fields[f] {
+				field = f
+				break
+			}
+		}
+		if field == "" {
+			out = append(out, Service{Name: ds.Name, Selector: sel})
+			continue
+		}
+		ref := aplIdent(field)
+		res, err := a.query(ctx, fmt.Sprintf("%s | where isnotempty(%s) | summarize count() by %s | take 500", sel, ref, ref), start, end)
+		if err != nil {
+			return nil, err
+		}
+		for _, row := range res.rows() {
+			v, ok := row[field].(string)
+			if !ok || v == "" {
+				continue
+			}
+			out = append(out, Service{Name: v, Selector: fmt.Sprintf("%s | where %s == %s", sel, ref, strconv.Quote(v))})
+		}
+	}
+	return out, nil
+}
+
+func (a *Axiom) Check(ctx context.Context) error {
+	var datasets []json.RawMessage
+	return a.do(ctx, http.MethodGet, "/v2/datasets", nil, &datasets)
+}
+
+// withFilter appends the regex filter on the message field.
+func (a *Axiom) withFilter(q Query, msgField string) string {
+	if q.Filter == "" {
+		return q.Selector
+	}
+	return fmt.Sprintf("%s | where tostring(%s) matches regex %s", q.Selector, aplIdent(msgField), strconv.Quote(q.Filter))
+}
+
+// aplIdent quotes a dataset or field name: ['service.name'].
+func aplIdent(name string) string {
+	return "['" + strings.NewReplacer(`\`, `\\`, `'`, `\'`).Replace(name) + "']"
+}
+
+// messageFieldCache remembers the detected message field per selector;
+// connectors are rebuilt per request, so this lives at package level.
+var messageFieldCache sync.Map // key -> cachedField
+
+type cachedField struct {
+	field string
+	until time.Time
+}
+
+func (a *Axiom) messageField(ctx context.Context, selector string) (string, error) {
+	if a.cfg.MessageField != "" {
+		return a.cfg.MessageField, nil
+	}
+	key := a.cfg.URL + "\x00" + a.cfg.OrgID + "\x00" + selector
+	if c, ok := messageFieldCache.Load(key); ok && time.Now().Before(c.(cachedField).until) {
+		return c.(cachedField).field, nil
+	}
+	end := time.Now()
+	fields, err := a.fields(ctx, selector, end.Add(-7*24*time.Hour), end)
+	if err != nil {
+		return "", err
+	}
+	if len(fields) == 0 {
+		return axiomMessageFields[0], nil // no data to detect from; don't cache
+	}
+	for _, f := range axiomMessageFields {
+		if fields[f] {
+			messageFieldCache.Store(key, cachedField{f, time.Now().Add(10 * time.Minute)})
+			return f, nil
+		}
+	}
+	return "", fmt.Errorf("axiom: no message field found for %s (tried %s); set message_field on the connector",
+		selector, strings.Join(axiomMessageFields, ", "))
+}
+
+// fields returns the field names of the selector's events, empty when there
+// are no events in the window.
+func (a *Axiom) fields(ctx context.Context, selector string, start, end time.Time) (map[string]bool, error) {
+	res, err := a.query(ctx, selector+" | take 1", start, end)
+	if err != nil {
+		return nil, err
+	}
+	out := map[string]bool{}
+	for _, t := range res.Tables {
+		if len(t.Columns) == 0 || len(t.Columns[0]) == 0 {
+			continue
+		}
+		for _, f := range t.Fields {
+			out[f.Name] = true
+		}
+	}
+	return out, nil
+}
+
+type axiomResult struct {
+	Tables []struct {
+		Fields []struct {
+			Name string `json:"name"`
+		} `json:"fields"`
+		Columns [][]any `json:"columns"`
+	} `json:"tables"`
+}
+
+// rows converts the first (column-major) table into rows keyed by field name.
+func (r *axiomResult) rows() []map[string]any {
+	if len(r.Tables) == 0 {
+		return nil
+	}
+	t := r.Tables[0]
+	n := 0
+	if len(t.Columns) > 0 {
+		n = len(t.Columns[0])
+	}
+	rows := make([]map[string]any, n)
+	for i := range rows {
+		rows[i] = make(map[string]any, len(t.Fields))
+		for j, f := range t.Fields {
+			if j < len(t.Columns) && i < len(t.Columns[j]) {
+				rows[i][f.Name] = t.Columns[j][i]
+			}
+		}
+	}
+	return rows
+}
+
+func (a *Axiom) query(ctx context.Context, apl string, start, end time.Time) (*axiomResult, error) {
+	body := map[string]any{"apl": apl}
+	if !start.IsZero() {
+		body["startTime"] = start.UTC().Format(time.RFC3339Nano)
+	}
+	if !end.IsZero() {
+		body["endTime"] = end.UTC().Format(time.RFC3339Nano)
+	}
+	var res axiomResult
+	if err := a.do(ctx, http.MethodPost, "/v1/datasets/_apl?format=tabular", body, &res); err != nil {
+		return nil, err
+	}
+	return &res, nil
+}
+
+func (a *Axiom) do(ctx context.Context, method, path string, in, out any) error {
+	var rd io.Reader
+	if in != nil {
+		b, err := json.Marshal(in)
+		if err != nil {
+			return err
+		}
+		rd = bytes.NewReader(b)
+	}
+	req, err := http.NewRequestWithContext(ctx, method, a.cfg.URL+path, rd)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", "Bearer "+a.cfg.Token)
+	req.Header.Set("Accept", "application/json")
+	if in != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	if a.cfg.OrgID != "" {
+		req.Header.Set("X-Axiom-Org-Id", a.cfg.OrgID)
+	}
+	resp, err := a.http.Do(req)
+	if err != nil {
+		return fmt.Errorf("axiom: %w", err)
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 32<<20))
+	if err != nil {
+		return fmt.Errorf("axiom: read response: %w", err)
+	}
+	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		var e struct {
+			Message string `json:"message"`
+		}
+		if json.Unmarshal(body, &e) == nil && e.Message != "" {
+			return fmt.Errorf("axiom: %s: %s", resp.Status, e.Message)
+		}
+		return fmt.Errorf("axiom: %s: %s", resp.Status, strings.TrimSpace(string(body)))
+	}
+	return json.Unmarshal(body, out)
+}
+
+func parseAxiomTime(v any) time.Time {
+	s, _ := v.(string)
+	t, err := time.Parse(time.RFC3339Nano, s)
+	if err != nil {
+		return time.Time{}
+	}
+	return t.UTC()
+}
+
+// axiomText returns the message field, or the whole event as JSON when it is empty.
+func axiomText(row map[string]any, msgField string) string {
+	switch v := row[msgField].(type) {
+	case string:
+		if v != "" {
+			return v
+		}
+	case nil:
+	default:
+		if b, err := json.Marshal(v); err == nil {
+			return string(b)
+		}
+	}
+	ev := make(map[string]any, len(row))
+	for k, v := range row {
+		if v != nil && !strings.HasPrefix(k, "_") {
+			ev[k] = v
+		}
+	}
+	b, _ := json.Marshal(ev)
+	return string(b)
+}
