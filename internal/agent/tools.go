@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -14,6 +15,7 @@ import (
 	opensrev1 "github.com/openstatushq/opensre/gen/opensre/v1"
 	"github.com/openstatushq/opensre/internal/catalog"
 	"github.com/openstatushq/opensre/internal/connector/logs"
+	"github.com/openstatushq/opensre/internal/connector/mcp"
 	"github.com/openstatushq/opensre/internal/policy"
 	"github.com/openstatushq/opensre/internal/store/db"
 )
@@ -33,6 +35,8 @@ type toolContext struct {
 	engine *Engine
 	graph  *catalog.Graph
 	now    time.Time
+	// mcp holds the read-only tools of the configured MCP connectors, by name.
+	mcp map[string]mcp.Tool
 }
 
 const (
@@ -407,9 +411,11 @@ func (tc *toolContext) logTarget(ctx context.Context, args logArgs) (logs.Source
 	return src, svc.Logs.Selector, w, nil
 }
 
-// toolParams converts the tool table into API definitions.
-func toolParams() []anthropic.BetaToolUnionParam {
-	out := make([]anthropic.BetaToolUnionParam, 0, len(tools))
+// toolParams converts the tool table, then the MCP tools, into API definitions.
+// Built-ins come first and MCP tools are sorted, so the cached prefix only
+// changes when the connected MCP servers change.
+func toolParams(remote ...mcp.Tool) []anthropic.BetaToolUnionParam {
+	out := make([]anthropic.BetaToolUnionParam, 0, len(tools)+len(remote))
 	for _, t := range tools {
 		p := anthropic.BetaToolParam{
 			Name:        t.name,
@@ -425,7 +431,45 @@ func toolParams() []anthropic.BetaToolUnionParam {
 		}
 		out = append(out, anthropic.BetaToolUnionParam{OfTool: &p})
 	}
+	remote = slices.Clone(remote)
+	slices.SortFunc(remote, func(a, b mcp.Tool) int { return strings.Compare(a.Name, b.Name) })
+	for _, t := range remote {
+		out = append(out, anthropic.BetaToolUnionParam{OfTool: &anthropic.BetaToolParam{
+			Name:        t.Name,
+			Description: anthropic.String(t.Description),
+			InputSchema: mcpSchema(t.InputSchema),
+		}})
+	}
 	return out
+}
+
+// mcpSchema maps an MCP input schema (a JSON Schema object) to the API shape.
+func mcpSchema(s map[string]any) anthropic.BetaToolInputSchemaParam {
+	p := anthropic.BetaToolInputSchemaParam{Properties: map[string]any{}}
+	extra := map[string]any{}
+	for k, v := range s {
+		switch k {
+		case "type", "$schema":
+		case "properties":
+			if props, ok := v.(map[string]any); ok {
+				p.Properties = props
+			}
+		case "required":
+			if req, ok := v.([]any); ok {
+				for _, r := range req {
+					if name, ok := r.(string); ok {
+						p.Required = append(p.Required, name)
+					}
+				}
+			}
+		default:
+			extra[k] = v
+		}
+	}
+	if len(extra) > 0 {
+		p.ExtraFields = extra
+	}
+	return p
 }
 
 func findTool(name string) (tool, bool) {

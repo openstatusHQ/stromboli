@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -15,6 +16,7 @@ import (
 
 	"github.com/anthropics/anthropic-sdk-go/v2"
 	"github.com/anthropics/anthropic-sdk-go/v2/option"
+	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 	"google.golang.org/protobuf/encoding/protojson"
 
 	opensrev1 "github.com/openstatushq/opensre/gen/opensre/v1"
@@ -83,6 +85,24 @@ func fakeLoki(t *testing.T) *httptest.Server {
 	}))
 }
 
+// fakeMCP serves one read-only tool and one mutating tool.
+func fakeMCP(t *testing.T) *httptest.Server {
+	srv := sdk.NewServer(&sdk.Implementation{Name: "fake-k8s", Version: "v0"}, nil)
+	srv.AddTool(&sdk.Tool{
+		Name: "rollout_status", Description: "Replica state of a deployment.",
+		InputSchema: map[string]any{"type": "object", "properties": map[string]any{"deployment": map[string]any{"type": "string"}}},
+		Annotations: &sdk.ToolAnnotations{ReadOnlyHint: true},
+	}, func(context.Context, *sdk.CallToolRequest) (*sdk.CallToolResult, error) {
+		return &sdk.CallToolResult{Content: []sdk.Content{&sdk.TextContent{Text: "deploy/api ready=2/4 restarts=17"}}}, nil
+	})
+	srv.AddTool(&sdk.Tool{Name: "rollout_restart", InputSchema: map[string]any{"type": "object"}},
+		func(context.Context, *sdk.CallToolRequest) (*sdk.CallToolResult, error) {
+			t.Error("a mutating MCP tool was called")
+			return &sdk.CallToolResult{}, nil
+		})
+	return httptest.NewServer(sdk.NewStreamableHTTPHandler(func(*http.Request) *sdk.Server { return srv }, &sdk.StreamableHTTPOptions{JSONResponse: true}))
+}
+
 func TestInvestigationEndToEnd(t *testing.T) {
 	dbURL := os.Getenv("OPENSRE_TEST_DB_URL")
 	if dbURL == "" {
@@ -105,6 +125,12 @@ func TestInvestigationEndToEnd(t *testing.T) {
 	if err := st.ReplaceConnector(ctx, db.ReplaceConnectorParams{Name: "test-loki", Kind: "loki", Config: public, Secrets: sealed}); err != nil {
 		t.Fatal(err)
 	}
+	mcpSrv := fakeMCP(t)
+	defer mcpSrv.Close()
+	public, sealed, _ = connector.Split(box, "mcp", map[string]string{"url": mcpSrv.URL})
+	if err := st.ReplaceConnector(ctx, db.ReplaceConnectorParams{Name: "test-k8s", Kind: "mcp", Config: public, Secrets: sealed}); err != nil {
+		t.Fatal(err)
+	}
 	svcName := fmt.Sprintf("api-test-%d", time.Now().UnixNano())
 	spec, _ := catalog.MarshalSpec(&opensrev1.Service{
 		Name: svcName, Logs: &opensrev1.LogsConfig{Source: "test-loki", Selector: `{service_name="api"}`},
@@ -115,6 +141,7 @@ func TestInvestigationEndToEnd(t *testing.T) {
 	t.Cleanup(func() {
 		st.Queries.DeleteService(context.Background(), svcName)
 		st.Queries.DeleteConnector(context.Background(), "test-loki")
+		st.Queries.DeleteConnector(context.Background(), "test-k8s")
 	})
 
 	model := &scripted{responses: []string{
@@ -125,7 +152,8 @@ func TestInvestigationEndToEnd(t *testing.T) {
 		// Reporting before mitigating is sent back to phase 1.
 		message("tool_use", toolUse("t3", "submit_report", reportJSON)),
 		message("tool_use", toolUse("t4", "submit_mitigation", mitigationJSON)),
-		message("tool_use", toolUse("t5", "log_timeline", fmt.Sprintf(`{"service":%q}`, svcName))),
+		message("tool_use", toolUse("t5", "log_timeline", fmt.Sprintf(`{"service":%q}`, svcName)),
+			toolUse("t5b", "mcp__test-k8s__rollout_status", `{"deployment":"api"}`)),
 		message("tool_use", toolUse("t6", "submit_report", reportJSON)),
 	}}
 
@@ -174,12 +202,14 @@ func TestInvestigationEndToEnd(t *testing.T) {
 		t.Fatal(err)
 	}
 	kinds := map[string]int{}
-	var patternsOut, badToolOut string
+	var patternsOut, badToolOut, mcpOut string
 	for _, s := range steps {
 		kinds[s.Kind]++
 		switch s.Name {
 		case "log_patterns":
 			patternsOut = s.Output
+		case "mcp__test-k8s__rollout_status":
+			mcpOut = s.Output
 		case "get_service":
 			badToolOut = s.Output
 			if !s.IsError {
@@ -187,11 +217,14 @@ func TestInvestigationEndToEnd(t *testing.T) {
 			}
 		}
 	}
-	if kinds["brief"] != 1 || kinds["llm"] != 5 || kinds["tool_call"] != 3 || kinds["mitigation"] != 1 || kinds["report"] != 1 {
+	if kinds["brief"] != 1 || kinds["llm"] != 5 || kinds["tool_call"] != 4 || kinds["mcp"] != 1 || kinds["mitigation"] != 1 || kinds["report"] != 1 {
 		t.Errorf("unexpected steps: %v", kinds)
 	}
 	if !strings.Contains(patternsOut, "too many clients") || !strings.Contains(patternsOut, `"new":true`) {
 		t.Errorf("log_patterns should surface the new error pattern, got: %s", patternsOut)
+	}
+	if mcpOut != "deploy/api ready=2/4 restarts=17" {
+		t.Errorf("unexpected MCP tool output: %q", mcpOut)
 	}
 	if !strings.Contains(badToolOut, "not in the catalog") {
 		t.Errorf("unexpected get_service output: %s", badToolOut)
@@ -213,6 +246,14 @@ func TestInvestigationEndToEnd(t *testing.T) {
 	}
 	if r := lastUser(t, model.requests[3]).Content[0].OfToolResult; r == nil || r.IsError.Value {
 		t.Error("submit_mitigation should be accepted")
+	}
+	// Only the read-only MCP tool is offered, after the built-ins.
+	var offered []string
+	for _, tool := range model.requests[0].Tools {
+		offered = append(offered, tool.OfTool.Name)
+	}
+	if offered[len(offered)-1] != "mcp__test-k8s__rollout_status" || slices.Contains(offered, "mcp__test-k8s__rollout_restart") {
+		t.Errorf("unexpected tools: %v", offered)
 	}
 	first := model.requests[0].Messages[0].OfUser.Content[0].OfText.Text
 	if !strings.Contains(first, "# Brief: "+svcName) {
@@ -261,4 +302,23 @@ func (n *recordingNotifier) Finished(context.Context, db.Investigation, *opensre
 	n.finished = true
 	n.finishedBeforeMitigation = len(n.mitigations) == 0
 	return nil
+}
+
+func TestMCPSchema(t *testing.T) {
+	p := mcpSchema(map[string]any{
+		"type":       "object",
+		"$schema":    "https://json-schema.org/draft/2020-12/schema",
+		"properties": map[string]any{"q": map[string]any{"type": "string"}},
+		"required":   []any{"q"},
+		"$defs":      map[string]any{"x": map[string]any{}},
+	})
+	if p.Properties.(map[string]any)["q"] == nil || len(p.Required) != 1 || p.Required[0] != "q" {
+		t.Errorf("unexpected schema: %+v", p)
+	}
+	if _, ok := p.ExtraFields["$defs"]; !ok || p.ExtraFields["$schema"] != nil {
+		t.Errorf("unexpected extra fields: %v", p.ExtraFields)
+	}
+	if empty := mcpSchema(nil); empty.Properties == nil {
+		t.Error("an empty schema needs empty properties")
+	}
 }

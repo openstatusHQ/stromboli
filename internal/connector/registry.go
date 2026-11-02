@@ -7,9 +7,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"slices"
+	"strings"
 
 	"github.com/openstatushq/opensre/internal/connector/deploys"
 	"github.com/openstatushq/opensre/internal/connector/logs"
+	"github.com/openstatushq/opensre/internal/connector/mcp"
 	"github.com/openstatushq/opensre/internal/secrets"
 	"github.com/openstatushq/opensre/internal/store"
 	"github.com/openstatushq/opensre/internal/store/db"
@@ -32,6 +34,23 @@ var Kinds = map[string]kindSpec{
 		optional: []string{"token", "base_url"},
 		secret:   []string{"token"},
 	},
+	// mcp exposes a remote MCP server's read-only tools to the agent.
+	// tools is an optional comma-separated allowlist.
+	"mcp": {
+		required: []string{"url"},
+		optional: []string{"bearer_token", "tools"},
+		secret:   []string{"bearer_token"},
+	},
+}
+
+// KindNames lists the supported kinds, sorted.
+func KindNames() []string {
+	names := make([]string, 0, len(Kinds))
+	for k := range Kinds {
+		names = append(names, k)
+	}
+	slices.Sort(names)
+	return names
 }
 
 // IsSecret reports whether key holds a secret for the given kind.
@@ -41,7 +60,7 @@ func IsSecret(kind, key string) bool { return slices.Contains(Kinds[kind].secret
 func Validate(kind string, config map[string]string) error {
 	spec, ok := Kinds[kind]
 	if !ok {
-		return fmt.Errorf("unknown connector kind %q (supported: loki, github)", kind)
+		return fmt.Errorf("unknown connector kind %q (supported: %s)", kind, strings.Join(KindNames(), ", "))
 	}
 	for _, k := range spec.required {
 		if config[k] == "" {
@@ -150,6 +169,34 @@ func (r *Registry) GitHub(ctx context.Context, name string) (*deploys.GitHub, er
 	return deploys.NewGitHub(deploys.GitHubConfig{Token: cfg["token"], BaseURL: cfg["base_url"]}), nil
 }
 
+// OpenMCP connects to the MCP server named name.
+func (r *Registry) OpenMCP(ctx context.Context, name string) (*mcp.Session, error) {
+	c, cfg, err := r.Config(ctx, name)
+	if err != nil {
+		return nil, err
+	}
+	if c.Kind != "mcp" {
+		return nil, fmt.Errorf("connector %q (%s) is not an mcp connector", name, c.Kind)
+	}
+	return mcp.Open(ctx, name, mcp.Config{URL: cfg["url"], BearerToken: cfg["bearer_token"], Tools: mcp.ParseTools(cfg["tools"])})
+}
+
+// MCPNames lists the configured MCP connectors.
+func (r *Registry) MCPNames(ctx context.Context) ([]string, error) {
+	rows, err := r.store.Queries.ListConnectors(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var names []string
+	for _, c := range rows {
+		if c.Kind == "mcp" {
+			names = append(names, c.Name)
+		}
+	}
+	slices.Sort(names)
+	return names, nil
+}
+
 // Check verifies connectivity for any connector kind.
 func (r *Registry) Check(ctx context.Context, name string) error {
 	c, err := r.store.GetConnector(ctx, name)
@@ -172,6 +219,16 @@ func (r *Registry) Check(ctx context.Context, name string) error {
 			return err
 		}
 		return gh.Check(ctx)
+	case "mcp":
+		s, err := r.OpenMCP(ctx, name)
+		if err != nil {
+			return err
+		}
+		defer s.Close()
+		if len(s.Tools()) == 0 {
+			return fmt.Errorf("connected, but none of the server's %d tools is exposed: mark read-only tools with readOnlyHint or list them with tools=a,b", s.Hidden)
+		}
+		return nil
 	}
 	return fmt.Errorf("unknown connector kind %q", c.Kind)
 }

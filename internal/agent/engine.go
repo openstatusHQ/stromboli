@@ -26,6 +26,7 @@ import (
 	"github.com/openstatushq/opensre/internal/catalog"
 	"github.com/openstatushq/opensre/internal/config"
 	"github.com/openstatushq/opensre/internal/connector"
+	"github.com/openstatushq/opensre/internal/connector/mcp"
 	"github.com/openstatushq/opensre/internal/store"
 	"github.com/openstatushq/opensre/internal/store/db"
 )
@@ -204,6 +205,18 @@ func (e *Engine) investigate(ctx context.Context, rec *recorder, inv db.Investig
 	tc := &toolContext{engine: e, graph: graph, now: time.Now()}
 	log := slog.With("investigation", inv.ID)
 
+	// MCP connectors: their read-only tools join the built-ins for both phases.
+	remote, closeMCP := e.openMCP(ctx, rec)
+	defer closeMCP()
+	tc.mcp = make(map[string]mcp.Tool, len(remote))
+	remote = slices.DeleteFunc(remote, func(t mcp.Tool) bool {
+		if _, dup := tc.mcp[t.Name]; dup {
+			return true // two connectors sanitized to the same name
+		}
+		tc.mcp[t.Name] = t
+		return false
+	})
+
 	// Orient: deterministic brief for every affected service.
 	w := Window{Start: req.At.Add(-30 * time.Minute), End: tc.now}
 	var briefs []string
@@ -225,7 +238,7 @@ func (e *Engine) investigate(ctx context.Context, rec *recorder, inv db.Investig
 		Model:     anthropic.Model(e.cfg.Model),
 		MaxTokens: 16000,
 		System:    []anthropic.BetaTextBlockParam{{Text: systemPrompt}},
-		Tools:     toolParams(),
+		Tools:     toolParams(remote...),
 		Messages:  []anthropic.BetaMessageParam{anthropic.NewBetaUserMessage(anthropic.NewBetaTextBlock(first))},
 		// Automatic caching: the breakpoint moves to the last block each turn,
 		// so every turn re-reads the previous turns from cache.
@@ -349,6 +362,59 @@ func (e *Engine) investigate(ctx context.Context, rec *recorder, inv db.Investig
 	}
 }
 
+// mcpOpenTimeout bounds connecting to one MCP server; a slow server must not
+// delay the mitigation.
+const mcpOpenTimeout = 10 * time.Second
+
+// openMCP connects to every MCP connector in parallel and returns the tools
+// they expose. A failing server is recorded and skipped.
+func (e *Engine) openMCP(ctx context.Context, rec *recorder) ([]mcp.Tool, func()) {
+	names, err := e.connectors.MCPNames(ctx)
+	if err != nil {
+		rec.record(ctx, step{Kind: "mcp", Output: "list MCP connectors: " + err.Error(), IsError: true})
+		return nil, func() {}
+	}
+	sessions := make([]*mcp.Session, len(names))
+	var wg sync.WaitGroup
+	for i, name := range names {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			start := time.Now()
+			octx, cancel := context.WithTimeout(ctx, mcpOpenTimeout)
+			defer cancel()
+			s, err := e.connectors.OpenMCP(octx, name)
+			if err != nil {
+				rec.record(ctx, step{Kind: "mcp", Name: name, Output: err.Error(), IsError: true, Duration: time.Since(start)})
+				slog.Warn("mcp connector unavailable", "connector", name, "err", err)
+				return
+			}
+			var exposed []string
+			for _, t := range s.Tools() {
+				exposed = append(exposed, t.Name)
+			}
+			rec.record(ctx, step{Kind: "mcp", Name: name, Duration: time.Since(start),
+				Output: fmt.Sprintf("%d read-only tools exposed (%d hidden): %s", len(exposed), s.Hidden, strings.Join(exposed, ", "))})
+			sessions[i] = s
+		}()
+	}
+	wg.Wait()
+
+	var out []mcp.Tool
+	for _, s := range sessions {
+		if s != nil {
+			out = append(out, s.Tools()...)
+		}
+	}
+	return out, func() {
+		for _, s := range sessions {
+			if s != nil {
+				_ = s.Close()
+			}
+		}
+	}
+}
+
 // mitigate validates, stores and publishes a proposed mitigation. It returns
 // the tool result for the model.
 func (e *Engine) mitigate(ctx context.Context, rec *recorder, inv *db.Investigation, u anthropic.BetaToolUseBlock) (string, bool) {
@@ -413,12 +479,15 @@ func (e *Engine) runTools(ctx context.Context, rec *recorder, tc *toolContext, u
 }
 
 func (e *Engine) callTool(ctx context.Context, tc *toolContext, u anthropic.BetaToolUseBlock) (string, error) {
+	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
+	defer cancel()
+	if rt, ok := tc.mcp[u.Name]; ok {
+		return rt.Call(ctx, json.RawMessage(u.JSON.Input.Raw()))
+	}
 	t, ok := findTool(u.Name)
 	if !ok || t.run == nil {
 		return "", fmt.Errorf("unknown tool %q", u.Name)
 	}
-	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
-	defer cancel()
 	out, err := t.run(ctx, tc, json.RawMessage(u.JSON.Input.Raw()))
 	if err != nil {
 		return "", err

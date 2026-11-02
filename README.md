@@ -19,6 +19,7 @@ See [PLAN.md](PLAN.md) for the design and roadmap.
    - `recent_deploys`, `get_commit`
    - `get_service`, `list_services`
    - `read_runbook`, `search_past_investigations`
+   - any read-only tool of a connected [MCP server](#mcp-connectors), as `mcp__<connector>__<tool>`
 
    Tool output is aggregated, size-capped and redacted (tokens, passwords, emails) before it reaches the model. If the evidence shows the mitigation will not help (say, a restart cannot fix a bad config push), Claude revises it.
 5. **Report:** a structured report: likely cause, confidence, evidence, ruled out, the mitigation given the root cause, the long-term fix, next steps. It goes to Slack and the API. Every brief, tool call and model turn is stored as an audit trail.
@@ -41,6 +42,7 @@ export OPENSRE_URL=http://localhost:8080 OPENSRE_API_TOKEN=...
 
 opensre connector add loki loki url=http://loki:3100            # + tenant_id, username, password, bearer_token
 opensre connector add github github token=ghp_...                # for deploys and commits
+opensre connector add k8s mcp url=https://k8s-mcp.internal/mcp bearer_token=...  # any MCP server, see below
 opensre catalog discover loki > services.yaml                    # proposes one service per Loki service_name/app label
 opensre catalog import services.yaml --runbooks runbooks/        # add --prune to make the file authoritative
 opensre brief api --since 1h                                     # the context brief, no LLM involved
@@ -75,6 +77,23 @@ Point your alerts at it:
 ```
 
 The catalog lives in opensre's database. YAML is its import/export format, so you can keep it in git and sync it from CI with `opensre catalog import --prune`.
+
+## MCP connectors
+
+Most of the live context a mitigation depends on (replica and rollout state, which regions are healthy, feature flags, failover targets, traffic) is reached through MCP servers rather than dedicated Go connectors. Add any server that speaks [Streamable HTTP](https://modelcontextprotocol.io/specification/2025-06-18/basic/transports):
+
+```sh
+opensre connector add k8s mcp url=https://k8s-mcp.internal/mcp bearer_token=...
+opensre connector add flags mcp url=https://flags.internal/mcp tools=get_flag,list_flags   # explicit allowlist
+```
+
+At the start of every investigation opensre connects to each MCP connector and offers its tools to Claude as `mcp__<connector>__<tool>`, for both the mitigation and the root-cause phase. opensre still never executes anything:
+
+- Only tools the server marks `readOnlyHint: true` are offered. Set `tools=a,b` to choose the exact list instead.
+- Annotations are declared by the server, so give MCP servers read-only credentials too.
+- Output is redacted and size-capped like every other tool. A server that is down is skipped and noted in the audit trail.
+
+`opensre connector test <name>` fails when the server is reachable but exposes no tool.
 
 ## API
 
