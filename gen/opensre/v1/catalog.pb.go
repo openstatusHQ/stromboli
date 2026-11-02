@@ -176,7 +176,10 @@ type LogsConfig struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Name of a configured log connector.
 	Source string `protobuf:"bytes,1,opt,name=source,proto3" json:"source,omitempty"`
-	// Backend-specific stream selector, e.g. `{service_name="api"}` for Loki.
+	// Backend-specific selector:
+	//   loki:       `{service_name="api"}` (LogQL stream selector)
+	//   axiom:      `['logs'] | where ['service.name'] == "api"` (APL)
+	//   cloudwatch: `/ecs/api` or `/ecs/prod | filter service = "api"` (log groups + Insights)
 	Selector      string `protobuf:"bytes,2,opt,name=selector,proto3" json:"selector,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache

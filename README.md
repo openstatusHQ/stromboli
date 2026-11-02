@@ -41,7 +41,7 @@ export OPENSRE_URL=http://localhost:8080 OPENSRE_API_TOKEN=...
 
 opensre connector add loki loki url=http://loki:3100            # + tenant_id, username, password, bearer_token
 opensre connector add github github token=ghp_...                # for deploys and commits
-opensre catalog discover loki > services.yaml                    # proposes one service per Loki service_name/app label
+opensre catalog discover loki > services.yaml                    # proposes one service per log stream/dataset/group (see below)
 opensre catalog import services.yaml --runbooks runbooks/        # add --prune to make the file authoritative
 opensre brief api --since 1h                                     # the context brief, no LLM involved
 opensre investigate api --description "5xx on /v1/monitors"      # streams the investigation live
@@ -73,6 +73,39 @@ Point your alerts at it:
   runbooks: [runbooks/api-5xx.md]
   monitors: ["openstatus:1234"]        # alert → service mapping
 ```
+
+### Log connectors
+
+| Kind | Add it | `logs.selector` | `catalog discover` proposes |
+|---|---|---|---|
+| `loki` | `connector add loki loki url=http://loki:3100` (+ `tenant_id`, `username`, `password`, `bearer_token`) | LogQL stream selector: `{service_name="api"}` | one service per `service_name` / `service` / `app` / `job` / `container` label value |
+| `axiom` | `connector add axiom axiom token=xaat-...` (+ `url` for other regions, `org_id` for personal tokens, `message_field`) | Start of an APL query: `['logs']` or `['logs'] \| where ['service.name'] == "api"` | one service per `service.name` / `service` / `app` value in each log dataset, or one per dataset |
+| `cloudwatch` | `connector add cw cloudwatch region=eu-west-1` (+ `access_key_id`, `secret_access_key`, `session_token`, `endpoint`) | Log group(s), optionally followed by Insights commands: `/ecs/api` or `/ecs/prod, /ecs/worker \| filter service = "api"` | one service per log group, named after its last path segment |
+
+Error filters are RE2 regexes applied to the log line: Loki's line, Axiom's message field (detected from `message`, `msg`, `body`, `log`, ... or set with `message_field`), CloudWatch's `@message`.
+
+Without `access_key_id`/`secret_access_key`, the CloudWatch connector uses the default AWS credential chain of the opensre server (environment, shared config, IAM role). It needs `logs:DescribeLogGroups`, `logs:StartQuery`, `logs:GetQueryResults` and `logs:StopQuery`.
+
+### Fly.io
+
+Fly has no API to query past logs. The whole organisation's logs are published on a NATS stream, and Fly's [log shipper](https://github.com/superfly/fly-log-shipper) forwards them to a log store. Point it at Loki, Axiom or CloudWatch, then add that store as a connector:
+
+```sh
+fly launch --image flyio/log-shipper:latest --no-public-ips --name log-shipper   # set internal_port = 8686
+fly secrets set -a log-shipper ORG=<org-slug> ACCESS_TOKEN="$(fly tokens create readonly <org-slug>)"
+# then one of:
+fly secrets set -a log-shipper LOKI_URL=https://loki.example.com LOKI_USERNAME=... LOKI_PASSWORD=...
+fly secrets set -a log-shipper AXIOM_TOKEN=xaat-... AXIOM_DATASET=fly-logs
+fly secrets set -a log-shipper AWS_ACCESS_KEY_ID=... AWS_SECRET_ACCESS_KEY=... AWS_REGION=eu-west-1 CLOUDWATCH_LOG_GROUP_NAME=/fly/logs
+```
+
+| Store | Connector | Discovered selector, one service per Fly app |
+|---|---|---|
+| Loki | `connector add loki loki url=...` | `{fly_app_name="checker"}` |
+| Axiom | `connector add axiom axiom token=...` | `['fly-logs'] \| where ['fly.app.name'] == "checker"` |
+| CloudWatch | `connector add cw cloudwatch region=eu-west-1 log_group_prefix=/fly/ service_field=fly.app.name` | `/fly/logs \| filter fly.app.name = "checker"` |
+
+The shipper writes JSON events (`message`, `log.level`, `fly.app.name`, `fly.region`, `host`). opensre shows the `message` with its level, so pattern grouping isn't split by region or instance. The CloudWatch shipper writes every app to one log group, so `service_field` makes discovery split it per app with one Insights query (`log_group_prefix` keeps that query to the Fly group).
 
 The catalog lives in opensre's database. YAML is its import/export format, so you can keep it in git and sync it from CI with `opensre catalog import --prune`.
 

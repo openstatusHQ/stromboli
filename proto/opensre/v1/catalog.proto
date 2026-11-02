@@ -25,7 +25,10 @@ message Service {
 message LogsConfig {
   // Name of a configured log connector.
   string source = 1;
-  // Backend-specific stream selector, e.g. `{service_name="api"}` for Loki.
+  // Backend-specific selector:
+  //   loki:       `{service_name="api"}` (LogQL stream selector)
+  //   axiom:      `['logs'] | where ['service.name'] == "api"` (APL)
+  //   cloudwatch: `/ecs/api` or `/ecs/prod | filter service = "api"` (log groups + Insights)
   string selector = 2;
 }
 

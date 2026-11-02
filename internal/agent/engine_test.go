@@ -83,6 +83,93 @@ func fakeLoki(t *testing.T) *httptest.Server {
 	}))
 }
 
+// errorLines are the incident: 5 identical errors in the last 5 minutes.
+func errorLines(start time.Time) []string {
+	if start.Before(time.Now().Add(-45 * time.Minute)) {
+		return nil // baseline window: no errors
+	}
+	var out []string
+	for i := range 5 {
+		out = append(out, fmt.Sprintf(`level=error msg="query failed" err="too many clients" id=%d`, i))
+	}
+	return out
+}
+
+// fakeAxiom serves the same incident as fakeLoki through the APL API.
+func fakeAxiom(t *testing.T) *httptest.Server {
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body struct{ APL, StartTime string }
+		if r.URL.Path != "/v1/datasets/_apl" || json.NewDecoder(r.Body).Decode(&body) != nil {
+			http.NotFound(w, r)
+			return
+		}
+		start, _ := time.Parse(time.RFC3339Nano, body.StartTime)
+		now := time.Now().UTC()
+		table := func(fields string, columns ...any) {
+			b, _ := json.Marshal(columns)
+			fmt.Fprintf(w, `{"tables":[{"fields":%s,"columns":%s}]}`, fields, b)
+		}
+		switch {
+		case strings.HasSuffix(body.APL, "| take 1"):
+			table(`[{"name":"_time"},{"name":"message"}]`, []string{now.Format(time.RFC3339)}, []string{"x"})
+		case strings.Contains(body.APL, "by t = bin(_time"):
+			table(`[{"name":"t"},{"name":"n"}]`, []string{now.Add(-2 * time.Minute).Format(time.RFC3339)}, []int{5})
+		case strings.Contains(body.APL, "summarize n = count()"):
+			table(`[{"name":"n"}]`, []int{len(errorLines(start))})
+		default:
+			lines := errorLines(start)
+			times := make([]string, len(lines))
+			for i := range lines {
+				times[i] = now.Add(-time.Duration(i) * time.Minute).Format(time.RFC3339Nano)
+			}
+			table(`[{"name":"_time"},{"name":"message"}]`, times, lines)
+		}
+	}))
+}
+
+// fakeCloudWatch serves the same incident through Logs Insights.
+func fakeCloudWatch(t *testing.T) *httptest.Server {
+	var mu sync.Mutex
+	var queries []map[string]any
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var in map[string]any
+		json.NewDecoder(r.Body).Decode(&in)
+		w.Header().Set("Content-Type", "application/x-amz-json-1.1")
+		mu.Lock()
+		defer mu.Unlock()
+		field := func(k, v string) string { return fmt.Sprintf(`{"field":%q,"value":%q}`, k, v) }
+		switch r.Header.Get("X-Amz-Target") {
+		case "Logs_20140328.StartQuery":
+			if fmt.Sprint(in["logGroupIdentifiers"]) != "[/ecs/api]" {
+				t.Errorf("unexpected log groups %v", in["logGroupIdentifiers"])
+			}
+			queries = append(queries, in)
+			fmt.Fprintf(w, `{"queryId":"%d"}`, len(queries)-1)
+		case "Logs_20140328.GetQueryResults":
+			idx, _ := strconv.Atoi(in["queryId"].(string))
+			q := queries[idx]["queryString"].(string)
+			start := time.Unix(int64(queries[idx]["startTime"].(float64)), 0)
+			now := time.Now().UTC()
+			var rows []string
+			switch {
+			case strings.Contains(q, "stats count(*) as n by bin("):
+				bin := q[strings.Index(q, "bin("):]
+				rows = append(rows, "["+field(bin, now.Add(-2*time.Minute).Format("2006-01-02 15:04:05.000"))+","+field("n", "5")+"]")
+			case strings.Contains(q, "stats count(*)"):
+				rows = append(rows, "["+field("n", strconv.Itoa(len(errorLines(start))))+"]")
+			default:
+				for i, l := range errorLines(start) {
+					ts := now.Add(-time.Duration(i) * time.Minute).Format("2006-01-02 15:04:05.000")
+					rows = append(rows, "["+field("@timestamp", ts)+","+field("@message", l)+"]")
+				}
+			}
+			fmt.Fprintf(w, `{"status":"Complete","results":[%s]}`, strings.Join(rows, ","))
+		default:
+			w.WriteHeader(http.StatusBadRequest)
+		}
+	}))
+}
+
 func TestInvestigationEndToEnd(t *testing.T) {
 	dbURL := os.Getenv("OPENSRE_TEST_DB_URL")
 	if dbURL == "" {
@@ -98,23 +185,49 @@ func TestInvestigationEndToEnd(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	box, _ := secrets.New("test")
 	loki := fakeLoki(t)
 	defer loki.Close()
-	public, sealed, _ := connector.Split(box, "loki", map[string]string{"url": loki.URL})
-	if err := st.ReplaceConnector(ctx, db.ReplaceConnectorParams{Name: "test-loki", Kind: "loki", Config: public, Secrets: sealed}); err != nil {
+	axiom := fakeAxiom(t)
+	defer axiom.Close()
+	cloudwatch := fakeCloudWatch(t)
+	defer cloudwatch.Close()
+	t.Setenv("AWS_CONFIG_FILE", os.DevNull)
+	t.Setenv("AWS_SHARED_CREDENTIALS_FILE", os.DevNull)
+
+	// The same investigation must work whatever the service's log backend is.
+	for _, b := range []logBackend{
+		{"loki", map[string]string{"url": loki.URL}, `{service_name="api"}`},
+		{"axiom", map[string]string{"url": axiom.URL, "token": "xaat-test"}, `['logs'] | where ['service.name'] == "api"`},
+		{"cloudwatch", map[string]string{"endpoint": cloudwatch.URL, "region": "eu-west-1", "access_key_id": "AKIATEST", "secret_access_key": "secret"}, "/ecs/api"},
+	} {
+		t.Run(b.kind, func(t *testing.T) { runInvestigation(t, st, b) })
+	}
+}
+
+type logBackend struct {
+	kind     string
+	config   map[string]string
+	selector string
+}
+
+func runInvestigation(t *testing.T, st *store.Store, b logBackend) {
+	ctx := context.Background()
+	box, _ := secrets.New("test")
+	connName := "test-" + b.kind
+	public, sealed, _ := connector.Split(box, b.kind, b.config)
+	if err := st.ReplaceConnector(ctx, db.ReplaceConnectorParams{Name: connName, Kind: b.kind, Config: public, Secrets: sealed}); err != nil {
 		t.Fatal(err)
 	}
 	svcName := fmt.Sprintf("api-test-%d", time.Now().UnixNano())
 	spec, _ := catalog.MarshalSpec(&opensrev1.Service{
-		Name: svcName, Logs: &opensrev1.LogsConfig{Source: "test-loki", Selector: `{service_name="api"}`},
+		Name: svcName, Logs: &opensrev1.LogsConfig{Source: connName, Selector: b.selector},
 	})
 	if err := st.UpsertService(ctx, db.UpsertServiceParams{Name: svcName, Spec: spec}); err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
 		st.Queries.DeleteService(context.Background(), svcName)
-		st.Queries.DeleteConnector(context.Background(), "test-loki")
+		st.Queries.DeleteConnector(context.Background(), connName)
 	})
 
 	model := &scripted{responses: []string{
@@ -174,12 +287,20 @@ func TestInvestigationEndToEnd(t *testing.T) {
 		t.Fatal(err)
 	}
 	kinds := map[string]int{}
-	var patternsOut, badToolOut string
+	var patternsOut, badToolOut, timelineOut string
 	for _, s := range steps {
 		kinds[s.Kind]++
 		switch s.Name {
+		case "log_timeline":
+			timelineOut = s.Output
+			if s.IsError {
+				t.Errorf("log_timeline failed: %s", s.Output)
+			}
 		case "log_patterns":
 			patternsOut = s.Output
+			if s.IsError {
+				t.Errorf("log_patterns failed: %s", s.Output)
+			}
 		case "get_service":
 			badToolOut = s.Output
 			if !s.IsError {
@@ -192,6 +313,9 @@ func TestInvestigationEndToEnd(t *testing.T) {
 	}
 	if !strings.Contains(patternsOut, "too many clients") || !strings.Contains(patternsOut, `"new":true`) {
 		t.Errorf("log_patterns should surface the new error pattern, got: %s", patternsOut)
+	}
+	if !strings.Contains(timelineOut, `"count":5`) && !strings.Contains(timelineOut, `"count":42`) {
+		t.Errorf("log_timeline should report the error burst, got: %s", timelineOut)
 	}
 	if !strings.Contains(badToolOut, "not in the catalog") {
 		t.Errorf("unexpected get_service output: %s", badToolOut)

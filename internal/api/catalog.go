@@ -224,14 +224,14 @@ func (c *CatalogService) DiscoverServices(ctx context.Context, req *connect.Requ
 	}
 	resp := &opensrev1.DiscoverServicesResponse{}
 	for _, f := range found {
-		label, value, _ := strings.Cut(f, "=")
-		name := strings.ToLower(value)
-		if known[name] {
+		name := strings.ToLower(f.Name)
+		if name == "" || known[name] {
 			continue
 		}
+		known[name] = true
 		resp.Candidates = append(resp.Candidates, &opensrev1.Service{
 			Name: name,
-			Logs: &opensrev1.LogsConfig{Source: req.Msg.Connector, Selector: fmt.Sprintf("{%s=%q}", label, value)},
+			Logs: &opensrev1.LogsConfig{Source: req.Msg.Connector, Selector: f.Selector},
 		})
 	}
 	return connect.NewResponse(resp), nil
