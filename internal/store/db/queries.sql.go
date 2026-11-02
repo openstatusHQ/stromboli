@@ -52,7 +52,7 @@ func (q *Queries) CreateConnector(ctx context.Context, arg CreateConnectorParams
 const createInvestigation = `-- name: CreateInvestigation :one
 INSERT INTO investigations (id, title, source, fingerprint, services, status, alert)
 VALUES ($1, $2, $3, $4, $5, $6, $7)
-RETURNING id, title, source, fingerprint, services, status, alert, report, error, slack_channel, slack_ts, input_tokens, output_tokens, created_at, finished_at
+RETURNING id, title, source, fingerprint, services, status, alert, report, error, slack_channel, slack_ts, input_tokens, output_tokens, created_at, finished_at, mitigation, mitigated_at
 `
 
 type CreateInvestigationParams struct {
@@ -92,6 +92,8 @@ func (q *Queries) CreateInvestigation(ctx context.Context, arg CreateInvestigati
 		&i.OutputTokens,
 		&i.CreatedAt,
 		&i.FinishedAt,
+		&i.Mitigation,
+		&i.MitigatedAt,
 	)
 	return i, err
 }
@@ -158,7 +160,7 @@ func (q *Queries) FailRunningInvestigations(ctx context.Context) (int64, error) 
 }
 
 const findOpenInvestigation = `-- name: FindOpenInvestigation :one
-SELECT id, title, source, fingerprint, services, status, alert, report, error, slack_channel, slack_ts, input_tokens, output_tokens, created_at, finished_at FROM investigations
+SELECT id, title, source, fingerprint, services, status, alert, report, error, slack_channel, slack_ts, input_tokens, output_tokens, created_at, finished_at, mitigation, mitigated_at FROM investigations
 WHERE fingerprint = $1 AND (status = 'running' OR finished_at > now() - make_interval(mins => $2::int))
 ORDER BY created_at DESC
 LIMIT 1
@@ -188,6 +190,8 @@ func (q *Queries) FindOpenInvestigation(ctx context.Context, arg FindOpenInvesti
 		&i.OutputTokens,
 		&i.CreatedAt,
 		&i.FinishedAt,
+		&i.Mitigation,
+		&i.MitigatedAt,
 	)
 	return i, err
 }
@@ -232,7 +236,7 @@ func (q *Queries) GetConnector(ctx context.Context, name string) (Connector, err
 }
 
 const getInvestigation = `-- name: GetInvestigation :one
-SELECT id, title, source, fingerprint, services, status, alert, report, error, slack_channel, slack_ts, input_tokens, output_tokens, created_at, finished_at FROM investigations WHERE id = $1
+SELECT id, title, source, fingerprint, services, status, alert, report, error, slack_channel, slack_ts, input_tokens, output_tokens, created_at, finished_at, mitigation, mitigated_at FROM investigations WHERE id = $1
 `
 
 func (q *Queries) GetInvestigation(ctx context.Context, id uuid.UUID) (Investigation, error) {
@@ -254,6 +258,8 @@ func (q *Queries) GetInvestigation(ctx context.Context, id uuid.UUID) (Investiga
 		&i.OutputTokens,
 		&i.CreatedAt,
 		&i.FinishedAt,
+		&i.Mitigation,
+		&i.MitigatedAt,
 	)
 	return i, err
 }
@@ -347,7 +353,7 @@ func (q *Queries) ListConnectors(ctx context.Context) ([]Connector, error) {
 }
 
 const listInvestigations = `-- name: ListInvestigations :many
-SELECT id, title, source, fingerprint, services, status, alert, report, error, slack_channel, slack_ts, input_tokens, output_tokens, created_at, finished_at FROM investigations ORDER BY created_at DESC LIMIT $1
+SELECT id, title, source, fingerprint, services, status, alert, report, error, slack_channel, slack_ts, input_tokens, output_tokens, created_at, finished_at, mitigation, mitigated_at FROM investigations ORDER BY created_at DESC LIMIT $1
 `
 
 func (q *Queries) ListInvestigations(ctx context.Context, limit int32) ([]Investigation, error) {
@@ -375,6 +381,8 @@ func (q *Queries) ListInvestigations(ctx context.Context, limit int32) ([]Invest
 			&i.OutputTokens,
 			&i.CreatedAt,
 			&i.FinishedAt,
+			&i.Mitigation,
+			&i.MitigatedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -502,7 +510,7 @@ func (q *Queries) ReplaceConnector(ctx context.Context, arg ReplaceConnectorPara
 }
 
 const searchInvestigations = `-- name: SearchInvestigations :many
-SELECT id, title, source, fingerprint, services, status, alert, report, error, slack_channel, slack_ts, input_tokens, output_tokens, created_at, finished_at FROM investigations
+SELECT id, title, source, fingerprint, services, status, alert, report, error, slack_channel, slack_ts, input_tokens, output_tokens, created_at, finished_at, mitigation, mitigated_at FROM investigations
 WHERE report IS NOT NULL
   AND ($2::text = '' OR $2::text = ANY(services))
   AND ($3::text = '' OR title ILIKE '%' || $3::text || '%' OR report::text ILIKE '%' || $3::text || '%')
@@ -541,6 +549,8 @@ func (q *Queries) SearchInvestigations(ctx context.Context, arg SearchInvestigat
 			&i.OutputTokens,
 			&i.CreatedAt,
 			&i.FinishedAt,
+			&i.Mitigation,
+			&i.MitigatedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -550,6 +560,20 @@ func (q *Queries) SearchInvestigations(ctx context.Context, arg SearchInvestigat
 		return nil, err
 	}
 	return items, nil
+}
+
+const setInvestigationMitigation = `-- name: SetInvestigationMitigation :exec
+UPDATE investigations SET mitigation = $2, mitigated_at = COALESCE(mitigated_at, now()) WHERE id = $1
+`
+
+type SetInvestigationMitigationParams struct {
+	ID         uuid.UUID
+	Mitigation json.RawMessage
+}
+
+func (q *Queries) SetInvestigationMitigation(ctx context.Context, arg SetInvestigationMitigationParams) error {
+	_, err := q.db.Exec(ctx, setInvestigationMitigation, arg.ID, arg.Mitigation)
+	return err
 }
 
 const setInvestigationSlack = `-- name: SetInvestigationSlack :exec

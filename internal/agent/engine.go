@@ -1,5 +1,7 @@
 // Package agent runs investigations: a deterministic brief, then a Claude
-// tool-use loop over read-only tools, then a report.
+// tool-use loop over read-only tools in two phases. The triage phase proposes
+// a generic mitigation and publishes it right away; the investigation phase
+// then looks for the root cause and ends with a report.
 package agent
 
 import (
@@ -8,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -41,6 +44,9 @@ type Messages interface {
 // Notifier publishes investigation progress, e.g. to Slack.
 type Notifier interface {
 	Started(ctx context.Context, inv db.Investigation) (channel, ts string, err error)
+	// Mitigated is called as soon as a mitigation is proposed, before the
+	// root cause is known. It may be called again if the mitigation is revised.
+	Mitigated(ctx context.Context, inv db.Investigation, m *opensrev1.Mitigation) error
 	Finished(ctx context.Context, inv db.Investigation, report *opensrev1.Report) error
 }
 
@@ -196,6 +202,7 @@ func (e *Engine) investigate(ctx context.Context, rec *recorder, inv db.Investig
 		return nil, err
 	}
 	tc := &toolContext{engine: e, graph: graph, now: time.Now()}
+	log := slog.With("investigation", inv.ID)
 
 	// Orient: deterministic brief for every affected service.
 	w := Window{Start: req.At.Add(-30 * time.Minute), End: tc.now}
@@ -228,7 +235,7 @@ func (e *Engine) investigate(ctx context.Context, rec *recorder, inv db.Investig
 		Betas:        []anthropic.AnthropicBeta{fallbackBeta},
 	}
 
-	toolCalls, nudged := 0, false
+	toolCalls, nudged, mitigated := 0, false, false
 	for turn := 1; ; turn++ {
 		if err := ctx.Err(); err != nil {
 			return nil, fmt.Errorf("investigation timed out after %s: %w", e.cfg.InvestigationTimeout, err)
@@ -267,14 +274,40 @@ func (e *Engine) investigate(ctx context.Context, rec *recorder, inv db.Investig
 				uses = append(uses, u)
 			}
 		}
-		for _, u := range uses {
-			if u.Name == submitReportTool {
+
+		// Mitigations are handled first so a report in the same turn sees them.
+		results := make([]anthropic.BetaContentBlockParamUnion, len(uses))
+		var lookups []anthropic.BetaToolUseBlock
+		var lookupIdx []int
+		reportIdx := -1
+		for i, u := range uses {
+			switch u.Name {
+			case submitMitigationTool:
+				out, isErr := e.mitigate(ctx, rec, &inv, u)
+				if !isErr {
+					mitigated = true
+					log.Info("mitigation proposed", "after", time.Since(tc.now).Round(time.Second))
+				}
+				results[i] = anthropic.NewBetaToolResultBlock(u.ID, out, isErr)
+			case submitReportTool:
+				reportIdx = i
+			default:
+				lookups = append(lookups, u)
+				lookupIdx = append(lookupIdx, i)
+			}
+		}
+		if reportIdx >= 0 {
+			u := uses[reportIdx]
+			if mitigated {
 				report := &opensrev1.Report{}
 				if err := (protojson.UnmarshalOptions{DiscardUnknown: true}).Unmarshal([]byte(u.JSON.Input.Raw()), report); err != nil {
 					return nil, fmt.Errorf("invalid report: %w", err)
 				}
 				return report, nil
 			}
+			// Mitigate first: send the model back to phase 1.
+			results[reportIdx] = anthropic.NewBetaToolResultBlock(u.ID,
+				"Rejected: call submit_mitigation first. The on-call engineer needs a way to stop user impact before the root cause; then submit the report.", true)
 		}
 
 		if len(uses) == 0 {
@@ -283,22 +316,70 @@ func (e *Engine) investigate(ctx context.Context, rec *recorder, inv db.Investig
 				return &opensrev1.Report{Summary: textOf(resp), LikelyCause: "unknown", Confidence: "low"}, nil
 			}
 			nudged = true
-			params.Messages = append(params.Messages, anthropic.NewBetaUserMessage(anthropic.NewBetaTextBlock(
-				"Call submit_report now with your findings.")))
+			nudge := "Call submit_report now with your findings."
+			if !mitigated {
+				nudge = "Call submit_mitigation now, then submit_report."
+			}
+			params.Messages = append(params.Messages, anthropic.NewBetaUserMessage(anthropic.NewBetaTextBlock(nudge)))
 			continue
 		}
 
 		if toolCalls >= e.cfg.MaxToolCalls+10 {
 			return nil, fmt.Errorf("gave up after %d tool calls without a report", toolCalls)
 		}
-		results := e.runTools(ctx, rec, tc, uses)
-		toolCalls += len(uses)
-		if toolCalls >= e.cfg.MaxToolCalls {
+		if len(lookups) > 0 {
+			for j, r := range e.runTools(ctx, rec, tc, lookups) {
+				results[lookupIdx[j]] = r
+			}
+			toolCalls += len(lookups)
+		}
+		switch {
+		case toolCalls >= e.cfg.MaxToolCalls:
+			next := "submit_report"
+			if !mitigated {
+				next = "submit_mitigation and then submit_report"
+			}
 			results = append(results, anthropic.NewBetaTextBlock(fmt.Sprintf(
-				"Tool budget reached (%d calls). Do not call any more investigation tools; call submit_report now with what you have.", toolCalls)))
+				"Tool budget reached (%d calls). Do not call any more investigation tools; call %s now with what you have.", toolCalls, next)))
+		case !mitigated && toolCalls >= e.cfg.MitigationToolCalls:
+			results = append(results, anthropic.NewBetaTextBlock(fmt.Sprintf(
+				"%d tool calls and no mitigation yet. Users may still be affected: call submit_mitigation now with the best generic mitigation the evidence supports (or kind \"none\"), then continue the investigation.", toolCalls)))
 		}
 		params.Messages = append(params.Messages, anthropic.NewBetaUserMessage(results...))
 	}
+}
+
+// mitigate validates, stores and publishes a proposed mitigation. It returns
+// the tool result for the model.
+func (e *Engine) mitigate(ctx context.Context, rec *recorder, inv *db.Investigation, u anthropic.BetaToolUseBlock) (string, bool) {
+	m := &opensrev1.Mitigation{}
+	if err := (protojson.UnmarshalOptions{DiscardUnknown: true}).Unmarshal([]byte(u.JSON.Input.Raw()), m); err != nil {
+		return "invalid mitigation: " + err.Error(), true
+	}
+	if !slices.Contains(mitigationKinds, m.Kind) {
+		return fmt.Sprintf("invalid kind %q: use one of %s", m.Kind, strings.Join(mitigationKinds, ", ")), true
+	}
+	raw, _ := protojson.MarshalOptions{UseProtoNames: true}.Marshal(m)
+	revised := len(inv.Mitigation) > 0
+	rec.record(ctx, step{Kind: "mitigation", Name: m.Kind, Output: string(raw)})
+	if err := e.store.SetInvestigationMitigation(ctx, db.SetInvestigationMitigationParams{ID: inv.ID, Mitigation: raw}); err != nil {
+		return "could not save the mitigation: " + err.Error(), true
+	}
+	inv.Mitigation = raw
+	if !inv.MitigatedAt.Valid {
+		inv.MitigatedAt = pgtype.Timestamptz{Time: time.Now(), Valid: true}
+	}
+	if e.notifier != nil {
+		if err := e.notifier.Mitigated(context.WithoutCancel(ctx), *inv, m); err != nil {
+			slog.Warn("notify mitigation", "investigation", inv.ID, "err", err)
+		}
+	}
+	verb := "published"
+	if revised {
+		verb = "revised and republished"
+	}
+	return fmt.Sprintf("Mitigation %s to the on-call engineer. Now find the root cause (phase 2), then call submit_report. "+
+		"If the evidence shows this mitigation will not help, call submit_mitigation again with a better one.", verb), false
 }
 
 // maxToolResult bounds what a single tool call adds to the context.

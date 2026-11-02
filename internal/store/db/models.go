@@ -36,6 +36,8 @@ type Investigation struct {
 	OutputTokens int64
 	CreatedAt    pgtype.Timestamptz
 	FinishedAt   pgtype.Timestamptz
+	Mitigation   json.RawMessage
+	MitigatedAt  pgtype.Timestamptz
 }
 
 type Runbook struct {

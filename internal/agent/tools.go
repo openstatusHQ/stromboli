@@ -35,7 +35,14 @@ type toolContext struct {
 	now    time.Time
 }
 
-const submitReportTool = "submit_report"
+const (
+	submitMitigationTool = "submit_mitigation"
+	submitReportTool     = "submit_report"
+)
+
+// mitigationKinds is the closed set of generic mitigations (after Google's
+// "Generic Mitigations"): each stops impact without knowing the root cause.
+var mitigationKinds = []string{"rollback", "restart", "scale_up", "drain", "disable_feature", "block_traffic", "failover", "degrade", "none"}
 
 func str(desc string) map[string]any { return map[string]any{"type": "string", "description": desc} }
 func integer(desc string) map[string]any {
@@ -322,8 +329,30 @@ var tools = []tool{
 		},
 	},
 	{
+		name: submitMitigationTool,
+		description: "Phase 1. Propose the fastest safe way to stop user impact, before you know the root cause. " +
+			"It is published to the on-call engineer immediately, then you continue to the root cause. " +
+			"Pick one generic mitigation: rollback (a recent deploy), restart (stuck or leaking processes), scale_up (saturation), " +
+			"drain (one region, zone or instance is bad), disable_feature (a flag-guarded change), block_traffic (abusive or bad traffic), " +
+			"failover (a failing dependency has a standby), degrade (shed non-critical work), or none (no safe mitigation, or no user impact). " +
+			"You may call it again to revise it if new evidence changes the best mitigation.",
+		strict: true,
+		properties: map[string]any{
+			"kind":       map[string]any{"type": "string", "enum": mitigationKinds},
+			"target":     str("What it applies to: service, deploy SHA to roll back to, region, instance, flag, or dependency."),
+			"action":     str("The exact command or steps a human runs, filled in from the alert and the brief."),
+			"rationale":  str("Which symptoms point to this mitigation, in one or two sentences."),
+			"verify":     str("How to tell within minutes that it worked: the metric, log pattern or check to watch."),
+			"undo":       str("How to revert it if it makes things worse."),
+			"risk":       map[string]any{"type": "string", "enum": []string{"safe", "reversible", "destructive"}},
+			"confidence": map[string]any{"type": "string", "enum": []string{"low", "medium", "high"}},
+			"impact":     str("Current user impact as far as the evidence shows: who is affected, since when, ongoing or not."),
+		},
+		required: []string{"kind", "target", "action", "rationale", "verify", "undo", "risk", "confidence", "impact"},
+	},
+	{
 		name: submitReportTool,
-		description: "Submit the final investigation report. Call it exactly once, when you are done. " +
+		description: "Phase 2. Submit the final root-cause report. Call it exactly once, after submit_mitigation, when you are done. " +
 			"Only state what the evidence you gathered supports; say what you could not check.",
 		strict: true,
 		properties: map[string]any{
@@ -332,10 +361,11 @@ var tools = []tool{
 			"confidence":           map[string]any{"type": "string", "enum": []string{"low", "medium", "high"}},
 			"evidence":             strList("Concrete observations backing the cause: counts, timestamps, log patterns, commits."),
 			"ruled_out":            strList("Hypotheses checked and rejected, each with the reason."),
-			"suggested_mitigation": str("The safest next action for a human to take (e.g. a rollback with the exact SHA), or \"none\"."),
+			"suggested_mitigation": str("The mitigation in light of the root cause: confirm the one you proposed, or say what to do instead and why, or \"none\"."),
+			"fix":                  str("The long-term fix for the root cause (e.g. revert commit X and add a guard), or \"unknown\"."),
 			"next_steps":           strList("What a human should check next that you could not."),
 		},
-		required: []string{"summary", "likely_cause", "confidence", "evidence", "ruled_out", "suggested_mitigation", "next_steps"},
+		required: []string{"summary", "likely_cause", "confidence", "evidence", "ruled_out", "suggested_mitigation", "fix", "next_steps"},
 	},
 }
 

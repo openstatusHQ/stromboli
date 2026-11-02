@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"connectrpc.com/connect"
+	"google.golang.org/protobuf/encoding/protojson"
 
 	opensrev1 "github.com/openstatushq/opensre/gen/opensre/v1"
 	"github.com/openstatushq/opensre/gen/opensre/v1/opensrev1connect"
@@ -332,6 +333,11 @@ func printStep(s *opensrev1.Step) {
 		if text := strings.TrimSpace(s.Output); text != "" {
 			fmt.Printf("· %s\n", indent(text))
 		}
+	case "mitigation":
+		m := &opensrev1.Mitigation{}
+		if err := protojson.Unmarshal([]byte(s.Output), m); err == nil {
+			fmt.Printf("\n%s\n\n· investigating the root cause…\n", report.MitigationMarkdown(m))
+		}
 	case "error":
 		fmt.Printf("✗ %s\n", s.Output)
 	}
@@ -339,6 +345,13 @@ func printStep(s *opensrev1.Step) {
 
 func printResult(inv *opensrev1.Investigation) {
 	fmt.Println()
+	if inv.Mitigation != nil {
+		fmt.Println(report.MitigationMarkdown(inv.Mitigation))
+		if inv.MitigatedAt != nil {
+			fmt.Printf("  (proposed %s after the alert)\n", inv.MitigatedAt.AsTime().Sub(inv.CreatedAt.AsTime()).Round(time.Second))
+		}
+		fmt.Println()
+	}
 	switch {
 	case inv.Report != nil:
 		fmt.Println(report.Markdown(inv.Report))
