@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -25,6 +26,12 @@ type CloudWatchConfig struct {
 	SessionToken    string
 	// Endpoint overrides the API endpoint (e.g. LocalStack).
 	Endpoint string
+	// LogGroupPrefix limits discovery to log groups with this prefix.
+	LogGroupPrefix string
+	// ServiceField, when set, makes discovery propose one service per value
+	// of this field inside each log group (e.g. fly.app.name for Fly's log
+	// shipper, which writes every app to one group) instead of one per group.
+	ServiceField string
 }
 
 // CloudWatch queries CloudWatch Logs Insights. A selector is one or more log
@@ -33,11 +40,18 @@ type CloudWatchConfig struct {
 //	/ecs/prod-api
 //	/ecs/prod, /ecs/prod-worker | filter service = "api"
 type CloudWatch struct {
-	client *cloudwatchlogs.Client
-	poll   time.Duration
+	client       *cloudwatchlogs.Client
+	poll         time.Duration
+	groupPrefix  string
+	serviceField string
 }
 
+var insightsFieldRe = regexp.MustCompile(`^[A-Za-z_@][A-Za-z0-9_.@-]*$`)
+
 func NewCloudWatch(ctx context.Context, cfg CloudWatchConfig) (*CloudWatch, error) {
+	if cfg.ServiceField != "" && !insightsFieldRe.MatchString(cfg.ServiceField) {
+		return nil, fmt.Errorf("cloudwatch: invalid service_field %q", cfg.ServiceField)
+	}
 	var opts []func(*awsconfig.LoadOptions) error
 	if cfg.Region != "" {
 		opts = append(opts, awsconfig.WithRegion(cfg.Region))
@@ -61,7 +75,7 @@ func NewCloudWatch(ctx context.Context, cfg CloudWatchConfig) (*CloudWatch, erro
 			o.BaseEndpoint = aws.String(cfg.Endpoint)
 		}
 	})
-	return &CloudWatch{client: client, poll: 500 * time.Millisecond}, nil
+	return &CloudWatch{client: client, poll: 500 * time.Millisecond, groupPrefix: cfg.LogGroupPrefix, serviceField: cfg.ServiceField}, nil
 }
 
 // insightsTime is the format of @timestamp and bin() values, in UTC.
@@ -120,7 +134,7 @@ func (c *CloudWatch) Query(ctx context.Context, q Query) ([]Line, error) {
 	}
 	lines := make([]Line, 0, len(rows))
 	for _, r := range rows {
-		l := Line{Text: r["@message"], Labels: map[string]string{}}
+		l := Line{Text: messageText(r["@message"]), Labels: map[string]string{}}
 		if t, err := time.Parse(insightsTime, r["@timestamp"]); err == nil {
 			l.Time = t.UTC()
 		}
@@ -183,10 +197,15 @@ func (c *CloudWatch) Histogram(ctx context.Context, q Query, step time.Duration)
 const maxDiscoverGroups = 1000
 
 // Services proposes one service per log group, named after the last path
-// segment (/aws/lambda/checkout -> checkout).
+// segment (/aws/lambda/checkout -> checkout). With a service field, groups
+// are split into one service per value of that field instead.
 func (c *CloudWatch) Services(ctx context.Context) ([]Service, error) {
 	var names []string
-	p := cloudwatchlogs.NewDescribeLogGroupsPaginator(c.client, &cloudwatchlogs.DescribeLogGroupsInput{})
+	in := &cloudwatchlogs.DescribeLogGroupsInput{}
+	if c.groupPrefix != "" {
+		in.LogGroupNamePrefix = aws.String(c.groupPrefix)
+	}
+	p := cloudwatchlogs.NewDescribeLogGroupsPaginator(c.client, in)
 	for p.HasMorePages() && len(names) < maxDiscoverGroups {
 		page, err := p.NextPage(ctx)
 		if err != nil {
@@ -198,7 +217,53 @@ func (c *CloudWatch) Services(ctx context.Context) ([]Service, error) {
 			}
 		}
 	}
-	return serviceNamesForGroups(names), nil
+	perGroup := serviceNamesForGroups(names)
+	if c.serviceField == "" {
+		return perGroup, nil
+	}
+
+	// One Insights query per 50 groups over the last 24h.
+	end := time.Now()
+	start := end.Add(-24 * time.Hour)
+	values := map[string][]string{} // group -> service field values
+	qs := fmt.Sprintf("filter ispresent(%[1]s) | stats count(*) as n by @log, %[1]s", c.serviceField)
+	for i := 0; i < len(names); i += maxLogGroups {
+		rows, err := c.run(ctx, names[i:min(i+maxLogGroups, len(names))], qs, start, end, 10000)
+		if err != nil {
+			return nil, err
+		}
+		for _, r := range rows {
+			_, group, _ := strings.Cut(r["@log"], ":") // "account-id:log-group"
+			if v := r[c.serviceField]; group != "" && v != "" {
+				values[group] = append(values[group], v)
+			}
+		}
+	}
+	var out []Service
+	seen := map[string]bool{}
+	for _, g := range perGroup {
+		vs := values[g.Selector]
+		if len(vs) == 0 {
+			if !seen[g.Name] {
+				seen[g.Name] = true
+				out = append(out, g)
+			}
+			continue
+		}
+		sort.Strings(vs)
+		for _, v := range vs {
+			name := strings.ToLower(v)
+			if seen[name] {
+				name += "-" + g.Name
+			}
+			if seen[name] {
+				continue
+			}
+			seen[name] = true
+			out = append(out, Service{Name: name, Selector: fmt.Sprintf("%s | filter %s = %s", g.Selector, c.serviceField, strconv.Quote(v))})
+		}
+	}
+	return out, nil
 }
 
 // serviceNamesForGroups names each group after its last path segment, using

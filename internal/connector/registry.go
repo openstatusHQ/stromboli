@@ -35,7 +35,7 @@ var Kinds = map[string]kindSpec{
 		secret:   []string{"token"},
 	},
 	"cloudwatch": {
-		optional: []string{"region", "access_key_id", "secret_access_key", "session_token", "endpoint"},
+		optional: []string{"region", "access_key_id", "secret_access_key", "session_token", "endpoint", "log_group_prefix", "service_field"},
 		secret:   []string{"secret_access_key", "session_token"},
 	},
 	"github": {
@@ -161,6 +161,7 @@ func (r *Registry) Logs(ctx context.Context, name string) (logs.Source, error) {
 		return logs.NewCloudWatch(ctx, logs.CloudWatchConfig{
 			Region: cfg["region"], AccessKeyID: cfg["access_key_id"], SecretAccessKey: cfg["secret_access_key"],
 			SessionToken: cfg["session_token"], Endpoint: cfg["endpoint"],
+			LogGroupPrefix: cfg["log_group_prefix"], ServiceField: cfg["service_field"],
 		})
 	default:
 		return nil, fmt.Errorf("connector %q (%s) is not a log source", name, c.Kind)

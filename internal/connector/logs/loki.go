@@ -72,7 +72,7 @@ func (l *Loki) Query(ctx context.Context, q Query) ([]Line, error) {
 			if err != nil {
 				continue
 			}
-			lines = append(lines, Line{Time: time.Unix(0, ns).UTC(), Labels: r.Stream, Text: v[1]})
+			lines = append(lines, Line{Time: time.Unix(0, ns).UTC(), Labels: r.Stream, Text: messageText(v[1])})
 		}
 	}
 	sort.Slice(lines, func(i, j int) bool { return lines[i].Time.After(lines[j].Time) })
@@ -111,7 +111,8 @@ func (l *Loki) Count(ctx context.Context, q Query) (int64, error) {
 }
 
 // serviceLabels are checked in order when discovering services.
-var serviceLabels = []string{"service_name", "service", "app", "job", "container"}
+// fly_app_name is set by Fly's log shipper (flyio/log-shipper).
+var serviceLabels = []string{"service_name", "service", "app", "fly_app_name", "job", "container"}
 
 func (l *Loki) Services(ctx context.Context) ([]Service, error) {
 	end := time.Now()

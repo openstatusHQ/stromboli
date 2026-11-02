@@ -4,6 +4,8 @@ package logs
 
 import (
 	"context"
+	"encoding/json"
+	"strings"
 	"time"
 )
 
@@ -47,3 +49,35 @@ type Source interface {
 
 // ErrorFilter matches lines that look like errors across common log formats.
 const ErrorFilter = `(?i)(\berror\b|\berr\b|\bfatal\b|\bpanic\b|\bexception\b|level=(error|fatal|crit)|"level":\s*"(error|fatal|critical)"|\bstatus[=:]\s*5\d\d\b|\btimeout\b|\btimed out\b)`
+
+// messageText extracts the message from a JSON log line (as written by Fly's
+// log shipper, Vector, and most structured loggers), so that pattern grouping
+// isn't split by per-event fields such as host, region or instance id. The
+// level is kept as a "level=..." prefix. Other lines are returned unchanged.
+func messageText(raw string) string {
+	s := strings.TrimSpace(raw)
+	if !strings.HasPrefix(s, "{") {
+		return raw
+	}
+	var ev map[string]any
+	if json.Unmarshal([]byte(s), &ev) != nil {
+		return raw
+	}
+	msg, ok := "", false
+	for _, k := range []string{"message", "msg"} {
+		if msg, ok = ev[k].(string); ok && msg != "" {
+			break
+		}
+	}
+	if !ok || msg == "" {
+		return raw
+	}
+	level, _ := ev["level"].(string)
+	if l, isMap := ev["log"].(map[string]any); isMap && level == "" {
+		level, _ = l["level"].(string)
+	}
+	if level != "" && !strings.Contains(strings.ToLower(msg), strings.ToLower(level)) {
+		return "level=" + level + " " + msg
+	}
+	return msg
+}

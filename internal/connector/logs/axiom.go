@@ -54,28 +54,29 @@ func NewAxiom(cfg AxiomConfig) (*Axiom, error) {
 var axiomMessageFields = []string{"message", "msg", "body", "log", "text", "_raw"}
 
 // axiomServiceFields are tried in order when discovering services.
-var axiomServiceFields = []string{"service.name", "resource.service.name", "service_name", "service", "app", "job", "container"}
+// fly.app.name is set by Fly's log shipper (flyio/log-shipper).
+var axiomServiceFields = []string{"service.name", "resource.service.name", "service_name", "service", "app", "fly.app.name", "job", "container"}
 
 // axiomLabelFields are copied into Line.Labels when present.
-var axiomLabelFields = []string{"service.name", "service", "app", "level", "severity", "severity_text", "host", "kubernetes.pod.name"}
+var axiomLabelFields = []string{"service.name", "service", "app", "fly.app.name", "fly.region", "level", "log.level", "severity", "severity_text", "host", "kubernetes.pod.name"}
 
 func (a *Axiom) Query(ctx context.Context, q Query) ([]Line, error) {
 	limit := q.Limit
 	if limit <= 0 || limit > maxLines {
 		limit = maxLines
 	}
-	msgField, err := a.messageField(ctx, q.Selector)
+	f, err := a.lineFields(ctx, q.Selector)
 	if err != nil {
 		return nil, err
 	}
-	apl := a.withFilter(q, msgField) + fmt.Sprintf(" | sort by _time desc | take %d", limit)
+	apl := a.withFilter(q, f) + fmt.Sprintf(" | sort by _time desc | take %d", limit)
 	res, err := a.query(ctx, apl, q.Start, q.End)
 	if err != nil {
 		return nil, err
 	}
 	var lines []Line
 	for _, row := range res.rows() {
-		l := Line{Time: parseAxiomTime(row["_time"]), Text: axiomText(row, msgField)}
+		l := Line{Time: parseAxiomTime(row["_time"]), Text: axiomText(row, f)}
 		for _, f := range axiomLabelFields {
 			if s, ok := row[f].(string); ok && s != "" {
 				if l.Labels == nil {
@@ -91,14 +92,14 @@ func (a *Axiom) Query(ctx context.Context, q Query) ([]Line, error) {
 }
 
 func (a *Axiom) Count(ctx context.Context, q Query) (int64, error) {
-	msgField := ""
+	var f axiomFields
 	if q.Filter != "" {
 		var err error
-		if msgField, err = a.messageField(ctx, q.Selector); err != nil {
+		if f, err = a.lineFields(ctx, q.Selector); err != nil {
 			return 0, err
 		}
 	}
-	res, err := a.query(ctx, a.withFilter(q, msgField)+" | summarize n = count()", q.Start, q.End)
+	res, err := a.query(ctx, a.withFilter(q, f)+" | summarize n = count()", q.Start, q.End)
 	if err != nil {
 		return 0, err
 	}
@@ -106,22 +107,22 @@ func (a *Axiom) Count(ctx context.Context, q Query) (int64, error) {
 	if len(rows) == 0 {
 		return 0, nil
 	}
-	f, ok := rows[0]["n"].(float64)
+	n, ok := rows[0]["n"].(float64)
 	if !ok {
 		return 0, fmt.Errorf("axiom: unexpected count value %v", rows[0]["n"])
 	}
-	return int64(f), nil
+	return int64(n), nil
 }
 
 func (a *Axiom) Histogram(ctx context.Context, q Query, step time.Duration) ([]Bucket, error) {
-	msgField := ""
+	var f axiomFields
 	if q.Filter != "" {
 		var err error
-		if msgField, err = a.messageField(ctx, q.Selector); err != nil {
+		if f, err = a.lineFields(ctx, q.Selector); err != nil {
 			return nil, err
 		}
 	}
-	apl := fmt.Sprintf("%s | summarize n = count() by t = bin(_time, %ds)", a.withFilter(q, msgField), int64(step/time.Second))
+	apl := fmt.Sprintf("%s | summarize n = count() by t = bin(_time, %ds)", a.withFilter(q, f), int64(step/time.Second))
 	res, err := a.query(ctx, apl, q.Start, q.End)
 	if err != nil {
 		return nil, err
@@ -200,12 +201,18 @@ func (a *Axiom) Check(ctx context.Context) error {
 	return a.do(ctx, http.MethodGet, "/v2/datasets", nil, &datasets)
 }
 
-// withFilter appends the regex filter on the message field.
-func (a *Axiom) withFilter(q Query, msgField string) string {
+// withFilter appends the regex filter. It matches "level=<level> <message>",
+// the same text Query returns, so level-only errors (e.g. Fly's log.level)
+// are caught by error filters.
+func (a *Axiom) withFilter(q Query, f axiomFields) string {
 	if q.Filter == "" {
 		return q.Selector
 	}
-	return fmt.Sprintf("%s | where tostring(%s) matches regex %s", q.Selector, aplIdent(msgField), strconv.Quote(q.Filter))
+	target := fmt.Sprintf("tostring(%s)", aplIdent(f.msg))
+	if f.level != "" {
+		target = fmt.Sprintf(`strcat("level=", tostring(%s), " ", %s)`, aplIdent(f.level), target)
+	}
+	return fmt.Sprintf("%s | where %s matches regex %s", q.Selector, target, strconv.Quote(q.Filter))
 }
 
 // aplIdent quotes a dataset or field name: ['service.name'].
@@ -213,39 +220,58 @@ func aplIdent(name string) string {
 	return "['" + strings.NewReplacer(`\`, `\\`, `'`, `\'`).Replace(name) + "']"
 }
 
-// messageFieldCache remembers the detected message field per selector;
-// connectors are rebuilt per request, so this lives at package level.
-var messageFieldCache sync.Map // key -> cachedField
+// axiomFields are the fields holding a selector's log line and level.
+type axiomFields struct {
+	msg, level string
+}
 
-type cachedField struct {
-	field string
+// fieldCache remembers the detected fields per selector; connectors are
+// rebuilt per request, so this lives at package level.
+var fieldCache sync.Map // key -> cachedFields
+
+type cachedFields struct {
+	axiomFields
 	until time.Time
 }
 
-func (a *Axiom) messageField(ctx context.Context, selector string) (string, error) {
-	if a.cfg.MessageField != "" {
-		return a.cfg.MessageField, nil
-	}
-	key := a.cfg.URL + "\x00" + a.cfg.OrgID + "\x00" + selector
-	if c, ok := messageFieldCache.Load(key); ok && time.Now().Before(c.(cachedField).until) {
-		return c.(cachedField).field, nil
+// axiomLevelFields are tried in order to find the log level. log.level is set
+// by Fly's log shipper.
+var axiomLevelFields = []string{"level", "log.level", "severity_text", "severity"}
+
+func (a *Axiom) lineFields(ctx context.Context, selector string) (axiomFields, error) {
+	key := a.cfg.URL + "\x00" + a.cfg.OrgID + "\x00" + a.cfg.MessageField + "\x00" + selector
+	if c, ok := fieldCache.Load(key); ok && time.Now().Before(c.(cachedFields).until) {
+		return c.(cachedFields).axiomFields, nil
 	}
 	end := time.Now()
 	fields, err := a.fields(ctx, selector, end.Add(-7*24*time.Hour), end)
 	if err != nil {
-		return "", err
+		return axiomFields{}, err
 	}
+	out := axiomFields{msg: a.cfg.MessageField}
 	if len(fields) == 0 {
-		return axiomMessageFields[0], nil // no data to detect from; don't cache
+		// No data to detect from; don't cache.
+		if out.msg == "" {
+			out.msg = axiomMessageFields[0]
+		}
+		return out, nil
 	}
 	for _, f := range axiomMessageFields {
-		if fields[f] {
-			messageFieldCache.Store(key, cachedField{f, time.Now().Add(10 * time.Minute)})
-			return f, nil
+		if out.msg == "" && fields[f] {
+			out.msg = f
 		}
 	}
-	return "", fmt.Errorf("axiom: no message field found for %s (tried %s); set message_field on the connector",
-		selector, strings.Join(axiomMessageFields, ", "))
+	if out.msg == "" {
+		return out, fmt.Errorf("axiom: no message field found for %s (tried %s); set message_field on the connector",
+			selector, strings.Join(axiomMessageFields, ", "))
+	}
+	for _, f := range axiomLevelFields {
+		if out.level == "" && fields[f] && f != out.msg {
+			out.level = f
+		}
+	}
+	fieldCache.Store(key, cachedFields{out, time.Now().Add(10 * time.Minute)})
+	return out, nil
 }
 
 // fields returns the field names of the selector's events, empty when there
@@ -364,25 +390,32 @@ func parseAxiomTime(v any) time.Time {
 	return t.UTC()
 }
 
-// axiomText returns the message field, or the whole event as JSON when it is empty.
-func axiomText(row map[string]any, msgField string) string {
-	switch v := row[msgField].(type) {
+// axiomText returns "level=<level> <message>", or the whole event as JSON when
+// the message is empty.
+func axiomText(row map[string]any, f axiomFields) string {
+	var text string
+	switch v := row[f.msg].(type) {
 	case string:
-		if v != "" {
-			return v
-		}
+		text = messageText(v)
 	case nil:
 	default:
 		if b, err := json.Marshal(v); err == nil {
-			return string(b)
+			text = string(b)
 		}
 	}
-	ev := make(map[string]any, len(row))
-	for k, v := range row {
-		if v != nil && !strings.HasPrefix(k, "_") {
-			ev[k] = v
+	if text == "" {
+		ev := make(map[string]any, len(row))
+		for k, v := range row {
+			if v != nil && !strings.HasPrefix(k, "_") {
+				ev[k] = v
+			}
 		}
+		b, _ := json.Marshal(ev)
+		return string(b)
 	}
-	b, _ := json.Marshal(ev)
-	return string(b)
+	if lvl, ok := row[f.level].(string); ok && lvl != "" && !strings.HasPrefix(text, "level=") &&
+		!strings.Contains(strings.ToLower(text), strings.ToLower(lvl)) {
+		text = "level=" + lvl + " " + text
+	}
+	return text
 }

@@ -60,7 +60,7 @@ func table(fields []string, columns ...[]any) string {
 }
 
 func TestAxiomQueryAndCount(t *testing.T) {
-	messageFieldCache = sync.Map{}
+	fieldCache = sync.Map{}
 	now := time.Now().UTC().Truncate(time.Second)
 	f := &fakeAxiom{answer: func(apl string) string {
 		switch {
@@ -125,7 +125,7 @@ func TestAxiomMessageFieldOverride(t *testing.T) {
 	if _, err := ax.Count(context.Background(), Query{Selector: "['logs']", Filter: "x", Start: time.Now().Add(-time.Hour), End: time.Now()}); err != nil {
 		t.Fatal(err)
 	}
-	if len(f.queries) != 1 || !strings.Contains(f.queries[0], `tostring(['attributes.line']) matches regex "x"`) {
+	if last := f.queries[len(f.queries)-1]; !strings.Contains(last, `tostring(['attributes.line']) matches regex "x"`) {
 		t.Fatalf("queries = %q", f.queries)
 	}
 }
@@ -181,7 +181,30 @@ func TestAxiomHistogram(t *testing.T) {
 		t.Fatalf("buckets = %+v", got)
 	}
 	want := `['logs'] | where tostring(['message']) matches regex "err" | summarize n = count() by t = bin(_time, 300s)`
-	if len(f.queries) != 1 || f.queries[0] != want {
+	if f.queries[len(f.queries)-1] != want {
 		t.Fatalf("queries = %q", f.queries)
+	}
+}
+
+// Fly's log shipper keeps the level in log.level: error filters must see it.
+func TestAxiomFlyLevel(t *testing.T) {
+	fieldCache = sync.Map{}
+	now := time.Now().UTC().Format(time.RFC3339)
+	f := &fakeAxiom{answer: func(apl string) string {
+		if strings.HasSuffix(apl, "| take 1") {
+			return table([]string{"_time", "message", "log.level", "fly.app.name"}, []any{now}, []any{"x"}, []any{"info"}, []any{"checker"})
+		}
+		return table([]string{"_time", "message", "log.level", "fly.app.name"}, []any{now}, []any{"query failed"}, []any{"error"}, []any{"checker"})
+	}}
+	ax, _ := NewAxiom(AxiomConfig{URL: f.server(t).URL, Token: "xaat-test"})
+	lines, err := ax.Query(context.Background(), Query{Selector: "['fly']", Filter: ErrorFilter, Start: time.Now().Add(-time.Hour), End: time.Now()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(lines) != 1 || lines[0].Text != "level=error query failed" || lines[0].Labels["fly.app.name"] != "checker" {
+		t.Fatalf("lines = %+v", lines)
+	}
+	if last := f.queries[len(f.queries)-1]; !strings.Contains(last, `where strcat("level=", tostring(['log.level']), " ", tostring(['message'])) matches regex`) {
+		t.Fatalf("query = %s", last)
 	}
 }
