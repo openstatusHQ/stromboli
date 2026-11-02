@@ -1,0 +1,141 @@
+// Package server wires the HTTP server: Connect API, webhooks and health.
+package server
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"log/slog"
+	"net/http"
+	"time"
+
+	"connectrpc.com/connect"
+	"connectrpc.com/grpchealth"
+	"connectrpc.com/grpcreflect"
+	"github.com/anthropics/anthropic-sdk-go/v2"
+	"github.com/anthropics/anthropic-sdk-go/v2/option"
+
+	"github.com/openstatushq/opensre/gen/opensre/v1/opensrev1connect"
+	"github.com/openstatushq/opensre/internal/agent"
+	"github.com/openstatushq/opensre/internal/api"
+	"github.com/openstatushq/opensre/internal/config"
+	"github.com/openstatushq/opensre/internal/connector"
+	"github.com/openstatushq/opensre/internal/report"
+	"github.com/openstatushq/opensre/internal/secrets"
+	"github.com/openstatushq/opensre/internal/store"
+	"github.com/openstatushq/opensre/internal/trigger"
+)
+
+// Run starts the server and blocks until ctx is cancelled.
+func Run(ctx context.Context, cfg config.Config) error {
+	box, err := secrets.New(cfg.SecretKey)
+	if err != nil {
+		return err
+	}
+	st, err := store.Open(ctx, cfg.DBURL)
+	if err != nil {
+		return err
+	}
+	defer st.Close()
+	if err := st.Migrate(ctx); err != nil {
+		return err
+	}
+	if n, err := st.FailRunningInvestigations(ctx); err != nil {
+		return err
+	} else if n > 0 {
+		slog.Warn("marked interrupted investigations as failed", "count", n)
+	}
+
+	reg := connector.NewRegistry(st, box)
+
+	var msgs agent.Messages
+	if cfg.AnthropicAPIKey != "" {
+		client := anthropic.NewClient(option.WithAPIKey(cfg.AnthropicAPIKey))
+		msgs = &client.Beta.Messages
+	} else {
+		slog.Warn("ANTHROPIC_API_KEY is not set: briefs work, investigations are disabled")
+	}
+	var notifier agent.Notifier
+	if cfg.SlackBotToken != "" && cfg.SlackChannel != "" {
+		notifier = report.NewSlack(cfg.SlackBotToken, cfg.SlackChannel)
+	} else {
+		slog.Info("Slack is not configured (SLACK_BOT_TOKEN, SLACK_CHANNEL): reports are available through the API only")
+	}
+
+	// Investigations outlive the request that started them, but not the server.
+	engineCtx, cancelEngine := context.WithCancel(context.Background())
+	defer cancelEngine()
+	engine := agent.New(engineCtx, cfg, st, reg, msgs, notifier)
+
+	if cfg.APIToken == "" {
+		slog.Warn("OPENSRE_API_TOKEN is not set: the API is unauthenticated, do not expose this instance")
+	}
+	opts := connect.WithInterceptors(api.NewAuthInterceptor(cfg.APIToken))
+
+	mux := http.NewServeMux()
+	mux.Handle(opensrev1connect.NewCatalogServiceHandler(api.NewCatalogService(st, reg), opts))
+	mux.Handle(opensrev1connect.NewConnectorServiceHandler(api.NewConnectorService(st, box, reg), opts))
+	mux.Handle(opensrev1connect.NewInvestigationServiceHandler(api.NewInvestigationService(st, engine), opts))
+	mux.Handle(grpchealth.NewHandler(grpchealth.NewStaticChecker(
+		opensrev1connect.CatalogServiceName,
+		opensrev1connect.ConnectorServiceName,
+		opensrev1connect.InvestigationServiceName,
+	)))
+	reflector := grpcreflect.NewStaticReflector(
+		opensrev1connect.CatalogServiceName,
+		opensrev1connect.ConnectorServiceName,
+		opensrev1connect.InvestigationServiceName,
+	)
+	mux.Handle(grpcreflect.NewHandlerV1(reflector))
+	mux.Handle(grpcreflect.NewHandlerV1Alpha(reflector))
+	trigger.New(engine, st, cfg.WebhookToken).Register(mux)
+	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
+		if err := st.Pool.Ping(r.Context()); err != nil {
+			http.Error(w, "database unavailable", http.StatusServiceUnavailable)
+			return
+		}
+		fmt.Fprintln(w, "ok")
+	})
+
+	protocols := new(http.Protocols)
+	protocols.SetHTTP1(true)
+	protocols.SetUnencryptedHTTP2(true) // gRPC clients without TLS
+	srv := &http.Server{
+		Addr:              cfg.Addr,
+		Handler:           logRequests(mux),
+		Protocols:         protocols,
+		ReadHeaderTimeout: 10 * time.Second,
+	}
+
+	errc := make(chan error, 1)
+	go func() {
+		slog.Info("opensre listening", "addr", cfg.Addr, "model", cfg.Model)
+		errc <- srv.ListenAndServe()
+	}()
+
+	select {
+	case err := <-errc:
+		return err
+	case <-ctx.Done():
+	}
+	slog.Info("shutting down")
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	err = srv.Shutdown(shutdownCtx)
+	cancelEngine()
+	engine.Wait()
+	if errors.Is(err, http.ErrServerClosed) {
+		return nil
+	}
+	return err
+}
+
+func logRequests(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
+		next.ServeHTTP(w, r)
+		if r.URL.Path != "/healthz" {
+			slog.Debug("request", "method", r.Method, "path", r.URL.Path, "duration", time.Since(start))
+		}
+	})
+}

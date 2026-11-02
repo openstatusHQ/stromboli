@@ -1,0 +1,41 @@
+# Catalog for the demo stack (docker-compose.dev.yml).
+# Import with: opensre catalog import examples/catalog/services.yaml --runbooks examples/catalog/runbooks
+- name: web
+  description: Public dashboard, server-rendered, calls api.
+  owners: ["@team-frontend"]
+  tier: 2
+  depends_on: [api]
+  logs:
+    source: loki
+    selector: '{service_name="web"}'
+
+- name: api
+  description: Public REST API for monitors and status pages.
+  owners: ["@team-backend"]
+  tier: 1
+  depends_on: [db-proxy]
+  logs:
+    source: loki
+    selector: '{service_name="api"}'
+  runbooks: [runbooks/api-5xx.md]
+  monitors: ["openstatus:1"]
+  slos:
+    - name: availability
+      target: 99.9
+
+- name: checker
+  description: Runs HTTP checks from multiple regions.
+  owners: ["@team-infra"]
+  tier: 1
+  logs:
+    source: loki
+    selector: '{service_name="checker"}'
+
+- name: db-proxy
+  description: Connection pooler in front of Postgres (max 100 connections).
+  owners: ["@team-infra"]
+  tier: 1
+  logs:
+    source: loki
+    selector: '{service_name="db-proxy"}'
+  runbooks: [runbooks/db-proxy-pool.md]

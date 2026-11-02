@@ -1,0 +1,161 @@
+syntax = "proto3";
+
+package opensre.v1;
+
+// Service is one entry of the service catalog. The same shape is used for the
+// YAML import/export format (snake_case field names).
+message Service {
+  string name = 1;
+  string description = 2;
+  repeated string owners = 3;
+  string repo = 4;
+  string path = 5;
+  string runtime = 6;
+  int32 tier = 7;
+  repeated string depends_on = 8;
+  LogsConfig logs = 9;
+  DeploysConfig deploys = 10;
+  MetricsConfig metrics = 11;
+  repeated string runbooks = 12;
+  // Alert sources mapped to this service, e.g. "openstatus:1234".
+  repeated string monitors = 13;
+  repeated SLO slos = 14;
+}
+
+message LogsConfig {
+  // Name of a configured log connector.
+  string source = 1;
+  // Backend-specific stream selector, e.g. `{service_name="api"}` for Loki.
+  string selector = 2;
+}
+
+message DeploysConfig {
+  // Name of a configured deploy connector.
+  string source = 1;
+  // owner/name of the GitHub repository.
+  string repo = 2;
+  // Optional workflow file name; deploys are its completed runs.
+  string workflow = 3;
+  // Optional GitHub deployment environment.
+  string environment = 4;
+  // Branch used when falling back to commits. Defaults to the repo's default branch.
+  string branch = 5;
+}
+
+message MetricsConfig {
+  string source = 1;
+  repeated string selectors = 2;
+}
+
+message SLO {
+  string name = 1;
+  double target = 2;
+}
+
+message Runbook {
+  // Path used to reference it from services, e.g. "runbooks/api-latency.md".
+  string path = 1;
+  string content = 2;
+}
+
+message ValidationIssue {
+  string service = 1;
+  string field = 2;
+  string message = 3;
+  bool warning = 4;
+}
+
+message ListServicesRequest {}
+
+message ListServicesResponse {
+  repeated Service services = 1;
+}
+
+message GetServiceRequest {
+  string name = 1;
+}
+
+message GetServiceResponse {
+  Service service = 1;
+  repeated string upstream = 2;
+  repeated string downstream = 3;
+}
+
+message UpsertServiceRequest {
+  Service service = 1;
+}
+
+message UpsertServiceResponse {
+  Service service = 1;
+  repeated ValidationIssue issues = 2;
+}
+
+message DeleteServiceRequest {
+  string name = 1;
+}
+
+message DeleteServiceResponse {}
+
+message ImportCatalogRequest {
+  // YAML list of services.
+  bytes services_yaml = 1;
+  repeated Runbook runbooks = 2;
+  // Delete services and runbooks that are not part of this import.
+  bool prune = 3;
+  // Validate only, do not write.
+  bool dry_run = 4;
+}
+
+message ImportCatalogResponse {
+  int32 services_upserted = 1;
+  int32 services_deleted = 2;
+  int32 runbooks_upserted = 3;
+  repeated ValidationIssue issues = 4;
+}
+
+message ExportCatalogRequest {}
+
+message ExportCatalogResponse {
+  bytes services_yaml = 1;
+  repeated Runbook runbooks = 2;
+}
+
+message ValidateCatalogRequest {
+  // Also run a test query against each service's log selector.
+  bool check_connectors = 1;
+}
+
+message ValidateCatalogResponse {
+  repeated ValidationIssue issues = 1;
+}
+
+message DiscoverServicesRequest {
+  // Log connector to inspect.
+  string connector = 1;
+}
+
+message DiscoverServicesResponse {
+  // Proposed services not yet in the catalog.
+  repeated Service candidates = 1;
+}
+
+service CatalogService {
+  rpc ListServices(ListServicesRequest) returns (ListServicesResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  rpc GetService(GetServiceRequest) returns (GetServiceResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  rpc UpsertService(UpsertServiceRequest) returns (UpsertServiceResponse);
+  rpc DeleteService(DeleteServiceRequest) returns (DeleteServiceResponse);
+  rpc ImportCatalog(ImportCatalogRequest) returns (ImportCatalogResponse);
+  rpc ExportCatalog(ExportCatalogRequest) returns (ExportCatalogResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  rpc ValidateCatalog(ValidateCatalogRequest) returns (ValidateCatalogResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  rpc DiscoverServices(DiscoverServicesRequest) returns (DiscoverServicesResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+}

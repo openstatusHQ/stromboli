@@ -1,0 +1,121 @@
+package catalog
+
+import (
+	"slices"
+	"strings"
+	"testing"
+)
+
+const sample = `
+- name: api
+  owners: ["@team-api"]
+  depends_on: [db, cache]
+  logs: {source: loki, selector: '{service_name="api"}'}
+  monitors: ["openstatus:12"]
+- name: web
+  owners: ["@team-web"]
+  depends_on: [api]
+  logs: {source: loki, selector: '{service_name="web"}'}
+- name: db
+  owners: ["@team-infra"]
+- name: cache
+  owners: ["@team-infra"]
+  depends_on: [api]
+`
+
+func TestParseAndGraph(t *testing.T) {
+	services, err := ParseYAML([]byte(sample))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(services) != 4 {
+		t.Fatalf("got %d services", len(services))
+	}
+	g := NewGraph(services)
+
+	if got := g.Downstream("api"); !slices.Equal(got, []string{"cache", "db"}) {
+		t.Errorf("downstream(api) = %v", got)
+	}
+	if got := g.Upstream("api"); !slices.Equal(got, []string{"cache", "web"}) {
+		t.Errorf("upstream(api) = %v", got)
+	}
+	if got := g.BlastRadius("db"); !slices.Equal(got, []string{"api", "cache", "web"}) {
+		t.Errorf("blast radius(db) = %v", got)
+	}
+	if s, ok := g.FindByMonitor("openstatus:12"); !ok || s.Name != "api" {
+		t.Errorf("FindByMonitor = %v, %v", s, ok)
+	}
+	if cycles := g.Cycles(); len(cycles) != 1 {
+		t.Errorf("cycles = %v", cycles)
+	}
+}
+
+func TestValidate(t *testing.T) {
+	services, err := ParseYAML([]byte(sample + `
+- name: Bad Name
+  depends_on: [ghost]
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	issues := Validate(services, ValidateOptions{Connectors: map[string]string{"loki": "loki"}})
+	if !HasErrors(issues) {
+		t.Fatal("expected a blocking error for the invalid name")
+	}
+	var msgs []string
+	for _, i := range issues {
+		msgs = append(msgs, i.Service+": "+i.Message)
+	}
+	all := strings.Join(msgs, "\n")
+	for _, want := range []string{"Bad Name: must be lowercase", `unknown service "ghost"`, "dependency cycle"} {
+		if !strings.Contains(all, want) {
+			t.Errorf("missing issue %q in:\n%s", want, all)
+		}
+	}
+}
+
+func TestYAMLRoundTrip(t *testing.T) {
+	services, err := ParseYAML([]byte(sample))
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err := MarshalYAML(services)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(out), "depends_on:") {
+		t.Errorf("expected snake_case keys in export:\n%s", out)
+	}
+	again, err := ParseYAML(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(again) != len(services) {
+		t.Fatalf("round trip lost services")
+	}
+}
+
+func TestYAMLExportKeepsFieldOrderAndTypes(t *testing.T) {
+	services, err := ParseYAML([]byte(`
+- name: "123"
+  owners: ["@team", "true"]
+  tier: 1
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err := MarshalYAML(services)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasPrefix(string(out), "- name: \"123\"\n") {
+		t.Errorf("name should come first and stay a string:\n%s", out)
+	}
+	again, err := ParseYAML(out)
+	if err != nil {
+		t.Fatalf("re-parse: %v\n%s", err, out)
+	}
+	if again[0].Name != "123" || again[0].Owners[1] != "true" {
+		t.Errorf("round trip changed values: %v", again[0])
+	}
+}

@@ -1,0 +1,59 @@
+syntax = "proto3";
+
+package opensre.v1;
+
+// Connector is a configured data source. Secret config values are never
+// returned by the API.
+message Connector {
+  string name = 1;
+  // One of: "loki", "github".
+  string kind = 2;
+  // Non-secret config keys and values. Secret keys are listed with an empty value.
+  map<string, string> config = 3;
+}
+
+message CreateConnectorRequest {
+  string name = 1;
+  string kind = 2;
+  // loki: url, tenant_id, username, password, bearer_token
+  // github: token, base_url
+  map<string, string> config = 3;
+  // Replace an existing connector with the same name.
+  bool replace = 4;
+}
+
+message CreateConnectorResponse {
+  Connector connector = 1;
+}
+
+message ListConnectorsRequest {}
+
+message ListConnectorsResponse {
+  repeated Connector connectors = 1;
+}
+
+message DeleteConnectorRequest {
+  string name = 1;
+}
+
+message DeleteConnectorResponse {}
+
+message TestConnectorRequest {
+  string name = 1;
+}
+
+message TestConnectorResponse {
+  bool ok = 1;
+  string message = 2;
+}
+
+service ConnectorService {
+  rpc CreateConnector(CreateConnectorRequest) returns (CreateConnectorResponse);
+  rpc ListConnectors(ListConnectorsRequest) returns (ListConnectorsResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  rpc DeleteConnector(DeleteConnectorRequest) returns (DeleteConnectorResponse);
+  rpc TestConnector(TestConnectorRequest) returns (TestConnectorResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+}

@@ -1,0 +1,120 @@
+syntax = "proto3";
+
+package opensre.v1;
+
+import "google/protobuf/struct.proto";
+import "google/protobuf/timestamp.proto";
+
+enum InvestigationStatus {
+  INVESTIGATION_STATUS_UNSPECIFIED = 0;
+  INVESTIGATION_STATUS_RUNNING = 1;
+  INVESTIGATION_STATUS_COMPLETED = 2;
+  INVESTIGATION_STATUS_FAILED = 3;
+}
+
+message Investigation {
+  string id = 1;
+  string title = 2;
+  // Alert source: "manual", "alertmanager", "grafana", "openstatus", "webhook".
+  string source = 3;
+  repeated string services = 4;
+  InvestigationStatus status = 5;
+  google.protobuf.Struct alert = 6;
+  Report report = 7;
+  string error = 8;
+  google.protobuf.Timestamp created_at = 9;
+  google.protobuf.Timestamp finished_at = 10;
+  int64 input_tokens = 11;
+  int64 output_tokens = 12;
+}
+
+message Report {
+  string summary = 1;
+  string likely_cause = 2;
+  // "low", "medium" or "high".
+  string confidence = 3;
+  repeated string evidence = 4;
+  repeated string ruled_out = 5;
+  string suggested_mitigation = 6;
+  repeated string next_steps = 7;
+}
+
+// Step is one entry of an investigation's audit trail.
+message Step {
+  int64 seq = 1;
+  // "brief", "tool_call", "llm", "report", "error".
+  string kind = 2;
+  string name = 3;
+  google.protobuf.Struct input = 4;
+  string output = 5;
+  bool is_error = 6;
+  int64 duration_ms = 7;
+  google.protobuf.Timestamp created_at = 8;
+}
+
+message StartInvestigationRequest {
+  string service = 1;
+  string title = 2;
+  // Free text from the reporter: what they observed.
+  string description = 3;
+}
+
+message StartInvestigationResponse {
+  Investigation investigation = 1;
+}
+
+message GetInvestigationRequest {
+  string id = 1;
+}
+
+message GetInvestigationResponse {
+  Investigation investigation = 1;
+  repeated Step steps = 2;
+}
+
+message ListInvestigationsRequest {
+  int32 limit = 1;
+}
+
+message ListInvestigationsResponse {
+  repeated Investigation investigations = 1;
+}
+
+message WatchInvestigationRequest {
+  string id = 1;
+  // Only stream steps with seq greater than this.
+  int64 after_seq = 2;
+}
+
+message WatchInvestigationResponse {
+  oneof event {
+    Step step = 1;
+    // Sent once the investigation finished; the stream then ends.
+    Investigation finished = 2;
+  }
+}
+
+message GetBriefRequest {
+  string service = 1;
+  // Look-back window, e.g. "1h". Defaults to 1h.
+  string since = 2;
+}
+
+message GetBriefResponse {
+  // Markdown brief built without the LLM.
+  string brief = 1;
+}
+
+service InvestigationService {
+  rpc StartInvestigation(StartInvestigationRequest) returns (StartInvestigationResponse);
+  rpc GetInvestigation(GetInvestigationRequest) returns (GetInvestigationResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  rpc ListInvestigations(ListInvestigationsRequest) returns (ListInvestigationsResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  rpc WatchInvestigation(WatchInvestigationRequest) returns (stream WatchInvestigationResponse);
+  rpc GetBrief(GetBriefRequest) returns (GetBriefResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+}
