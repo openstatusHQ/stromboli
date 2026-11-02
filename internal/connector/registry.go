@@ -54,6 +54,12 @@ func KindNames() []string {
 	return names
 }
 
+// Keys returns the required and optional config keys of a kind.
+func Keys(kind string) (required, optional []string) {
+	spec := Kinds[kind]
+	return slices.Clone(spec.required), slices.Clone(spec.optional)
+}
+
 // IsSecret reports whether key holds a secret for the given kind.
 func IsSecret(kind, key string) bool { return slices.Contains(Kinds[kind].secret, key) }
 
