@@ -122,14 +122,16 @@ func TestInvestigationEndToEnd(t *testing.T) {
 			`{"type":"text","text":"Checking the error patterns."}`,
 			toolUse("t1", "log_patterns", fmt.Sprintf(`{"service":%q}`, svcName)),
 			toolUse("t2", "get_service", `{"service":"does-not-exist"}`)),
-		message("tool_use", toolUse("t3", "submit_report", `{
-			"summary":"api is failing database queries","likely_cause":"database connection limit reached",
-			"confidence":"medium","evidence":["5 'too many clients' errors, none in baseline"],
-			"ruled_out":[],"suggested_mitigation":"none","next_steps":["check db-proxy"]}`)),
+		// Reporting before mitigating is sent back to phase 1.
+		message("tool_use", toolUse("t3", "submit_report", reportJSON)),
+		message("tool_use", toolUse("t4", "submit_mitigation", mitigationJSON)),
+		message("tool_use", toolUse("t5", "log_timeline", fmt.Sprintf(`{"service":%q}`, svcName))),
+		message("tool_use", toolUse("t6", "submit_report", reportJSON)),
 	}}
 
-	cfg := config.Config{Model: "claude-opus-5-5", Effort: "high", MaxToolCalls: 10, InvestigationTimeout: time.Minute, DedupeWindow: time.Minute}
-	engine := New(ctx, cfg, st, connector.NewRegistry(st, box), model, nil)
+	cfg := config.Config{Model: "claude-opus-5-5", Effort: "high", MaxToolCalls: 10, MitigationToolCalls: 2, InvestigationTimeout: time.Minute, DedupeWindow: time.Minute}
+	notifier := &recordingNotifier{}
+	engine := New(ctx, cfg, st, connector.NewRegistry(st, box), model, notifier)
 
 	inv, _, err := engine.Start(ctx, StartRequest{Title: "api errors", Source: "manual", Services: []string{svcName}})
 	if err != nil {
@@ -148,8 +150,23 @@ func TestInvestigationEndToEnd(t *testing.T) {
 	if err := protojson.Unmarshal(got.Report, rep); err != nil {
 		t.Fatal(err)
 	}
-	if rep.LikelyCause != "database connection limit reached" || rep.Confidence != "medium" {
+	if rep.LikelyCause != "database connection limit reached" || rep.Confidence != "medium" || rep.Fix == "" {
 		t.Errorf("unexpected report: %v", rep)
+	}
+
+	// Mitigate first: the mitigation is stored and published before the report.
+	mit := &opensrev1.Mitigation{}
+	if err := protojson.Unmarshal(got.Mitigation, mit); err != nil {
+		t.Fatalf("mitigation not stored: %v", err)
+	}
+	if mit.Kind != "restart" || !got.MitigatedAt.Valid {
+		t.Errorf("unexpected mitigation: %v (at %v)", mit, got.MitigatedAt)
+	}
+	if got.MitigatedAt.Time.After(got.FinishedAt.Time) {
+		t.Error("mitigation should be proposed before the investigation finishes")
+	}
+	if len(notifier.mitigations) != 1 || notifier.mitigations[0].Kind != "restart" || notifier.finishedBeforeMitigation {
+		t.Errorf("notifier should get the mitigation before the report: %+v", notifier)
 	}
 
 	steps, err := st.ListSteps(ctx, db.ListStepsParams{InvestigationID: inv.ID})
@@ -170,7 +187,7 @@ func TestInvestigationEndToEnd(t *testing.T) {
 			}
 		}
 	}
-	if kinds["brief"] != 1 || kinds["llm"] != 2 || kinds["tool_call"] != 2 || kinds["report"] != 1 {
+	if kinds["brief"] != 1 || kinds["llm"] != 5 || kinds["tool_call"] != 3 || kinds["mitigation"] != 1 || kinds["report"] != 1 {
 		t.Errorf("unexpected steps: %v", kinds)
 	}
 	if !strings.Contains(patternsOut, "too many clients") || !strings.Contains(patternsOut, `"new":true`) {
@@ -180,20 +197,68 @@ func TestInvestigationEndToEnd(t *testing.T) {
 		t.Errorf("unexpected get_service output: %s", badToolOut)
 	}
 
-	// The second request must carry both tool results in one user message.
-	if len(model.requests) != 2 {
+	if len(model.requests) != 5 {
 		t.Fatalf("got %d model requests", len(model.requests))
 	}
-	msgs := model.requests[1].Messages
-	last := msgs[len(msgs)-1]
-	if last.OfUser == nil {
-		t.Fatal("last message should be a user message")
+	// The second request must carry both tool results in one user message,
+	// plus the nudge to mitigate since the triage budget (2) is spent.
+	last := lastUser(t, model.requests[1])
+	if len(last.Content) != 3 || last.Content[0].OfToolResult == nil || last.Content[1].OfToolResult == nil ||
+		last.Content[2].OfText == nil || !strings.Contains(last.Content[2].OfText.Text, "submit_mitigation") {
+		t.Errorf("expected two tool results and a mitigation nudge, got %d blocks", len(last.Content))
 	}
-	if len(last.OfUser.Content) != 2 || last.OfUser.Content[0].OfToolResult == nil || last.OfUser.Content[1].OfToolResult == nil {
-		t.Errorf("expected two tool results in the last message, got %d blocks", len(last.OfUser.Content))
+	// A report before any mitigation is rejected.
+	if r := lastUser(t, model.requests[2]).Content[0].OfToolResult; r == nil || !r.IsError.Value {
+		t.Error("submit_report before submit_mitigation should be rejected")
+	}
+	if r := lastUser(t, model.requests[3]).Content[0].OfToolResult; r == nil || r.IsError.Value {
+		t.Error("submit_mitigation should be accepted")
 	}
 	first := model.requests[0].Messages[0].OfUser.Content[0].OfText.Text
 	if !strings.Contains(first, "# Brief: "+svcName) {
 		t.Errorf("first message should include the brief, got: %.300s", first)
 	}
+}
+
+const (
+	mitigationJSON = `{"kind":"restart","target":"api","action":"kubectl rollout restart deploy/api","rationale":"connection pool exhausted",
+		"verify":"'too many clients' stops in log_patterns","undo":"none needed","risk":"safe","confidence":"medium","impact":"api queries failing for 5 minutes"}`
+	reportJSON = `{"summary":"api is failing database queries","likely_cause":"database connection limit reached",
+		"confidence":"medium","evidence":["5 'too many clients' errors, none in baseline"],
+		"ruled_out":[],"suggested_mitigation":"restart api","fix":"lower the pool size","next_steps":["check db-proxy"]}`
+)
+
+func lastUser(t *testing.T, p anthropic.BetaMessageNewParams) *anthropic.BetaUserMessageParam {
+	t.Helper()
+	m := p.Messages[len(p.Messages)-1]
+	if m.OfUser == nil {
+		t.Fatal("last message should be a user message")
+	}
+	return m.OfUser
+}
+
+type recordingNotifier struct {
+	mu                       sync.Mutex
+	mitigations              []*opensrev1.Mitigation
+	finished                 bool
+	finishedBeforeMitigation bool
+}
+
+func (n *recordingNotifier) Started(context.Context, db.Investigation) (string, string, error) {
+	return "", "", nil
+}
+
+func (n *recordingNotifier) Mitigated(_ context.Context, _ db.Investigation, m *opensrev1.Mitigation) error {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	n.mitigations = append(n.mitigations, m)
+	return nil
+}
+
+func (n *recordingNotifier) Finished(context.Context, db.Investigation, *opensrev1.Report) error {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	n.finished = true
+	n.finishedBeforeMitigation = len(n.mitigations) == 0
+	return nil
 }

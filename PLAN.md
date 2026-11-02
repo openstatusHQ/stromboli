@@ -4,6 +4,7 @@
 > - `protovalidate` is not wired yet; validation is in Go.
 > - The openstatus API connector (as a source of context) is not built; only the openstatus webhook trigger is.
 > - Slack steering is not built yet (milestone 5).
+> - Investigations **mitigate first, investigate second**: a triage phase proposes a generic mitigation (rollback, restart, scale_up, drain, disable_feature, block_traffic, failover, degrade, none) and publishes it before the root-cause phase. Time to mitigation is stored (`mitigated_at`). Next: a deterministic fast path (no LLM) for obvious cases, such as errors that start right after a deploy → rollback.
 
 An AI SRE agent, in the spirit of OpenAI's SevBot and Google's ProdAgent: it knows every service we run, and when something breaks it gathers context (logs, deploys, metrics, dependencies), forms and checks hypotheses, and reports to humans. It **suggests, it does not execute**.
 

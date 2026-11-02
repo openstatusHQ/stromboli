@@ -1,6 +1,6 @@
 # opensre
 
-An open-source AI SRE agent you host yourself. It knows your services (owners, dependencies, logs, deploys, runbooks). When an alert fires, it gathers the context, investigates with Claude using read-only tools, and posts a report to Slack. It **suggests, it never executes**.
+An open-source AI SRE agent you host yourself. It knows your services (owners, dependencies, logs, deploys, runbooks). When an alert fires, it gathers the context, **proposes a mitigation first, then investigates the root cause** with Claude using read-only tools, and posts both to Slack. It **suggests, it never executes**.
 
 See [PLAN.md](PLAN.md) for the design and roadmap.
 
@@ -13,14 +13,15 @@ See [PLAN.md](PLAN.md) for the design and roadmap.
    - recent deploys or commits of the service and its dependencies
    - its runbooks
    - similar past investigations
-3. **Investigate:** Claude reads the brief and tests hypotheses with read-only tools:
+3. **Mitigate first:** what matters most is how fast user impact stops, not how fast the bug is understood (as in [Google's SRE practice](https://cloud.google.com/blog/topics/developers-practitioners/how-google-sres-use-gemini-cli-to-solve-real-world-outages)). From the brief and a few tool calls, Claude picks one generic mitigation from a closed set: `rollback`, `restart`, `scale_up`, `drain`, `disable_feature`, `block_traffic`, `failover`, `degrade` or `none`. It fills in the target and exact command, how to verify it worked, how to undo it, and the risk (`safe`, `reversible`, `destructive`). The mitigation is published right away to the API, Slack (with a thread reply so on-call gets notified) and the audit trail, and its time is stored as `mitigated_at`. After `OPENSRE_MITIGATION_TOOL_CALLS` tool calls the agent is told to propose one. A report submitted before a mitigation is rejected.
+4. **Investigate:** with a mitigation in hand, Claude looks for the root cause and tests hypotheses with read-only tools:
    - `log_patterns`, `query_logs`, `log_timeline`
    - `recent_deploys`, `get_commit`
    - `get_service`, `list_services`
    - `read_runbook`, `search_past_investigations`
 
-   Tool output is aggregated, size-capped and redacted (tokens, passwords, emails) before it reaches the model.
-4. **Report:** a structured report: likely cause, confidence, evidence, ruled out, suggested mitigation, next steps. It goes to Slack and the API. Every brief, tool call and model turn is stored as an audit trail.
+   Tool output is aggregated, size-capped and redacted (tokens, passwords, emails) before it reaches the model. If the evidence shows the mitigation will not help (say, a restart cannot fix a bad config push), Claude revises it.
+5. **Report:** a structured report: likely cause, confidence, evidence, ruled out, the mitigation given the root cause, the long-term fix, next steps. It goes to Slack and the API. Every brief, tool call and model turn is stored as an audit trail.
 
 Logs are queried on demand. opensre never ingests or stores your logs, only the aggregated evidence each investigation used.
 
@@ -98,6 +99,7 @@ grpcurl -plaintext -H "Authorization: Bearer $OPENSRE_API_TOKEN" localhost:8080 
 | `ANTHROPIC_API_KEY` | | required for investigations |
 | `OPENSRE_MODEL` / `OPENSRE_EFFORT` | `claude-opus-5-5` / `high` | |
 | `OPENSRE_MAX_TOOL_CALLS` | `30` | per investigation |
+| `OPENSRE_MITIGATION_TOOL_CALLS` | `6` | tool calls before the agent must propose a mitigation |
 | `OPENSRE_INVESTIGATION_TIMEOUT` | `8m` | |
 | `OPENSRE_DEDUPE_WINDOW` | `30m` | |
 | `SLACK_BOT_TOKEN`, `SLACK_CHANNEL` | | bot needs `chat:write` |

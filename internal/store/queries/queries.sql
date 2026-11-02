@@ -67,6 +67,9 @@ UPDATE investigations SET slack_channel = $2, slack_ts = $3 WHERE id = $1;
 -- name: AddInvestigationTokens :exec
 UPDATE investigations SET input_tokens = input_tokens + $2, output_tokens = output_tokens + $3 WHERE id = $1;
 
+-- name: SetInvestigationMitigation :exec
+UPDATE investigations SET mitigation = $2, mitigated_at = COALESCE(mitigated_at, now()) WHERE id = $1;
+
 -- name: FinishInvestigation :exec
 UPDATE investigations SET status = $2, report = $3, error = $4, finished_at = now() WHERE id = $1;
 

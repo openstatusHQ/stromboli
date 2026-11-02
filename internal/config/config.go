@@ -22,6 +22,9 @@ type Config struct {
 	Effort          string // OPENSRE_EFFORT
 	// MaxToolCalls bounds one investigation.
 	MaxToolCalls int // OPENSRE_MAX_TOOL_CALLS
+	// MitigationToolCalls is how many tool calls the triage phase gets before
+	// the agent is told to propose a mitigation (mitigate first, investigate second).
+	MitigationToolCalls int // OPENSRE_MITIGATION_TOOL_CALLS
 	// InvestigationTimeout bounds one investigation's wall-clock time.
 	InvestigationTimeout time.Duration // OPENSRE_INVESTIGATION_TIMEOUT
 
@@ -52,6 +55,9 @@ func Load() (Config, error) {
 	var err error
 	if c.MaxToolCalls, err = strconv.Atoi(env("OPENSRE_MAX_TOOL_CALLS", "30")); err != nil {
 		return c, fmt.Errorf("OPENSRE_MAX_TOOL_CALLS: %w", err)
+	}
+	if c.MitigationToolCalls, err = strconv.Atoi(env("OPENSRE_MITIGATION_TOOL_CALLS", "6")); err != nil {
+		return c, fmt.Errorf("OPENSRE_MITIGATION_TOOL_CALLS: %w", err)
 	}
 	if c.InvestigationTimeout, err = time.ParseDuration(env("OPENSRE_INVESTIGATION_TIMEOUT", "8m")); err != nil {
 		return c, fmt.Errorf("OPENSRE_INVESTIGATION_TIMEOUT: %w", err)

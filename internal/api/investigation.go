@@ -171,6 +171,15 @@ func toInvestigation(r db.Investigation) *opensrev1.Investigation {
 	if len(r.Alert) > 0 {
 		out.Alert = toStruct(r.Alert)
 	}
+	if len(r.Mitigation) > 0 {
+		m := &opensrev1.Mitigation{}
+		if err := protojson.Unmarshal(r.Mitigation, m); err == nil {
+			out.Mitigation = m
+		}
+	}
+	if r.MitigatedAt.Valid {
+		out.MitigatedAt = timestamppb.New(r.MitigatedAt.Time)
+	}
 	if len(r.Report) > 0 {
 		rep := &opensrev1.Report{}
 		if err := protojson.Unmarshal(r.Report, rep); err == nil {

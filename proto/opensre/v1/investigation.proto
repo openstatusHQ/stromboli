@@ -26,6 +26,34 @@ message Investigation {
   google.protobuf.Timestamp finished_at = 10;
   int64 input_tokens = 11;
   int64 output_tokens = 12;
+  // Set as soon as the triage phase proposes a mitigation, before the root
+  // cause is known. Investigations mitigate first and investigate second.
+  Mitigation mitigation = 13;
+  google.protobuf.Timestamp mitigated_at = 14;
+}
+
+// Mitigation is the fastest safe way to stop user impact, proposed before the
+// root cause is known. opensre suggests it; a human runs it.
+message Mitigation {
+  // Generic mitigation class: "rollback", "restart", "scale_up", "drain",
+  // "disable_feature", "block_traffic", "failover", "degrade" or "none".
+  string kind = 1;
+  // What the action applies to: a service, deploy SHA, region, flag...
+  string target = 2;
+  // The exact command or steps a human runs.
+  string action = 3;
+  // Why this mitigation fits the symptoms.
+  string rationale = 4;
+  // How to tell it worked.
+  string verify = 5;
+  // How to revert it if it makes things worse.
+  string undo = 6;
+  // "safe", "reversible" or "destructive".
+  string risk = 7;
+  // "low", "medium" or "high".
+  string confidence = 8;
+  // Current user impact, as far as the evidence shows.
+  string impact = 9;
 }
 
 message Report {
@@ -37,12 +65,14 @@ message Report {
   repeated string ruled_out = 5;
   string suggested_mitigation = 6;
   repeated string next_steps = 7;
+  // The long-term fix for the root cause (e.g. revert commit X and add a check).
+  string fix = 8;
 }
 
 // Step is one entry of an investigation's audit trail.
 message Step {
   int64 seq = 1;
-  // "brief", "tool_call", "llm", "report", "error".
+  // "brief", "tool_call", "llm", "mitigation", "report", "error".
   string kind = 2;
   string name = 3;
   google.protobuf.Struct input = 4;
