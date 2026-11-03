@@ -11,7 +11,9 @@ import (
 
 	"github.com/openstatushq/opensre/internal/connector/deploys"
 	"github.com/openstatushq/opensre/internal/connector/fly"
+	"github.com/openstatushq/opensre/internal/connector/gcp"
 	"github.com/openstatushq/opensre/internal/connector/logs"
+	"github.com/openstatushq/opensre/internal/connector/mcpconn"
 	"github.com/openstatushq/opensre/internal/connector/metrics"
 	"github.com/openstatushq/opensre/internal/secrets"
 	"github.com/openstatushq/opensre/internal/store"
@@ -50,8 +52,10 @@ var Kinds = map[string]kindSpec{
 		optional: []string{"url"},
 		secret:   []string{"token"},
 	},
+	// With a token, github goes through GitHub's remote MCP server (mcp_url
+	// overrides it); deployments and token-less use stay on the REST API.
 	"github": {
-		optional: []string{"token", "base_url"},
+		optional: []string{"token", "base_url", "mcp_url"},
 		secret:   []string{"token"},
 	},
 	// fly_machines holds a token that can act on machines (fly tokens create
@@ -60,6 +64,19 @@ var Kinds = map[string]kindSpec{
 		required: []string{"org", "token"},
 		optional: []string{"url"},
 		secret:   []string{"token"},
+	},
+	// Google Cloud, through Google's remote MCP servers. Without
+	// credentials_json (a service account key), Application Default
+	// Credentials are used.
+	"gcp_logging": {
+		required: []string{"project"},
+		optional: []string{"credentials_json"},
+		secret:   []string{"credentials_json"},
+	},
+	"gcp_monitoring": {
+		required: []string{"project"},
+		optional: []string{"credentials_json"},
+		secret:   []string{"credentials_json"},
 	},
 }
 
@@ -131,10 +148,22 @@ func Split(box *secrets.Box, kind string, config map[string]string) (public json
 type Registry struct {
 	store *store.Store
 	box   *secrets.Box
+	// mcp keeps one MCP session per connector across requests.
+	mcp *mcpconn.Pool
 }
 
 func NewRegistry(s *store.Store, box *secrets.Box) *Registry {
-	return &Registry{store: s, box: box}
+	return &Registry{store: s, box: box, mcp: mcpconn.NewPool()}
+}
+
+// Close ends the connectors' MCP sessions.
+func (r *Registry) Close() { r.mcp.Close() }
+
+// gcpMCP returns the pooled MCP client of a gcp_* connector.
+func (r *Registry) gcpMCP(name string, cfg map[string]string, server gcp.Server, tools []string) (*mcpconn.Client, error) {
+	return r.mcp.Get(name, cfg, func() (mcpconn.Config, error) {
+		return gcp.Config{Project: cfg["project"], CredentialsJSON: cfg["credentials_json"]}.MCP(server, tools...)
+	})
 }
 
 // Config returns a connector's full config, secrets included.
@@ -188,19 +217,31 @@ func (r *Registry) Logs(ctx context.Context, name string) (logs.Source, error) {
 			SessionToken: cfg["session_token"], Endpoint: cfg["endpoint"],
 			LogGroupPrefix: cfg["log_group_prefix"], ServiceField: cfg["service_field"],
 		})
+	case "gcp_logging":
+		c, err := r.gcpMCP(name, cfg, gcp.Logging, logs.GCPLoggingTools)
+		if err != nil {
+			return nil, err
+		}
+		return logs.NewGCPLogging(cfg["project"], c), nil
 	default:
 		return nil, fmt.Errorf("connector %q (%s) is not a log source", name, c.Kind)
 	}
 }
 
 // Metrics returns the metric source named name and its kind (presets depend on it).
-func (r *Registry) Metrics(ctx context.Context, name string) (*metrics.Prometheus, string, error) {
+func (r *Registry) Metrics(ctx context.Context, name string) (metrics.Source, string, error) {
 	c, cfg, err := r.Config(ctx, name)
 	if err != nil {
 		return nil, "", err
 	}
 	var p *metrics.Prometheus
 	switch c.Kind {
+	case "gcp_monitoring":
+		m, err := r.gcpMCP(name, cfg, gcp.Monitoring, metrics.GCPMonitoringTools)
+		if err != nil {
+			return nil, "", err
+		}
+		return metrics.NewGCPMonitoring(cfg["project"], m), c.Kind, nil
 	case "prometheus":
 		p, err = metrics.NewPrometheus(metrics.PrometheusConfig{
 			URL: cfg["url"], TenantID: cfg["tenant_id"], Username: cfg["username"],
@@ -211,7 +252,10 @@ func (r *Registry) Metrics(ctx context.Context, name string) (*metrics.Prometheu
 	default:
 		return nil, "", fmt.Errorf("connector %q (%s) is not a metrics source", name, c.Kind)
 	}
-	return p, c.Kind, err
+	if err != nil {
+		return nil, "", err
+	}
+	return p, c.Kind, nil
 }
 
 // GitHub returns the deploy source named name.
@@ -223,7 +267,7 @@ func (r *Registry) GitHub(ctx context.Context, name string) (*deploys.GitHub, er
 	if c.Kind != "github" {
 		return nil, fmt.Errorf("connector %q (%s) is not a github connector", name, c.Kind)
 	}
-	return deploys.NewGitHub(deploys.GitHubConfig{Token: cfg["token"], BaseURL: cfg["base_url"]}), nil
+	return deploys.NewGitHub(deploys.GitHubConfig{Token: cfg["token"]}), nil
 }
 
 // FlyMachines returns a Machines API client from a fly_machines connector,

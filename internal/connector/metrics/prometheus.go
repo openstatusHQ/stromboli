@@ -67,6 +67,26 @@ func NewFly(org, token, baseURL string) (*Prometheus, error) {
 	})
 }
 
+// Source is a metrics backend queried with PromQL. Implementations must
+// bound their responses.
+type Source interface {
+	// Range evaluates expr over [start, end].
+	Range(ctx context.Context, expr string, start, end time.Time) ([]Series, error)
+	// MetricNames lists the metric names with series matching matchers.
+	MetricNames(ctx context.Context, matchers string, start, end time.Time) ([]string, error)
+	// Services proposes catalog services found in the backend, for onboarding.
+	Services(ctx context.Context) ([]Service, error)
+	// Check verifies connectivity and credentials.
+	Check(ctx context.Context) error
+}
+
+var _ Source = (*Prometheus)(nil)
+
+// rangeStep keeps each series at most maxPoints samples, and at least 15s.
+func rangeStep(start, end time.Time) time.Duration {
+	return max(end.Sub(start)/maxPoints, 15*time.Second).Truncate(time.Second)
+}
+
 // maxSeries and maxPoints bound a range query's response.
 const (
 	maxSeries = 50
@@ -76,29 +96,37 @@ const (
 // Range evaluates expr over [start, end]. The step is chosen so each series
 // has at most maxPoints samples, and at least 15s.
 func (p *Prometheus) Range(ctx context.Context, expr string, start, end time.Time) ([]Series, error) {
-	step := max(end.Sub(start)/maxPoints, 15*time.Second).Truncate(time.Second)
+	step := rangeStep(start, end)
 	params := url.Values{
 		"query": {expr},
 		"start": {strconv.FormatInt(start.Unix(), 10)},
 		"end":   {strconv.FormatInt(end.Unix(), 10)},
 		"step":  {strconv.FormatInt(int64(step.Seconds()), 10)},
 	}
-	var resp struct {
-		Data struct {
-			ResultType string `json:"resultType"`
-			Result     []struct {
-				Metric map[string]string `json:"metric"`
-				Values [][2]any          `json:"values"`
-			} `json:"result"`
-		} `json:"data"`
-	}
+	var resp matrixResponse
 	if err := p.get(ctx, "/api/v1/query_range", params, &resp); err != nil {
 		return nil, err
 	}
-	out := make([]Series, 0, len(resp.Data.Result))
-	for _, r := range resp.Data.Result {
-		s := Series{Labels: r.Metric}
-		for _, v := range r.Values {
+	return resp.series(), nil
+}
+
+// matrixResponse is a Prometheus range query response.
+type matrixResponse struct {
+	Data struct {
+		ResultType string `json:"resultType"`
+		Result     []struct {
+			Metric map[string]string `json:"metric"`
+			Values [][2]any          `json:"values"`
+		} `json:"result"`
+	} `json:"data"`
+}
+
+// series converts the response, keeping the maxSeries highest series.
+func (r matrixResponse) series() []Series {
+	out := make([]Series, 0, len(r.Data.Result))
+	for _, m := range r.Data.Result {
+		s := Series{Labels: m.Metric}
+		for _, v := range m.Values {
 			ts, ok := v[0].(float64)
 			str, _ := v[1].(string)
 			f, err := strconv.ParseFloat(str, 64)
@@ -112,7 +140,7 @@ func (p *Prometheus) Range(ctx context.Context, expr string, start, end time.Tim
 	if len(out) > maxSeries {
 		out = topSeries(out, maxSeries)
 	}
-	return out, nil
+	return out
 }
 
 // topSeries keeps the n series with the highest peak.

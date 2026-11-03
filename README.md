@@ -89,6 +89,21 @@ Point your alerts at it:
   runtime: fly.io                      # or a fly: block, see Machine actions
 ```
 
+### MCP first
+
+opensre calls a provider through the MCP server the provider hosts, when there is one. Otherwise it calls the provider's API directly, without adding a CLI or local process just to get MCP. opensre is the MCP client: it calls the tools from code and turns their output into compact evidence. The model never talks to these servers directly.
+
+- **Allow-list.** Each connector names the few tools it may call (`internal/connector/mcpconn`). Any other tool the server offers is refused, including `deploy`, `delete` and `exec`.
+- **Read-only check.** For servers that annotate their tools (Google Cloud, GitHub), connecting fails unless every allowed tool is marked `readOnlyHint`.
+- **Sessions are reused** per connector and closed on shutdown.
+
+| Provider | Through | Not covered by MCP (REST) |
+|---|---|---|
+| Google Cloud: `gcp_logging`, `gcp_monitoring` | Google's remote MCP servers (`logging.googleapis.com/mcp`, `monitoring.googleapis.com/mcp`) | none |
+| GitHub: `github` with a token | GitHub's remote MCP server, toolsets `repos,actions`, read-only mode | Deployments (`deploys.environment`), and token-less use |
+| Fly.io, Loki, Prometheus, CloudWatch | their APIs: the Machines API, Fly's managed Prometheus, the Loki and Prometheus HTTP APIs, the AWS SDK | no hosted MCP server: see [Not on MCP](#not-on-mcp) |
+| Axiom | REST API for now | see [Not on MCP](#not-on-mcp) |
+
 ### Log connectors
 
 | Kind | Add it | `logs.selector` | `catalog discover` proposes |
@@ -96,8 +111,9 @@ Point your alerts at it:
 | `loki` | `connector add loki loki url=http://loki:3100` (+ `tenant_id`, `username`, `password`, `bearer_token`) | LogQL stream selector: `{service_name="api"}` | one service per `service_name` / `service` / `app` / `job` / `container` label value |
 | `axiom` | `connector add axiom axiom token=xaat-...` (+ `url` for other regions, `org_id` for personal tokens, `message_field`) | Start of an APL query: `['logs']` or `['logs'] \| where ['service.name'] == "api"` | one service per `service.name` / `service` / `app` value in each log dataset, or one per dataset |
 | `cloudwatch` | `connector add cw cloudwatch region=eu-west-1` (+ `access_key_id`, `secret_access_key`, `session_token`, `endpoint`) | Log group(s), optionally followed by Insights commands: `/ecs/api` or `/ecs/prod, /ecs/worker \| filter service = "api"` | one service per log group, named after its last path segment |
+| `gcp_logging` | `connector add gcp-logs gcp_logging project=<project-id>` (+ `credentials_json=@key.json`) | Logging query language filter: `resource.type="cloud_run_revision" AND resource.labels.service_name="api"` | one service per Cloud Run service or job, function, Cloud Scheduler job, Cloud Tasks queue, Pub/Sub subscription or topic seen in the last hour |
 
-Error filters are RE2 regexes applied to the log line: Loki's line, Axiom's message field (detected from `message`, `msg`, `body`, `log`, ... or set with `message_field`), CloudWatch's `@message`.
+Error filters are RE2 regexes applied to the log line: Loki's line, Axiom's message field (detected from `message`, `msg`, `body`, `log`, ... or set with `message_field`), CloudWatch's `@message`, and Cloud Logging's `textPayload` and `jsonPayload.message`. On Cloud Logging, the error filter also matches `severity>=ERROR` and `httpRequest.status>=500`. Cloud Logging has no count tool, so error counts there stop at 5000.
 
 Without `access_key_id`/`secret_access_key`, the CloudWatch connector uses the default AWS credential chain of the opensre server (environment, shared config, IAM role). It needs `logs:DescribeLogGroups`, `logs:StartQuery`, `logs:GetQueryResults` and `logs:StopQuery`.
 
@@ -107,10 +123,32 @@ Without `access_key_id`/`secret_access_key`, the CloudWatch connector uses the d
 |---|---|---|---|
 | `fly` | `connector add fly fly org=<org-slug> token="$(fly tokens create readonly <org-slug>)"` | `app="checker"` | yes, see below |
 | `prometheus` | `connector add prom prometheus url=http://prometheus:9090` (+ `tenant_id`, `username`, `password`, `bearer_token`, `service_label`) | `job="api"`, `service="api"` | none: the agent uses `list_metrics` and writes PromQL |
+| `gcp_monitoring` | `connector add gcp-metrics gcp_monitoring project=<project-id>` (+ `credentials_json=@key.json`) | `subscription_id="checker-ams"`, `queue_id="alerting"`, `service_name="api"` | yes, see below |
 
 `prometheus` works with anything speaking the Prometheus HTTP API (Prometheus, Mimir, Thanos, VictoriaMetrics, Grafana Cloud). In a PromQL query, `$selector` expands to the service's matchers, e.g. `sum by (instance) (rate(http_requests_total{$selector, code=~"5.."}[1m]))`. Each series comes back as min, max, avg, last, its average over the baseline window and 12 points, capped at 10 series.
 
 `opensre catalog discover <metrics-connector>` proposes `metrics` for every app it finds (one per `app` label value on Fly; the first of `service_name`, `service`, `app`, `job` with values on Prometheus, or `service_label`). Services already in the catalog without metrics come back as their full entry with `metrics` filled in, so `opensre catalog import` only adds the metrics.
+
+### Google Cloud
+
+Both GCP connectors go through Google's remote MCP servers using PromQL and the Logging query language. Without `credentials_json` (a service account key), they use Application Default Credentials: `GOOGLE_APPLICATION_CREDENTIALS`, workload identity, or `gcloud auth application-default login`. The principal needs `roles/mcp.toolUser`, `roles/logging.viewer` and `roles/monitoring.viewer`. Calls are billed to `project`.
+
+`gcp_monitoring` presets depend on the resource label in the service's selectors. A selector with `subscription_id` gets the Pub/Sub presets, `queue_id` gets Cloud Tasks, and `service_name` gets Cloud Run:
+
+| Product | Presets |
+|---|---|
+| Pub/Sub | `pubsub_backlog_messages`, `pubsub_oldest_unacked_seconds`, `pubsub_acks_per_second`, `pubsub_sent_per_second`, `pubsub_expired_ack_deadlines_per_second`, `pubsub_dead_letter_per_second`, `pubsub_nacks` |
+| Cloud Tasks | `tasks_queue_depth`, `tasks_attempts_per_second` (by response code), `tasks_attempt_delay_p95_seconds` |
+| Cloud Run | `http_requests_per_second`, `http_5xx_per_second`, `http_p95_seconds`, `instances`, `cpu_utilization_p95_percent`, `memory_utilization_p95_percent`, `startup_latency_p95_seconds` (per revision) |
+
+`list_metrics` lists the project's active metrics under their PromQL names (`pubsub_googleapis_com:subscription_num_undelivered_messages`). `catalog discover` proposes one service per Pub/Sub subscription, Cloud Tasks queue and Cloud Run service with data in the last hour.
+
+### Not on MCP
+
+- **Fly.io** offers MCP only through `flyctl mcp server`, a local process that runs flyctl commands and serves all of them (destroy, exec, secrets) without marking any read-only. opensre calls the Machines API directly instead.
+- **CloudWatch:** AWS's MCP server (`awslabs.cloudwatch-mcp-server`) is a local Python process, so opensre uses the AWS SDK.
+- **Loki and Prometheus** have no hosted MCP server. Grafana's `mcp-grafana` needs a Grafana instance in front of them.
+- **Axiom** hosts an MCP server (`mcp.axiom.co`). Its tool list needs credentials even to read, so its tools have not been checked yet. Until then, opensre uses its REST API.
 
 ### Fly.io
 
