@@ -1,0 +1,99 @@
+syntax = "proto3";
+
+package opensre.v1;
+
+import "google/protobuf/timestamp.proto";
+import "opensre/v1/investigation.proto";
+
+enum ActionStatus {
+  ACTION_STATUS_UNSPECIFIED = 0;
+  // Waiting for a human to approve or reject it.
+  ACTION_STATUS_PROPOSED = 1;
+  // Approved and being executed.
+  ACTION_STATUS_RUNNING = 2;
+  ACTION_STATUS_SUCCEEDED = 3;
+  ACTION_STATUS_FAILED = 4;
+  ACTION_STATUS_REJECTED = 5;
+  // Not approved in time (OPENSRE_ACTION_TTL).
+  ACTION_STATUS_EXPIRED = 6;
+  // Replaced by a revised mitigation before anyone approved it.
+  ACTION_STATUS_SUPERSEDED = 7;
+}
+
+// Action is an executable mitigation and its audit record: who approved it,
+// when, and what it did.
+message Action {
+  string id = 1;
+  string investigation_id = 2;
+  string service = 3;
+  MachineAction machine_action = 4;
+  // Connector whose credentials run the action.
+  string connector = 5;
+  ActionStatus status = 6;
+  // Who approved or rejected it, and their note.
+  string decided_by = 7;
+  string note = 8;
+  // What was done, machine by machine, and how to undo it.
+  string result = 9;
+  string error = 10;
+  google.protobuf.Timestamp created_at = 11;
+  google.protobuf.Timestamp expires_at = 12;
+  google.protobuf.Timestamp decided_at = 13;
+  google.protobuf.Timestamp finished_at = 14;
+}
+
+message ListActionsRequest {
+  // Only the actions of this investigation.
+  string investigation_id = 1;
+  // Only actions with this status.
+  ActionStatus status = 2;
+  int32 limit = 3;
+}
+
+message ListActionsResponse {
+  repeated Action actions = 1;
+}
+
+message GetActionRequest {
+  string id = 1;
+}
+
+message GetActionResponse {
+  Action action = 1;
+}
+
+message ApproveActionRequest {
+  string id = 1;
+  // Name of the person approving, recorded in the audit trail.
+  string approver = 2;
+  string note = 3;
+}
+
+message ApproveActionResponse {
+  // The action once it ran: succeeded or failed.
+  Action action = 1;
+}
+
+message RejectActionRequest {
+  string id = 1;
+  string approver = 2;
+  string reason = 3;
+}
+
+message RejectActionResponse {
+  Action action = 1;
+}
+
+// ActionService approves and runs mitigations the agent proposed. opensre
+// never runs one on its own.
+service ActionService {
+  rpc ListActions(ListActionsRequest) returns (ListActionsResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  rpc GetAction(GetActionRequest) returns (GetActionResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  // Runs the action synchronously and returns its outcome.
+  rpc ApproveAction(ApproveActionRequest) returns (ApproveActionResponse);
+  rpc RejectAction(RejectActionRequest) returns (RejectActionResponse);
+}

@@ -54,6 +54,25 @@ message Mitigation {
   string confidence = 8;
   // Current user impact, as far as the evidence shows.
   string impact = 9;
+  // Executable form of the mitigation, for services on Fly.io machines whose
+  // catalog entry allows it. Nothing runs until a human approves the action.
+  MachineAction machine_action = 10;
+  // ID of the action created for machine_action, to approve or reject.
+  string action_id = 11;
+}
+
+// MachineAction is a Fly.io Machines API call opensre can run once approved.
+message MachineAction {
+  // Catalog service the machines belong to.
+  string service = 1;
+  // "restart", "clone", "cordon", "uncordon", "stop" or "start".
+  string action = 2;
+  // Machines to act on (one clone per machine for "clone").
+  repeated string machine_ids = 3;
+  // For "clone": region of the new machines. Defaults to the source's.
+  string region = 4;
+  // Fly app, resolved from the catalog.
+  string app = 5;
 }
 
 message Report {

@@ -289,7 +289,7 @@ func runInvestigation(t *testing.T, st *store.Store, b logBackend) {
 
 	cfg := config.Config{Model: "claude-opus-5-5", Effort: "high", MaxToolCalls: 10, MitigationToolCalls: 2, InvestigationTimeout: time.Minute, DedupeWindow: time.Minute}
 	notifier := &recordingNotifier{}
-	engine := New(ctx, cfg, st, connector.NewRegistry(st, box), model, notifier)
+	engine := New(ctx, cfg, st, connector.NewRegistry(st, box), model, notifier, nil)
 
 	inv, _, err := engine.Start(ctx, StartRequest{Title: "api errors", Source: "manual", Services: []string{svcName}})
 	if err != nil {

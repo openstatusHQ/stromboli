@@ -362,6 +362,19 @@ var tools = []tool{
 			"risk":       map[string]any{"type": "string", "enum": []string{"safe", "reversible", "destructive"}},
 			"confidence": map[string]any{"type": "string", "enum": []string{"low", "medium", "high"}},
 			"impact":     str("Current user impact as far as the evidence shows: who is affected, since when, ongoing or not."),
+			"machine_action": map[string]any{
+				"type": "object",
+				"description": "Only when the brief's Fly.io section says opensre can run machine actions for the service: the same mitigation as a Fly machine action, " +
+					"which a human approves before opensre runs it. Omit it otherwise.",
+				"properties": map[string]any{
+					"service":     str("Catalog service the machines belong to."),
+					"action":      map[string]any{"type": "string", "enum": catalog.MachineActions},
+					"machine_ids": strList("Machine IDs from the brief's machine table (the instance label of the Fly metrics)."),
+					"region":      str("clone only: region of the new machine. Defaults to the source machine's."),
+				},
+				"required":             []string{"service", "action", "machine_ids"},
+				"additionalProperties": false,
+			},
 		},
 		required: []string{"kind", "target", "action", "rationale", "verify", "undo", "risk", "confidence", "impact"},
 	},

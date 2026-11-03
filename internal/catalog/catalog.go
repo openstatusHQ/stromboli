@@ -157,6 +157,20 @@ func Validate(services []*opensrev1.Service, opts ValidateOptions) []*opensrev1.
 				}
 			}
 		}
+		if f := s.Fly; f != nil {
+			for _, a := range f.Allow {
+				if !slices.Contains(MachineActions, a) {
+					add(s.Name, "fly.allow", fmt.Sprintf("unknown machine action %q (use %v)", a, MachineActions), false)
+				}
+			}
+			if f.Actions != "" && opts.Connectors != nil {
+				if kind, ok := opts.Connectors[f.Actions]; !ok {
+					add(s.Name, "fly.actions", fmt.Sprintf("unknown connector %q", f.Actions), true)
+				} else if kind != "fly_machines" {
+					add(s.Name, "fly.actions", fmt.Sprintf("connector %q is a %s connector, not a fly_machines connector", f.Actions, kind), false)
+				}
+			}
+		}
 		if opts.Runbooks != nil {
 			for _, rb := range s.Runbooks {
 				if !opts.Runbooks[rb] {

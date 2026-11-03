@@ -32,6 +32,10 @@ Client (uses OPENSRE_URL and OPENSRE_API_TOKEN):
   opensre investigate <service> [--title t] [--description d] [--no-watch]
   opensre investigations [--limit n]
   opensre show <investigation-id>
+  opensre actions [list] [--investigation id] [--status proposed]
+  opensre actions show <action-id>
+  opensre actions approve <action-id> --as <name> [--note n]   run an action the agent proposed
+  opensre actions reject <action-id> --as <name> [--note reason]
 `
 
 func main() {

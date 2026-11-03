@@ -91,3 +91,45 @@ WHERE report IS NOT NULL
   AND (@query::text = '' OR title ILIKE '%' || @query::text || '%' OR report::text ILIKE '%' || @query::text || '%')
 ORDER BY created_at DESC
 LIMIT $1;
+
+-- name: CreateAction :one
+INSERT INTO actions (id, investigation_id, service, kind, spec, connector, status, expires_at)
+VALUES ($1, $2, $3, $4, $5, $6, 'proposed', $7)
+RETURNING *;
+
+-- name: GetAction :one
+SELECT * FROM actions WHERE id = $1;
+
+-- name: ListActions :many
+SELECT * FROM actions
+WHERE (sqlc.narg('investigation_id')::uuid IS NULL OR investigation_id = sqlc.narg('investigation_id')::uuid)
+  AND (@status::text = '' OR status = @status::text)
+ORDER BY created_at DESC
+LIMIT $1;
+
+-- name: ExpireActions :execrows
+UPDATE actions SET status = 'expired' WHERE status = 'proposed' AND expires_at <= now();
+
+-- name: SupersedeActions :execrows
+UPDATE actions SET status = 'superseded' WHERE investigation_id = $1 AND status = 'proposed';
+
+-- Claiming is atomic: only one approval of a proposed, unexpired action wins.
+-- name: ClaimAction :one
+UPDATE actions SET status = 'running', decided_by = $2, note = $3, decided_at = now()
+WHERE id = $1 AND status = 'proposed' AND expires_at > now()
+RETURNING *;
+
+-- name: RejectAction :one
+UPDATE actions SET status = 'rejected', decided_by = $2, note = $3, decided_at = now()
+WHERE id = $1 AND status = 'proposed'
+RETURNING *;
+
+-- name: FinishAction :one
+UPDATE actions SET status = $2, result = $3, error = $4, finished_at = now()
+WHERE id = $1
+RETURNING *;
+
+-- name: FailRunningActions :execrows
+UPDATE actions SET status = 'failed', finished_at = now(),
+    error = 'server restarted while the action was running: check the machines'
+WHERE status = 'running';
