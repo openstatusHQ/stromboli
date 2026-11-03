@@ -65,8 +65,9 @@ func Run(ctx context.Context, cfg config.Config) error {
 	}
 	var notifier agent.Notifier
 	var actionNotifier action.Notifier
+	var slack *report.Slack
 	if cfg.SlackBotToken != "" && cfg.SlackChannel != "" {
-		slack := report.NewSlack(cfg.SlackBotToken, cfg.SlackChannel)
+		slack = report.NewSlack(cfg.SlackBotToken, cfg.SlackChannel)
 		notifier, actionNotifier = slack, slack
 	} else {
 		slog.Info("Slack is not configured (SLACK_BOT_TOKEN, SLACK_CHANNEL): reports are available through the API only")
@@ -78,6 +79,18 @@ func Run(ctx context.Context, cfg config.Config) error {
 	actions := action.New(cfg, st, reg, actionNotifier)
 	if cfg.ActionsEnabled {
 		slog.Info("machine actions are enabled: investigations can propose them, a human approves each one", "ttl", cfg.ActionTTL)
+	}
+	slackButtons := slack != nil && cfg.ActionsEnabled && cfg.SlackSigningSecret != ""
+	switch {
+	case slackButtons:
+		slack.EnableButtons(actions, st.GetInvestigation, cfg.SlackSigningSecret, cfg.SlackApprovers)
+		if len(cfg.SlackApprovers) == 0 {
+			slog.Warn("Slack approval buttons are enabled for anyone in the channel: set SLACK_APPROVERS to limit them")
+		} else {
+			slog.Info("Slack approval buttons are enabled", "approvers", cfg.SlackApprovers)
+		}
+	case cfg.SlackSigningSecret != "":
+		slog.Warn("SLACK_SIGNING_SECRET is set but Slack buttons need SLACK_BOT_TOKEN, SLACK_CHANNEL and OPENSRE_ACTIONS_ENABLED=true")
 	}
 	engine := agent.New(engineCtx, cfg, st, reg, msgs, notifier, actions)
 
@@ -106,6 +119,10 @@ func Run(ctx context.Context, cfg config.Config) error {
 	mux.Handle(grpcreflect.NewHandlerV1(reflector))
 	mux.Handle(grpcreflect.NewHandlerV1Alpha(reflector))
 	trigger.New(engine, st, cfg.WebhookToken).Register(mux)
+	if slackButtons {
+		// Authenticated by Slack's request signature, not the API token.
+		mux.Handle("POST /slack/interactions", slack.InteractionsHandler())
+	}
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
 		if err := st.Pool.Ping(r.Context()); err != nil {
 			http.Error(w, "database unavailable", http.StatusServiceUnavailable)

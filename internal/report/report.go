@@ -4,6 +4,7 @@ package report
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -93,6 +94,9 @@ func Markdown(r *opensrev1.Report) string {
 type Slack struct {
 	client  *slack.Client
 	channel string
+	// buttons is set by EnableButtons: proposed actions then get Approve and
+	// Reject buttons instead of the CLI command.
+	buttons *buttons
 }
 
 func NewSlack(token, channel string) *Slack {
@@ -111,12 +115,9 @@ func (s *Slack) Mitigated(ctx context.Context, inv db.Investigation, m *opensrev
 	if !inv.SlackChannel.Valid {
 		return nil
 	}
-	out := []slack.Block{slack.NewSectionBlock(md(header(inv)), nil, nil)}
-	out = append(out, mitigationBlocks(inv, m)...)
-	out = append(out, slack.NewContextBlock("", md(fmt.Sprintf("🔎 Investigating the root cause… · opensre investigation `%s` · nothing runs without a human's approval", inv.ID))))
 	text := fmt.Sprintf("🩹 %s — mitigate first: %s %s", inv.Title, m.Kind, m.Target)
 	if _, _, _, err := s.client.UpdateMessageContext(ctx, inv.SlackChannel.String, inv.SlackTs.String,
-		slack.MsgOptionText(text, false), slack.MsgOptionBlocks(out...)); err != nil {
+		slack.MsgOptionText(text, false), slack.MsgOptionBlocks(s.mitigatedBlocks(ctx, inv, m)...)); err != nil {
 		return err
 	}
 	// Edits do not notify anyone; a thread reply does.
@@ -130,7 +131,42 @@ func (s *Slack) Finished(ctx context.Context, inv db.Investigation, r *opensrev1
 		return nil
 	}
 	_, _, _, err := s.client.UpdateMessageContext(ctx, inv.SlackChannel.String, inv.SlackTs.String,
-		slack.MsgOptionText(fallbackText(inv, r), false), slack.MsgOptionBlocks(blocks(inv, r)...))
+		slack.MsgOptionText(fallbackText(inv, r), false), slack.MsgOptionBlocks(s.blocks(ctx, inv, r)...))
+	return err
+}
+
+func (s *Slack) mitigatedBlocks(ctx context.Context, inv db.Investigation, m *opensrev1.Mitigation) []slack.Block {
+	out := []slack.Block{slack.NewSectionBlock(md(header(inv)), nil, nil)}
+	out = append(out, s.mitigationBlocks(ctx, inv, m)...)
+	return append(out, slack.NewContextBlock("", md(fmt.Sprintf("🔎 Investigating the root cause… · opensre investigation `%s` · nothing runs without a human's approval", inv.ID))))
+}
+
+// refresh redraws the investigation's message from its stored state, e.g.
+// once an action was decided so its buttons go away.
+func (s *Slack) refresh(ctx context.Context, inv db.Investigation) error {
+	if !inv.SlackChannel.Valid {
+		return nil
+	}
+	var text string
+	var out []slack.Block
+	switch m := Mitigation(inv); {
+	case inv.Status != "running":
+		var r *opensrev1.Report
+		if len(inv.Report) > 0 {
+			r = &opensrev1.Report{}
+			if err := (protojson.UnmarshalOptions{DiscardUnknown: true}).Unmarshal(inv.Report, r); err != nil {
+				r = nil
+			}
+		}
+		text, out = fallbackText(inv, r), s.blocks(ctx, inv, r)
+	case m != nil:
+		text = fmt.Sprintf("🩹 %s — mitigate first: %s %s", inv.Title, m.Kind, m.Target)
+		out = s.mitigatedBlocks(ctx, inv, m)
+	default:
+		return nil
+	}
+	_, _, _, err := s.client.UpdateMessageContext(ctx, inv.SlackChannel.String, inv.SlackTs.String,
+		slack.MsgOptionText(text, false), slack.MsgOptionBlocks(out...))
 	return err
 }
 
@@ -160,6 +196,12 @@ func (s *Slack) ActionFinished(ctx context.Context, inv db.Investigation, a db.A
 	}
 	_, _, err := s.client.PostMessageContext(ctx, inv.SlackChannel.String,
 		slack.MsgOptionTS(inv.SlackTs.String), slack.MsgOptionText(clip(text), false))
+	if s.buttons != nil {
+		// Replace the buttons with the outcome.
+		if err := s.refresh(ctx, inv); err != nil {
+			slog.Warn("slack: redraw investigation message", "investigation", inv.ID, "err", err)
+		}
+	}
 	return err
 }
 
@@ -180,7 +222,7 @@ func header(inv db.Investigation) string {
 
 // mitigationBlocks renders the mitigation, with how long after the start of
 // the investigation it was proposed (a proxy for time to mitigation).
-func mitigationBlocks(inv db.Investigation, m *opensrev1.Mitigation) []slack.Block {
+func (s *Slack) mitigationBlocks(ctx context.Context, inv db.Investigation, m *opensrev1.Mitigation) []slack.Block {
 	if m == nil {
 		return nil
 	}
@@ -194,15 +236,19 @@ func mitigationBlocks(inv db.Investigation, m *opensrev1.Mitigation) []slack.Blo
 			lines = append(lines, fmt.Sprintf("*%s:* %s", f[0], f[1]))
 		}
 	}
-	if m.ActionId != "" {
+	if m.ActionId != "" && s.buttons == nil {
 		lines = append(lines, fmt.Sprintf("*opensre can do it once approved:* %s\n`%s`", MachineActionText(m.MachineAction), ApproveCommand(m.ActionId)))
 	}
-	return []slack.Block{slack.NewSectionBlock(md(clip(strings.Join(lines, "\n"))), nil, nil)}
+	out := []slack.Block{slack.NewSectionBlock(md(clip(strings.Join(lines, "\n"))), nil, nil)}
+	if m.ActionId != "" && s.buttons != nil {
+		out = append(out, s.buttons.actionBlocks(ctx, m)...)
+	}
+	return out
 }
 
-func blocks(inv db.Investigation, r *opensrev1.Report) []slack.Block {
+func (s *Slack) blocks(ctx context.Context, inv db.Investigation, r *opensrev1.Report) []slack.Block {
 	out := []slack.Block{slack.NewSectionBlock(md(header(inv)), nil, nil)}
-	out = append(out, mitigationBlocks(inv, Mitigation(inv))...)
+	out = append(out, s.mitigationBlocks(ctx, inv, Mitigation(inv))...)
 
 	if r == nil {
 		return append(out, slack.NewSectionBlock(md(fmt.Sprintf("❌ Investigation failed: %s", inv.Error.String)), nil, nil))

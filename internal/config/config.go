@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -30,6 +31,11 @@ type Config struct {
 
 	SlackBotToken string // SLACK_BOT_TOKEN
 	SlackChannel  string // SLACK_CHANNEL: channel ID for reports
+	// SlackSigningSecret enables Approve/Reject buttons on proposed actions,
+	// received at POST /slack/interactions. Needs OPENSRE_ACTIONS_ENABLED.
+	SlackSigningSecret string // SLACK_SIGNING_SECRET
+	// SlackApprovers, when set, are the only Slack user IDs that may click them.
+	SlackApprovers []string // SLACK_APPROVERS: comma-separated user IDs
 
 	// DedupeWindow reuses a finished investigation for the same alert within this window.
 	DedupeWindow time.Duration // OPENSRE_DEDUPE_WINDOW
@@ -53,6 +59,13 @@ func Load() (Config, error) {
 		Effort:          env("OPENSRE_EFFORT", "high"),
 		SlackBotToken:   os.Getenv("SLACK_BOT_TOKEN"),
 		SlackChannel:    os.Getenv("SLACK_CHANNEL"),
+
+		SlackSigningSecret: os.Getenv("SLACK_SIGNING_SECRET"),
+	}
+	for _, id := range strings.Split(os.Getenv("SLACK_APPROVERS"), ",") {
+		if id = strings.TrimSpace(id); id != "" {
+			c.SlackApprovers = append(c.SlackApprovers, id)
+		}
 	}
 	if c.WebhookToken == "" {
 		c.WebhookToken = c.APIToken
