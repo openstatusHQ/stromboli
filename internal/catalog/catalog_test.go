@@ -4,6 +4,8 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	opensrev1 "github.com/openstatushq/opensre/gen/opensre/v1"
 )
 
 const sample = `
@@ -117,5 +119,23 @@ func TestYAMLExportKeepsFieldOrderAndTypes(t *testing.T) {
 	}
 	if again[0].Name != "123" || again[0].Owners[1] != "true" {
 		t.Errorf("round trip changed values: %v", again[0])
+	}
+}
+
+func TestValidateMetrics(t *testing.T) {
+	services := []*opensrev1.Service{
+		{Name: "ok", Owners: []string{"@a"}, Metrics: &opensrev1.MetricsConfig{Source: "fly", Selectors: []string{`app="ok"`}}},
+		{Name: "no-selector", Owners: []string{"@a"}, Metrics: &opensrev1.MetricsConfig{Source: "fly"}},
+		{Name: "wrong-kind", Owners: []string{"@a"}, Metrics: &opensrev1.MetricsConfig{Source: "loki", Selectors: []string{`app="x"`}}},
+	}
+	issues := Validate(services, ValidateOptions{Connectors: map[string]string{"fly": "fly", "loki": "loki"}})
+	errs := map[string]string{}
+	for _, i := range issues {
+		if !i.Warning {
+			errs[i.Service] = i.Field
+		}
+	}
+	if len(errs) != 2 || errs["no-selector"] != "metrics.selectors" || errs["wrong-kind"] != "metrics.source" {
+		t.Errorf("unexpected errors: %v", errs)
 	}
 }

@@ -205,20 +205,20 @@ do not fail).`,
 			return nil
 		},
 	}
-	cmd.Flags().BoolVar(&checkConnectors, "check-connectors", false, "also run a test query for each service's log selector")
+	cmd.Flags().BoolVar(&checkConnectors, "check-connectors", false, "also run a test query for each service's log and metrics selector")
 	return cmd
 }
 
 func (a *app) catalogDiscoverCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "discover <log-connector>",
-		Short: "Propose catalog entries from the services a log connector sees",
-		Long: `Ask a log connector which services it can see, and print one catalog entry per
-service not in the catalog yet, with its log selector filled in. Add owners and
+		Use:   "discover <log-or-metrics-connector>",
+		Short: "Propose catalog entries from the services a log or metrics connector sees",
+		Long: `Ask a log or metrics connector which services it can see, and print one catalog entry per
+service not in the catalog yet, with its selector filled in. Add owners and
 depends_on, then import the file.`,
 		Example: `  opensre catalog discover loki > services.yaml
   opensre catalog import services.yaml`,
-		Args: exactArgs(1, "<log-connector>"),
+		Args: exactArgs(1, "<log-or-metrics-connector>"),
 		RunE: func(cmd *cobra.Command, pos []string) error {
 			c, err := a.api()
 			if err != nil {

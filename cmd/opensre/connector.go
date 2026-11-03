@@ -16,8 +16,8 @@ import (
 )
 
 func (a *app) connectorCmd() *cobra.Command {
-	cmd := group("connector", "Manage connectors to logs and deploy sources",
-		"Connectors give opensre read access to your logs (Loki, Axiom, CloudWatch) and\ndeploys (GitHub). Secrets are encrypted on the server and never printed back.")
+	cmd := group("connector", "Manage connectors to logs, metrics, deploys and machines",
+		"Connectors give opensre read access to your logs (Loki, Axiom, CloudWatch),\nmetrics (Prometheus, Fly.io), deploys (GitHub) and Fly.io machines (fly_machines). Secrets are encrypted on the server and never printed back.")
 	cmd.Aliases = []string{"connectors"}
 	cmd.AddCommand(a.connectorAddCmd(), a.connectorListCmd(), a.connectorTestCmd(), a.connectorRmCmd())
 	return cmd
@@ -92,8 +92,8 @@ history and the process list. Instead pass:
 				return err
 			}
 			if !a.json {
-				if slices.Contains([]string{"loki", "axiom", "cloudwatch"}, kind) {
-					a.info("Next: propose catalog entries from its logs with `opensre catalog discover %s > services.yaml`", name)
+				if slices.Contains([]string{"loki", "axiom", "cloudwatch", "prometheus", "fly"}, kind) {
+					a.info("Next: propose catalog entries from it with `opensre catalog discover %s > services.yaml`", name)
 				}
 			}
 			return nil

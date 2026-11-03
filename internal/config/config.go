@@ -33,6 +33,12 @@ type Config struct {
 
 	// DedupeWindow reuses a finished investigation for the same alert within this window.
 	DedupeWindow time.Duration // OPENSRE_DEDUPE_WINDOW
+
+	// ActionsEnabled lets investigations propose machine actions that a human
+	// can approve and opensre then runs. Off by default: mitigations are text only.
+	ActionsEnabled bool // OPENSRE_ACTIONS_ENABLED
+	// ActionTTL is how long a proposed action can be approved.
+	ActionTTL time.Duration // OPENSRE_ACTION_TTL
 }
 
 func Load() (Config, error) {
@@ -64,6 +70,17 @@ func Load() (Config, error) {
 	}
 	if c.DedupeWindow, err = time.ParseDuration(env("OPENSRE_DEDUPE_WINDOW", "30m")); err != nil {
 		return c, fmt.Errorf("OPENSRE_DEDUPE_WINDOW: %w", err)
+	}
+
+	if c.ActionsEnabled, err = strconv.ParseBool(env("OPENSRE_ACTIONS_ENABLED", "false")); err != nil {
+		return c, fmt.Errorf("OPENSRE_ACTIONS_ENABLED: %w", err)
+	}
+	if c.ActionTTL, err = time.ParseDuration(env("OPENSRE_ACTION_TTL", "30m")); err != nil || c.ActionTTL <= 0 {
+		return c, fmt.Errorf("OPENSRE_ACTION_TTL: invalid duration %q", os.Getenv("OPENSRE_ACTION_TTL"))
+	}
+	if c.ActionsEnabled && c.APIToken == "" {
+		// Approving an action changes production: it must not be open to anyone.
+		return c, fmt.Errorf("OPENSRE_ACTIONS_ENABLED requires OPENSRE_API_TOKEN")
 	}
 
 	if c.DBURL == "" {

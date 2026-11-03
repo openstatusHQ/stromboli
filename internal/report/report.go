@@ -23,6 +23,9 @@ func MitigationMarkdown(m *opensrev1.Mitigation) string {
 			fmt.Fprintf(&b, "  %s: %s\n", f[0], indent(f[1]))
 		}
 	}
+	if m.ActionId != "" {
+		fmt.Fprintf(&b, "  opensre can do it: %s\n    approve: %s\n", MachineActionText(m.MachineAction), ApproveCommand(m.ActionId))
+	}
 	return strings.TrimRight(b.String(), "\n")
 }
 
@@ -36,6 +39,23 @@ func Mitigation(inv db.Investigation) *opensrev1.Mitigation {
 		return nil
 	}
 	return m
+}
+
+// MachineActionText describes a machine action, e.g. "restart 148e of app api".
+func MachineActionText(m *opensrev1.MachineAction) string {
+	if m == nil {
+		return ""
+	}
+	s := fmt.Sprintf("%s %s of app %s", m.Action, strings.Join(m.MachineIds, ", "), m.App)
+	if m.Region != "" {
+		s += " in " + m.Region
+	}
+	return s
+}
+
+// ApproveCommand is the CLI command that approves and runs an action.
+func ApproveCommand(id string) string {
+	return fmt.Sprintf("opensre actions approve %s --as <your name>", id)
 }
 
 func indent(s string) string { return strings.ReplaceAll(s, "\n", "\n    ") }
@@ -93,7 +113,7 @@ func (s *Slack) Mitigated(ctx context.Context, inv db.Investigation, m *opensrev
 	}
 	out := []slack.Block{slack.NewSectionBlock(md(header(inv)), nil, nil)}
 	out = append(out, mitigationBlocks(inv, m)...)
-	out = append(out, slack.NewContextBlock("", md(fmt.Sprintf("🔎 Investigating the root cause… · opensre investigation `%s` · suggestions only, nothing was changed", inv.ID))))
+	out = append(out, slack.NewContextBlock("", md(fmt.Sprintf("🔎 Investigating the root cause… · opensre investigation `%s` · nothing runs without a human's approval", inv.ID))))
 	text := fmt.Sprintf("🩹 %s — mitigate first: %s %s", inv.Title, m.Kind, m.Target)
 	if _, _, _, err := s.client.UpdateMessageContext(ctx, inv.SlackChannel.String, inv.SlackTs.String,
 		slack.MsgOptionText(text, false), slack.MsgOptionBlocks(out...)); err != nil {
@@ -111,6 +131,35 @@ func (s *Slack) Finished(ctx context.Context, inv db.Investigation, r *opensrev1
 	}
 	_, _, _, err := s.client.UpdateMessageContext(ctx, inv.SlackChannel.String, inv.SlackTs.String,
 		slack.MsgOptionText(fallbackText(inv, r), false), slack.MsgOptionBlocks(blocks(inv, r)...))
+	return err
+}
+
+// ActionFinished replies in the investigation's thread with what an approved
+// action did, or that it was rejected.
+func (s *Slack) ActionFinished(ctx context.Context, inv db.Investigation, a db.Action, m *opensrev1.MachineAction) error {
+	if !inv.SlackChannel.Valid {
+		return nil
+	}
+	what := MachineActionText(m)
+	var text string
+	switch a.Status {
+	case "succeeded":
+		text = fmt.Sprintf("✅ %s, approved by %s.\n%s", what, a.DecidedBy.String, a.Result.String)
+	case "failed":
+		text = fmt.Sprintf("❌ %s, approved by %s, failed: %s", what, a.DecidedBy.String, a.Error.String)
+		if a.Result.String != "" {
+			text += "\nDone before the failure:\n" + a.Result.String
+		}
+	case "rejected":
+		text = fmt.Sprintf("🚫 %s was rejected by %s.", what, a.DecidedBy.String)
+	default:
+		return nil
+	}
+	if a.Note.String != "" {
+		text += "\n> " + a.Note.String
+	}
+	_, _, err := s.client.PostMessageContext(ctx, inv.SlackChannel.String,
+		slack.MsgOptionTS(inv.SlackTs.String), slack.MsgOptionText(clip(text), false))
 	return err
 }
 
@@ -145,6 +194,9 @@ func mitigationBlocks(inv db.Investigation, m *opensrev1.Mitigation) []slack.Blo
 			lines = append(lines, fmt.Sprintf("*%s:* %s", f[0], f[1]))
 		}
 	}
+	if m.ActionId != "" {
+		lines = append(lines, fmt.Sprintf("*opensre can do it once approved:* %s\n`%s`", MachineActionText(m.MachineAction), ApproveCommand(m.ActionId)))
+	}
 	return []slack.Block{slack.NewSectionBlock(md(clip(strings.Join(lines, "\n"))), nil, nil)}
 }
 
@@ -175,7 +227,7 @@ func blocks(inv db.Investigation, r *opensrev1.Report) []slack.Block {
 		out = append(out, slack.NewSectionBlock(md(clip("*Fix*\n"+r.Fix)), nil, nil))
 	}
 	bullets("Next steps", r.NextSteps)
-	out = append(out, slack.NewContextBlock("", md(fmt.Sprintf("opensre investigation `%s` · suggestions only, nothing was changed", inv.ID))))
+	out = append(out, slack.NewContextBlock("", md(fmt.Sprintf("opensre investigation `%s` · nothing runs without a human's approval", inv.ID))))
 	return out
 }
 

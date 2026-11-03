@@ -46,9 +46,15 @@ func (e *Engine) Brief(ctx context.Context, service string, w Window) (string, e
 		wg                          sync.WaitGroup
 		logSection, deploySection   string
 		runbookSection, pastSection string
+		metricSection, flySection   string
 	)
-	wg.Add(4)
+	if catalog.IsFly(svc) {
+		wg.Add(1)
+		go func() { defer wg.Done(); flySection = e.briefFly(ctx, svc) }()
+	}
+	wg.Add(5)
 	go func() { defer wg.Done(); logSection = e.briefLogs(ctx, svc, w) }()
+	go func() { defer wg.Done(); metricSection = e.briefMetrics(ctx, svc, w) }()
 	go func() { defer wg.Done(); deploySection = e.briefDeploys(ctx, graph, svc, w) }()
 	go func() { defer wg.Done(); runbookSection = e.briefRunbooks(ctx, svc) }()
 	go func() { defer wg.Done(); pastSection = e.briefPast(ctx, svc) }()
@@ -69,7 +75,11 @@ func (e *Engine) Brief(ctx context.Context, service string, w Window) (string, e
 	fmt.Fprintf(&b, "- Blast radius if this service fails: %s\n\n", list(graph.BlastRadius(svc.Name)))
 
 	b.WriteString("## Logs\n\n" + logSection + "\n")
+	b.WriteString("## Metrics\n\n" + metricSection + "\n")
 	b.WriteString("## Recent changes\n\n" + deploySection + "\n")
+	if flySection != "" {
+		b.WriteString("## Fly.io\n\n" + flySection + "\n")
+	}
 	b.WriteString("## Runbooks\n\n" + runbookSection + "\n")
 	b.WriteString("## Similar past investigations\n\n" + pastSection)
 	return b.String(), nil

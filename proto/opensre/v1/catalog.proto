@@ -20,6 +20,25 @@ message Service {
   // Alert sources mapped to this service, e.g. "openstatus:1234".
   repeated string monitors = 13;
   repeated SLO slos = 14;
+  // Fly.io settings, for services that run on Fly machines.
+  FlyConfig fly = 15;
+}
+
+// FlyConfig describes a service deployed as a Fly.io app. The brief lists the
+// app's machines and the Fly commands for each generic mitigation.
+message FlyConfig {
+  // Fly app name. Defaults to the app="..." metrics selector, then the
+  // service name.
+  string app = 1;
+  // Name of a fly_machines connector whose token can act on this app's
+  // machines. When set (and OPENSRE_ACTIONS_ENABLED=true), opensre can run a
+  // machine action after a human approves it; otherwise Fly mitigations stay
+  // suggestions.
+  string actions = 2;
+  // Machine actions opensre may run for this service: "restart", "clone",
+  // "cordon", "uncordon", "stop", "start". Defaults to restart, clone, cordon
+  // and uncordon.
+  repeated string allow = 3;
 }
 
 message LogsConfig {
@@ -46,7 +65,10 @@ message DeploysConfig {
 }
 
 message MetricsConfig {
+  // Name of a configured metrics connector (prometheus or fly).
   string source = 1;
+  // PromQL label matchers selecting the service's series, ANDed together,
+  // e.g. `app="checker"` (fly) or `job="api"`. Queries reference them as $selector.
   repeated string selectors = 2;
 }
 
@@ -133,12 +155,13 @@ message ValidateCatalogResponse {
 }
 
 message DiscoverServicesRequest {
-  // Log connector to inspect.
+  // Log or metrics connector to inspect.
   string connector = 1;
 }
 
 message DiscoverServicesResponse {
-  // Proposed services not yet in the catalog.
+  // Proposed services not yet in the catalog. For a metrics connector, also
+  // existing services without metrics, with their metrics config filled in.
   repeated Service candidates = 1;
 }
 

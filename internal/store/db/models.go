@@ -11,6 +11,24 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type Action struct {
+	ID              uuid.UUID
+	InvestigationID uuid.UUID
+	Service         string
+	Kind            string
+	Spec            json.RawMessage
+	Connector       string
+	Status          string
+	DecidedBy       pgtype.Text
+	Note            pgtype.Text
+	Result          pgtype.Text
+	Error           pgtype.Text
+	CreatedAt       pgtype.Timestamptz
+	ExpiresAt       pgtype.Timestamptz
+	DecidedAt       pgtype.Timestamptz
+	FinishedAt      pgtype.Timestamptz
+}
+
 type Connector struct {
 	Name      string
 	Kind      string

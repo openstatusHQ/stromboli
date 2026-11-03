@@ -129,7 +129,7 @@ which talk to a running server.`,
 		c.GroupID = "setup"
 		root.AddCommand(c)
 	}
-	for _, c := range []*cobra.Command{a.briefCmd(), a.investigateCmd(), a.investigationsCmd(), a.showCmd()} {
+	for _, c := range []*cobra.Command{a.briefCmd(), a.investigateCmd(), a.investigationsCmd(), a.showCmd(), a.actionsCmd()} {
 		c.GroupID = "investigate"
 		root.AddCommand(c)
 	}

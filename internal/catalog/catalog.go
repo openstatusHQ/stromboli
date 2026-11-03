@@ -15,6 +15,7 @@ import (
 
 	opensrev1 "github.com/openstatushq/opensre/gen/opensre/v1"
 	"github.com/openstatushq/opensre/internal/connector/logs"
+	"github.com/openstatushq/opensre/internal/connector/metrics"
 )
 
 var (
@@ -132,6 +133,18 @@ func Validate(services []*opensrev1.Service, opts ValidateOptions) []*opensrev1.
 				add(s.Name, "logs.source", fmt.Sprintf("connector %q is a %s connector, not a log connector", s.Logs.Source, kind), false)
 			}
 		}
+		if m := s.Metrics; m != nil && m.Source != "" {
+			if metrics.Matchers(m.Selectors) == "" {
+				add(s.Name, "metrics.selectors", `required when metrics.source is set, e.g. ['app="api"']`, false)
+			}
+			if opts.Connectors != nil {
+				if kind, ok := opts.Connectors[m.Source]; !ok {
+					add(s.Name, "metrics.source", fmt.Sprintf("unknown connector %q", m.Source), true)
+				} else if !slices.Contains(metrics.Kinds, kind) {
+					add(s.Name, "metrics.source", fmt.Sprintf("connector %q is a %s connector, not a metrics connector", m.Source, kind), false)
+				}
+			}
+		}
 		if d := s.Deploys; d != nil && d.Source != "" {
 			if d.Repo == "" {
 				add(s.Name, "deploys.repo", "required when deploys.source is set", false)
@@ -141,6 +154,20 @@ func Validate(services []*opensrev1.Service, opts ValidateOptions) []*opensrev1.
 					add(s.Name, "deploys.source", fmt.Sprintf("unknown connector %q", d.Source), true)
 				} else if kind != "github" {
 					add(s.Name, "deploys.source", fmt.Sprintf("connector %q is a %s connector, not a deploy connector", d.Source, kind), false)
+				}
+			}
+		}
+		if f := s.Fly; f != nil {
+			for _, a := range f.Allow {
+				if !slices.Contains(MachineActions, a) {
+					add(s.Name, "fly.allow", fmt.Sprintf("unknown machine action %q (use %v)", a, MachineActions), false)
+				}
+			}
+			if f.Actions != "" && opts.Connectors != nil {
+				if kind, ok := opts.Connectors[f.Actions]; !ok {
+					add(s.Name, "fly.actions", fmt.Sprintf("unknown connector %q", f.Actions), true)
+				} else if kind != "fly_machines" {
+					add(s.Name, "fly.actions", fmt.Sprintf("connector %q is a %s connector, not a fly_machines connector", f.Actions, kind), false)
 				}
 			}
 		}

@@ -204,6 +204,7 @@ type clients struct {
 	catalog       opensrev1connect.CatalogServiceClient
 	connectors    opensrev1connect.ConnectorServiceClient
 	investigation opensrev1connect.InvestigationServiceClient
+	actions       opensrev1connect.ActionServiceClient
 }
 
 // api returns the RPC clients, configured from --url and the API token.
@@ -226,6 +227,7 @@ func (a *app) api() (*clients, error) {
 		catalog:       opensrev1connect.NewCatalogServiceClient(hc, url, opts),
 		connectors:    opensrev1connect.NewConnectorServiceClient(hc, url, opts),
 		investigation: opensrev1connect.NewInvestigationServiceClient(hc, url, opts),
+		actions:       opensrev1connect.NewActionServiceClient(hc, url, opts),
 	}
 	return a.clients, nil
 }
