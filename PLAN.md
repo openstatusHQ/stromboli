@@ -222,6 +222,10 @@ The `LogSource` interface stays backend-neutral (service, window, filter, limit)
 
 Overall build order: **Loki → GitHub deploys → generic alert webhook + openstatus → Prometheus → ClickHouse.**
 
+### Metrics (built)
+
+One Prometheus HTTP API client (`internal/connector/metrics`) serves two kinds: `prometheus` (any compatible backend) and `fly` (Fly.io's managed Prometheus at `api.fly.io/prometheus/<org>`, with presets for machine memory, CPU, throttling, OOM kills, disk, network and proxy HTTP metrics). A service's `metrics.selectors` are PromQL label matchers, substituted for `$selector` in queries. Range queries are summarised per series (min, max, avg, last, baseline average, 12 points) before reaching the model.
+
 ---
 
 ## 5. Investigation engine
@@ -245,7 +249,7 @@ Overall build order: **Loki → GitHub deploys → generic alert webhook + opens
 | `get_dependencies(name, direction)` | catalog graph |
 | `query_logs(service, from, to, filter)` | LogSource (aggregated) |
 | `log_patterns(service, from, to)` | LogSource |
-| `get_metric(service, metric, from, to)` | MetricSource |
+| `get_metrics(service, metric \| query, since, until)`, `list_metrics(service)` | MetricSource (built) |
 | `recent_deploys(service, since)` | DeploySource |
 | `get_deploy_diff(sha)` | GitHub (summarized) |
 | `monitor_status(id)` / `response_logs(id)` | openstatus |

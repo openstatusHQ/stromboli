@@ -7,12 +7,15 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"time"
 
 	"connectrpc.com/connect"
+	"google.golang.org/protobuf/proto"
 
 	opensrev1 "github.com/openstatushq/opensre/gen/opensre/v1"
 	"github.com/openstatushq/opensre/internal/catalog"
 	"github.com/openstatushq/opensre/internal/connector"
+	"github.com/openstatushq/opensre/internal/connector/metrics"
 	"github.com/openstatushq/opensre/internal/store"
 	"github.com/openstatushq/opensre/internal/store/db"
 )
@@ -206,6 +209,13 @@ func (c *CatalogService) ValidateCatalog(ctx context.Context, req *connect.Reque
 }
 
 func (c *CatalogService) DiscoverServices(ctx context.Context, req *connect.Request[opensrev1.DiscoverServicesRequest]) (*connect.Response[opensrev1.DiscoverServicesResponse], error) {
+	services, _, err := catalog.Load(ctx, c.store.Queries)
+	if err != nil {
+		return nil, internal(err)
+	}
+	if cn, err := c.store.GetConnector(ctx, req.Msg.Connector); err == nil && slices.Contains(metrics.Kinds, cn.Kind) {
+		return c.discoverMetrics(ctx, req.Msg.Connector, services)
+	}
 	src, err := c.connectors.Logs(ctx, req.Msg.Connector)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeFailedPrecondition, err)
@@ -213,10 +223,6 @@ func (c *CatalogService) DiscoverServices(ctx context.Context, req *connect.Requ
 	found, err := src.Services(ctx)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeUnavailable, err)
-	}
-	services, _, err := catalog.Load(ctx, c.store.Queries)
-	if err != nil {
-		return nil, internal(err)
 	}
 	known := map[string]bool{}
 	for _, s := range services {
@@ -233,6 +239,45 @@ func (c *CatalogService) DiscoverServices(ctx context.Context, req *connect.Requ
 			Name: name,
 			Logs: &opensrev1.LogsConfig{Source: req.Msg.Connector, Selector: f.Selector},
 		})
+	}
+	return connect.NewResponse(resp), nil
+}
+
+// discoverMetrics proposes a metrics config per service found in a metrics
+// backend: new services, and existing services that have no metrics yet
+// (their full entry, so importing it keeps everything else).
+func (c *CatalogService) discoverMetrics(ctx context.Context, name string, services []*opensrev1.Service) (*connect.Response[opensrev1.DiscoverServicesResponse], error) {
+	src, _, err := c.connectors.Metrics(ctx, name)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeFailedPrecondition, err)
+	}
+	found, err := src.Services(ctx)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeUnavailable, err)
+	}
+	existing := map[string]*opensrev1.Service{}
+	for _, s := range services {
+		existing[s.Name] = s
+	}
+	seen := map[string]bool{}
+	resp := &opensrev1.DiscoverServicesResponse{}
+	for _, f := range found {
+		n := strings.ToLower(f.Name)
+		if n == "" || seen[n] {
+			continue
+		}
+		seen[n] = true
+		cfg := &opensrev1.MetricsConfig{Source: name, Selectors: []string{f.Selector}}
+		if s, ok := existing[n]; ok {
+			if s.Metrics != nil && s.Metrics.Source != "" {
+				continue
+			}
+			s = proto.Clone(s).(*opensrev1.Service)
+			s.Metrics = cfg
+			resp.Candidates = append(resp.Candidates, s)
+			continue
+		}
+		resp.Candidates = append(resp.Candidates, &opensrev1.Service{Name: n, Metrics: cfg})
 	}
 	return connect.NewResponse(resp), nil
 }
@@ -269,7 +314,34 @@ func (c *CatalogService) checkLogSelectors(ctx context.Context, services []*open
 			issues = append(issues, &opensrev1.ValidationIssue{Service: s.Name, Field: "logs.selector", Message: err.Error(), Warning: true})
 		}
 	}
+	for _, s := range services {
+		m := s.Metrics
+		if m == nil || m.Source == "" || metrics.Matchers(m.Selectors) == "" {
+			continue
+		}
+		if err := c.checkMetricSelector(ctx, m); err != nil {
+			issues = append(issues, &opensrev1.ValidationIssue{Service: s.Name, Field: "metrics.selectors", Message: err.Error(), Warning: true})
+		}
+	}
 	return issues
+}
+
+// checkMetricSelector reports an error when no series matched the selector in the last hour.
+func (c *CatalogService) checkMetricSelector(ctx context.Context, m *opensrev1.MetricsConfig) error {
+	src, _, err := c.connectors.Metrics(ctx, m.Source)
+	if err != nil {
+		return err
+	}
+	matchers := metrics.Matchers(m.Selectors)
+	now := time.Now()
+	names, err := src.MetricNames(ctx, matchers, now.Add(-time.Hour), now)
+	if err != nil {
+		return err
+	}
+	if len(names) == 0 {
+		return fmt.Errorf("no series match {%s} in the last hour", matchers)
+	}
+	return nil
 }
 
 func onlyFor(issues []*opensrev1.ValidationIssue, service string) []*opensrev1.ValidationIssue {

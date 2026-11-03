@@ -46,9 +46,11 @@ func (e *Engine) Brief(ctx context.Context, service string, w Window) (string, e
 		wg                          sync.WaitGroup
 		logSection, deploySection   string
 		runbookSection, pastSection string
+		metricSection               string
 	)
-	wg.Add(4)
+	wg.Add(5)
 	go func() { defer wg.Done(); logSection = e.briefLogs(ctx, svc, w) }()
+	go func() { defer wg.Done(); metricSection = e.briefMetrics(ctx, svc, w) }()
 	go func() { defer wg.Done(); deploySection = e.briefDeploys(ctx, graph, svc, w) }()
 	go func() { defer wg.Done(); runbookSection = e.briefRunbooks(ctx, svc) }()
 	go func() { defer wg.Done(); pastSection = e.briefPast(ctx, svc) }()
@@ -69,6 +71,7 @@ func (e *Engine) Brief(ctx context.Context, service string, w Window) (string, e
 	fmt.Fprintf(&b, "- Blast radius if this service fails: %s\n\n", list(graph.BlastRadius(svc.Name)))
 
 	b.WriteString("## Logs\n\n" + logSection + "\n")
+	b.WriteString("## Metrics\n\n" + metricSection + "\n")
 	b.WriteString("## Recent changes\n\n" + deploySection + "\n")
 	b.WriteString("## Runbooks\n\n" + runbookSection + "\n")
 	b.WriteString("## Similar past investigations\n\n" + pastSection)

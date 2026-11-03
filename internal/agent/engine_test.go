@@ -170,6 +170,40 @@ func fakeCloudWatch(t *testing.T) *httptest.Server {
 	}))
 }
 
+// fakeFlyMetrics serves Fly's Prometheus API: one api machine whose memory
+// climbs to 97% in the window, from 40% in the baseline.
+func fakeFlyMetrics(t *testing.T) *httptest.Server {
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Authorization") != "FlyV1 fm2_test" {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		q := r.URL.Query()
+		switch r.URL.Path {
+		case "/prometheus/acme/api/v1/query_range":
+			expr := q.Get("query")
+			if !strings.Contains(expr, `app="api"`) {
+				t.Errorf("metrics query not scoped to the service: %s", expr)
+			}
+			start, _ := strconv.ParseInt(q.Get("start"), 10, 64)
+			end, _ := strconv.ParseInt(q.Get("end"), 10, 64)
+			v := "40"
+			if time.Unix(end, 0).After(time.Now().Add(-5 * time.Minute)) {
+				v = "97"
+			}
+			if !strings.Contains(expr, "fly_instance_memory") {
+				fmt.Fprint(w, `{"status":"success","data":{"resultType":"matrix","result":[]}}`)
+				return
+			}
+			fmt.Fprintf(w, `{"status":"success","data":{"resultType":"matrix","result":[{"metric":{"instance":"148e","region":"ams"},"values":[[%d,%q],[%d,%q]]}]}}`, start, v, end, v)
+		case "/prometheus/acme/api/v1/label/__name__/values":
+			fmt.Fprint(w, `{"status":"success","data":["fly_instance_memory_mem_total"]}`)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+}
+
 func TestInvestigationEndToEnd(t *testing.T) {
 	dbURL := os.Getenv("OPENSRE_TEST_DB_URL")
 	if dbURL == "" {
@@ -191,6 +225,14 @@ func TestInvestigationEndToEnd(t *testing.T) {
 	defer axiom.Close()
 	cloudwatch := fakeCloudWatch(t)
 	defer cloudwatch.Close()
+	fly := fakeFlyMetrics(t)
+	defer fly.Close()
+	box, _ := secrets.New("test")
+	public, sealed, _ := connector.Split(box, "fly", map[string]string{"org": "acme", "token": "fm2_test", "url": fly.URL + "/prometheus"})
+	if err := st.ReplaceConnector(ctx, db.ReplaceConnectorParams{Name: "test-fly", Kind: "fly", Config: public, Secrets: sealed}); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { st.Queries.DeleteConnector(context.Background(), "test-fly") })
 	t.Setenv("AWS_CONFIG_FILE", os.DevNull)
 	t.Setenv("AWS_SHARED_CREDENTIALS_FILE", os.DevNull)
 
@@ -221,6 +263,7 @@ func runInvestigation(t *testing.T, st *store.Store, b logBackend) {
 	svcName := fmt.Sprintf("api-test-%d", time.Now().UnixNano())
 	spec, _ := catalog.MarshalSpec(&opensrev1.Service{
 		Name: svcName, Logs: &opensrev1.LogsConfig{Source: connName, Selector: b.selector},
+		Metrics: &opensrev1.MetricsConfig{Source: "test-fly", Selectors: []string{`app="api"`}},
 	})
 	if err := st.UpsertService(ctx, db.UpsertServiceParams{Name: svcName, Spec: spec}); err != nil {
 		t.Fatal(err)
@@ -238,7 +281,9 @@ func runInvestigation(t *testing.T, st *store.Store, b logBackend) {
 		// Reporting before mitigating is sent back to phase 1.
 		message("tool_use", toolUse("t3", "submit_report", reportJSON)),
 		message("tool_use", toolUse("t4", "submit_mitigation", mitigationJSON)),
-		message("tool_use", toolUse("t5", "log_timeline", fmt.Sprintf(`{"service":%q}`, svcName))),
+		message("tool_use",
+			toolUse("t5", "log_timeline", fmt.Sprintf(`{"service":%q}`, svcName)),
+			toolUse("t5b", "get_metrics", fmt.Sprintf(`{"service":%q,"metric":"memory_used_percent","since_minutes":30}`, svcName))),
 		message("tool_use", toolUse("t6", "submit_report", reportJSON)),
 	}}
 
@@ -287,7 +332,7 @@ func runInvestigation(t *testing.T, st *store.Store, b logBackend) {
 		t.Fatal(err)
 	}
 	kinds := map[string]int{}
-	var patternsOut, badToolOut, timelineOut string
+	var patternsOut, badToolOut, timelineOut, metricsOut string
 	for _, s := range steps {
 		kinds[s.Kind]++
 		switch s.Name {
@@ -295,6 +340,11 @@ func runInvestigation(t *testing.T, st *store.Store, b logBackend) {
 			timelineOut = s.Output
 			if s.IsError {
 				t.Errorf("log_timeline failed: %s", s.Output)
+			}
+		case "get_metrics":
+			metricsOut = s.Output
+			if s.IsError {
+				t.Errorf("get_metrics failed: %s", s.Output)
 			}
 		case "log_patterns":
 			patternsOut = s.Output
@@ -308,7 +358,7 @@ func runInvestigation(t *testing.T, st *store.Store, b logBackend) {
 			}
 		}
 	}
-	if kinds["brief"] != 1 || kinds["llm"] != 5 || kinds["tool_call"] != 3 || kinds["mitigation"] != 1 || kinds["report"] != 1 {
+	if kinds["brief"] != 1 || kinds["llm"] != 5 || kinds["tool_call"] != 4 || kinds["mitigation"] != 1 || kinds["report"] != 1 {
 		t.Errorf("unexpected steps: %v", kinds)
 	}
 	if !strings.Contains(patternsOut, "too many clients") || !strings.Contains(patternsOut, `"new":true`) {
@@ -316,6 +366,9 @@ func runInvestigation(t *testing.T, st *store.Store, b logBackend) {
 	}
 	if !strings.Contains(timelineOut, `"count":5`) && !strings.Contains(timelineOut, `"count":42`) {
 		t.Errorf("log_timeline should report the error burst, got: %s", timelineOut)
+	}
+	if !strings.Contains(metricsOut, `"max":97`) || !strings.Contains(metricsOut, `"baseline_avg":40`) || !strings.Contains(metricsOut, `"instance":"148e"`) {
+		t.Errorf("get_metrics should report memory per instance against the baseline, got: %s", metricsOut)
 	}
 	if !strings.Contains(badToolOut, "not in the catalog") {
 		t.Errorf("unexpected get_service output: %s", badToolOut)
@@ -341,6 +394,10 @@ func runInvestigation(t *testing.T, st *store.Store, b logBackend) {
 	first := model.requests[0].Messages[0].OfUser.Content[0].OfText.Text
 	if !strings.Contains(first, "# Brief: "+svcName) {
 		t.Errorf("first message should include the brief, got: %.300s", first)
+	}
+	if !strings.Contains(first, "**memory_used_percent**\n  - instance=148e region=ams: avg 97.0%, peak 97.0%, last 97.0% (baseline 40.0%)") ||
+		!strings.Contains(first, "**cpu_percent**: no data") {
+		t.Errorf("brief should show machine metrics against the baseline, got: %s", first[strings.Index(first, "## Metrics"):])
 	}
 }
 

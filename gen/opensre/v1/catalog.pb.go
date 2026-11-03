@@ -311,9 +311,12 @@ func (x *DeploysConfig) GetBranch() string {
 }
 
 type MetricsConfig struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Source        string                 `protobuf:"bytes,1,opt,name=source,proto3" json:"source,omitempty"`
-	Selectors     []string               `protobuf:"bytes,2,rep,name=selectors,proto3" json:"selectors,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Name of a configured metrics connector (prometheus or fly).
+	Source string `protobuf:"bytes,1,opt,name=source,proto3" json:"source,omitempty"`
+	// PromQL label matchers selecting the service's series, ANDed together,
+	// e.g. `app="checker"` (fly) or `job="api"`. Queries reference them as $selector.
+	Selectors     []string `protobuf:"bytes,2,rep,name=selectors,proto3" json:"selectors,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1213,7 +1216,7 @@ func (x *ValidateCatalogResponse) GetIssues() []*ValidationIssue {
 
 type DiscoverServicesRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// Log connector to inspect.
+	// Log or metrics connector to inspect.
 	Connector     string `protobuf:"bytes,1,opt,name=connector,proto3" json:"connector,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -1258,7 +1261,8 @@ func (x *DiscoverServicesRequest) GetConnector() string {
 
 type DiscoverServicesResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// Proposed services not yet in the catalog.
+	// Proposed services not yet in the catalog. For a metrics connector, also
+	// existing services without metrics, with their metrics config filled in.
 	Candidates    []*Service `protobuf:"bytes,1,rep,name=candidates,proto3" json:"candidates,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
