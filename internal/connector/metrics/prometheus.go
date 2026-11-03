@@ -11,6 +11,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/openstatushq/opensre/internal/connector/fly"
 )
 
 // PrometheusConfig configures a Prometheus HTTP API client.
@@ -58,16 +60,9 @@ func NewFly(org, token, baseURL string) (*Prometheus, error) {
 	if baseURL == "" {
 		baseURL = FlyURL
 	}
-	token = strings.TrimSpace(token)
-	auth := "Bearer " + token
-	if strings.HasPrefix(token, "FlyV1 ") || strings.HasPrefix(token, "Bearer ") {
-		auth = token
-	} else if strings.HasPrefix(token, "fm1") || strings.HasPrefix(token, "fm2") {
-		auth = "FlyV1 " + token
-	}
 	return NewPrometheus(PrometheusConfig{
 		URL:           strings.TrimRight(baseURL, "/") + "/" + url.PathEscape(org),
-		Authorization: auth,
+		Authorization: fly.Authorization(token),
 		ServiceLabel:  "app",
 	})
 }

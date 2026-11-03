@@ -248,7 +248,12 @@ type Mitigation struct {
 	// "low", "medium" or "high".
 	Confidence string `protobuf:"bytes,8,opt,name=confidence,proto3" json:"confidence,omitempty"`
 	// Current user impact, as far as the evidence shows.
-	Impact        string `protobuf:"bytes,9,opt,name=impact,proto3" json:"impact,omitempty"`
+	Impact string `protobuf:"bytes,9,opt,name=impact,proto3" json:"impact,omitempty"`
+	// Executable form of the mitigation, for services on Fly.io machines whose
+	// catalog entry allows it. Nothing runs until a human approves the action.
+	MachineAction *MachineAction `protobuf:"bytes,10,opt,name=machine_action,json=machineAction,proto3" json:"machine_action,omitempty"`
+	// ID of the action created for machine_action, to approve or reject.
+	ActionId      string `protobuf:"bytes,11,opt,name=action_id,json=actionId,proto3" json:"action_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -346,6 +351,102 @@ func (x *Mitigation) GetImpact() string {
 	return ""
 }
 
+func (x *Mitigation) GetMachineAction() *MachineAction {
+	if x != nil {
+		return x.MachineAction
+	}
+	return nil
+}
+
+func (x *Mitigation) GetActionId() string {
+	if x != nil {
+		return x.ActionId
+	}
+	return ""
+}
+
+// MachineAction is a Fly.io Machines API call opensre can run once approved.
+type MachineAction struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Catalog service the machines belong to.
+	Service string `protobuf:"bytes,1,opt,name=service,proto3" json:"service,omitempty"`
+	// "restart", "clone", "cordon", "uncordon", "stop" or "start".
+	Action string `protobuf:"bytes,2,opt,name=action,proto3" json:"action,omitempty"`
+	// Machines to act on (one clone per machine for "clone").
+	MachineIds []string `protobuf:"bytes,3,rep,name=machine_ids,json=machineIds,proto3" json:"machine_ids,omitempty"`
+	// For "clone": region of the new machines. Defaults to the source's.
+	Region string `protobuf:"bytes,4,opt,name=region,proto3" json:"region,omitempty"`
+	// Fly app, resolved from the catalog.
+	App           string `protobuf:"bytes,5,opt,name=app,proto3" json:"app,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MachineAction) Reset() {
+	*x = MachineAction{}
+	mi := &file_opensre_v1_investigation_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MachineAction) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MachineAction) ProtoMessage() {}
+
+func (x *MachineAction) ProtoReflect() protoreflect.Message {
+	mi := &file_opensre_v1_investigation_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MachineAction.ProtoReflect.Descriptor instead.
+func (*MachineAction) Descriptor() ([]byte, []int) {
+	return file_opensre_v1_investigation_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *MachineAction) GetService() string {
+	if x != nil {
+		return x.Service
+	}
+	return ""
+}
+
+func (x *MachineAction) GetAction() string {
+	if x != nil {
+		return x.Action
+	}
+	return ""
+}
+
+func (x *MachineAction) GetMachineIds() []string {
+	if x != nil {
+		return x.MachineIds
+	}
+	return nil
+}
+
+func (x *MachineAction) GetRegion() string {
+	if x != nil {
+		return x.Region
+	}
+	return ""
+}
+
+func (x *MachineAction) GetApp() string {
+	if x != nil {
+		return x.App
+	}
+	return ""
+}
+
 type Report struct {
 	state       protoimpl.MessageState `protogen:"open.v1"`
 	Summary     string                 `protobuf:"bytes,1,opt,name=summary,proto3" json:"summary,omitempty"`
@@ -364,7 +465,7 @@ type Report struct {
 
 func (x *Report) Reset() {
 	*x = Report{}
-	mi := &file_opensre_v1_investigation_proto_msgTypes[2]
+	mi := &file_opensre_v1_investigation_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -376,7 +477,7 @@ func (x *Report) String() string {
 func (*Report) ProtoMessage() {}
 
 func (x *Report) ProtoReflect() protoreflect.Message {
-	mi := &file_opensre_v1_investigation_proto_msgTypes[2]
+	mi := &file_opensre_v1_investigation_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -389,7 +490,7 @@ func (x *Report) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Report.ProtoReflect.Descriptor instead.
 func (*Report) Descriptor() ([]byte, []int) {
-	return file_opensre_v1_investigation_proto_rawDescGZIP(), []int{2}
+	return file_opensre_v1_investigation_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *Report) GetSummary() string {
@@ -466,7 +567,7 @@ type Step struct {
 
 func (x *Step) Reset() {
 	*x = Step{}
-	mi := &file_opensre_v1_investigation_proto_msgTypes[3]
+	mi := &file_opensre_v1_investigation_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -478,7 +579,7 @@ func (x *Step) String() string {
 func (*Step) ProtoMessage() {}
 
 func (x *Step) ProtoReflect() protoreflect.Message {
-	mi := &file_opensre_v1_investigation_proto_msgTypes[3]
+	mi := &file_opensre_v1_investigation_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -491,7 +592,7 @@ func (x *Step) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Step.ProtoReflect.Descriptor instead.
 func (*Step) Descriptor() ([]byte, []int) {
-	return file_opensre_v1_investigation_proto_rawDescGZIP(), []int{3}
+	return file_opensre_v1_investigation_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *Step) GetSeq() int64 {
@@ -562,7 +663,7 @@ type StartInvestigationRequest struct {
 
 func (x *StartInvestigationRequest) Reset() {
 	*x = StartInvestigationRequest{}
-	mi := &file_opensre_v1_investigation_proto_msgTypes[4]
+	mi := &file_opensre_v1_investigation_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -574,7 +675,7 @@ func (x *StartInvestigationRequest) String() string {
 func (*StartInvestigationRequest) ProtoMessage() {}
 
 func (x *StartInvestigationRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_opensre_v1_investigation_proto_msgTypes[4]
+	mi := &file_opensre_v1_investigation_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -587,7 +688,7 @@ func (x *StartInvestigationRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StartInvestigationRequest.ProtoReflect.Descriptor instead.
 func (*StartInvestigationRequest) Descriptor() ([]byte, []int) {
-	return file_opensre_v1_investigation_proto_rawDescGZIP(), []int{4}
+	return file_opensre_v1_investigation_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *StartInvestigationRequest) GetService() string {
@@ -620,7 +721,7 @@ type StartInvestigationResponse struct {
 
 func (x *StartInvestigationResponse) Reset() {
 	*x = StartInvestigationResponse{}
-	mi := &file_opensre_v1_investigation_proto_msgTypes[5]
+	mi := &file_opensre_v1_investigation_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -632,7 +733,7 @@ func (x *StartInvestigationResponse) String() string {
 func (*StartInvestigationResponse) ProtoMessage() {}
 
 func (x *StartInvestigationResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_opensre_v1_investigation_proto_msgTypes[5]
+	mi := &file_opensre_v1_investigation_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -645,7 +746,7 @@ func (x *StartInvestigationResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StartInvestigationResponse.ProtoReflect.Descriptor instead.
 func (*StartInvestigationResponse) Descriptor() ([]byte, []int) {
-	return file_opensre_v1_investigation_proto_rawDescGZIP(), []int{5}
+	return file_opensre_v1_investigation_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *StartInvestigationResponse) GetInvestigation() *Investigation {
@@ -664,7 +765,7 @@ type GetInvestigationRequest struct {
 
 func (x *GetInvestigationRequest) Reset() {
 	*x = GetInvestigationRequest{}
-	mi := &file_opensre_v1_investigation_proto_msgTypes[6]
+	mi := &file_opensre_v1_investigation_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -676,7 +777,7 @@ func (x *GetInvestigationRequest) String() string {
 func (*GetInvestigationRequest) ProtoMessage() {}
 
 func (x *GetInvestigationRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_opensre_v1_investigation_proto_msgTypes[6]
+	mi := &file_opensre_v1_investigation_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -689,7 +790,7 @@ func (x *GetInvestigationRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetInvestigationRequest.ProtoReflect.Descriptor instead.
 func (*GetInvestigationRequest) Descriptor() ([]byte, []int) {
-	return file_opensre_v1_investigation_proto_rawDescGZIP(), []int{6}
+	return file_opensre_v1_investigation_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *GetInvestigationRequest) GetId() string {
@@ -709,7 +810,7 @@ type GetInvestigationResponse struct {
 
 func (x *GetInvestigationResponse) Reset() {
 	*x = GetInvestigationResponse{}
-	mi := &file_opensre_v1_investigation_proto_msgTypes[7]
+	mi := &file_opensre_v1_investigation_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -721,7 +822,7 @@ func (x *GetInvestigationResponse) String() string {
 func (*GetInvestigationResponse) ProtoMessage() {}
 
 func (x *GetInvestigationResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_opensre_v1_investigation_proto_msgTypes[7]
+	mi := &file_opensre_v1_investigation_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -734,7 +835,7 @@ func (x *GetInvestigationResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetInvestigationResponse.ProtoReflect.Descriptor instead.
 func (*GetInvestigationResponse) Descriptor() ([]byte, []int) {
-	return file_opensre_v1_investigation_proto_rawDescGZIP(), []int{7}
+	return file_opensre_v1_investigation_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *GetInvestigationResponse) GetInvestigation() *Investigation {
@@ -760,7 +861,7 @@ type ListInvestigationsRequest struct {
 
 func (x *ListInvestigationsRequest) Reset() {
 	*x = ListInvestigationsRequest{}
-	mi := &file_opensre_v1_investigation_proto_msgTypes[8]
+	mi := &file_opensre_v1_investigation_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -772,7 +873,7 @@ func (x *ListInvestigationsRequest) String() string {
 func (*ListInvestigationsRequest) ProtoMessage() {}
 
 func (x *ListInvestigationsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_opensre_v1_investigation_proto_msgTypes[8]
+	mi := &file_opensre_v1_investigation_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -785,7 +886,7 @@ func (x *ListInvestigationsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListInvestigationsRequest.ProtoReflect.Descriptor instead.
 func (*ListInvestigationsRequest) Descriptor() ([]byte, []int) {
-	return file_opensre_v1_investigation_proto_rawDescGZIP(), []int{8}
+	return file_opensre_v1_investigation_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *ListInvestigationsRequest) GetLimit() int32 {
@@ -804,7 +905,7 @@ type ListInvestigationsResponse struct {
 
 func (x *ListInvestigationsResponse) Reset() {
 	*x = ListInvestigationsResponse{}
-	mi := &file_opensre_v1_investigation_proto_msgTypes[9]
+	mi := &file_opensre_v1_investigation_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -816,7 +917,7 @@ func (x *ListInvestigationsResponse) String() string {
 func (*ListInvestigationsResponse) ProtoMessage() {}
 
 func (x *ListInvestigationsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_opensre_v1_investigation_proto_msgTypes[9]
+	mi := &file_opensre_v1_investigation_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -829,7 +930,7 @@ func (x *ListInvestigationsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListInvestigationsResponse.ProtoReflect.Descriptor instead.
 func (*ListInvestigationsResponse) Descriptor() ([]byte, []int) {
-	return file_opensre_v1_investigation_proto_rawDescGZIP(), []int{9}
+	return file_opensre_v1_investigation_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *ListInvestigationsResponse) GetInvestigations() []*Investigation {
@@ -850,7 +951,7 @@ type WatchInvestigationRequest struct {
 
 func (x *WatchInvestigationRequest) Reset() {
 	*x = WatchInvestigationRequest{}
-	mi := &file_opensre_v1_investigation_proto_msgTypes[10]
+	mi := &file_opensre_v1_investigation_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -862,7 +963,7 @@ func (x *WatchInvestigationRequest) String() string {
 func (*WatchInvestigationRequest) ProtoMessage() {}
 
 func (x *WatchInvestigationRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_opensre_v1_investigation_proto_msgTypes[10]
+	mi := &file_opensre_v1_investigation_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -875,7 +976,7 @@ func (x *WatchInvestigationRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WatchInvestigationRequest.ProtoReflect.Descriptor instead.
 func (*WatchInvestigationRequest) Descriptor() ([]byte, []int) {
-	return file_opensre_v1_investigation_proto_rawDescGZIP(), []int{10}
+	return file_opensre_v1_investigation_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *WatchInvestigationRequest) GetId() string {
@@ -905,7 +1006,7 @@ type WatchInvestigationResponse struct {
 
 func (x *WatchInvestigationResponse) Reset() {
 	*x = WatchInvestigationResponse{}
-	mi := &file_opensre_v1_investigation_proto_msgTypes[11]
+	mi := &file_opensre_v1_investigation_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -917,7 +1018,7 @@ func (x *WatchInvestigationResponse) String() string {
 func (*WatchInvestigationResponse) ProtoMessage() {}
 
 func (x *WatchInvestigationResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_opensre_v1_investigation_proto_msgTypes[11]
+	mi := &file_opensre_v1_investigation_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -930,7 +1031,7 @@ func (x *WatchInvestigationResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WatchInvestigationResponse.ProtoReflect.Descriptor instead.
 func (*WatchInvestigationResponse) Descriptor() ([]byte, []int) {
-	return file_opensre_v1_investigation_proto_rawDescGZIP(), []int{11}
+	return file_opensre_v1_investigation_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *WatchInvestigationResponse) GetEvent() isWatchInvestigationResponse_Event {
@@ -986,7 +1087,7 @@ type GetBriefRequest struct {
 
 func (x *GetBriefRequest) Reset() {
 	*x = GetBriefRequest{}
-	mi := &file_opensre_v1_investigation_proto_msgTypes[12]
+	mi := &file_opensre_v1_investigation_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -998,7 +1099,7 @@ func (x *GetBriefRequest) String() string {
 func (*GetBriefRequest) ProtoMessage() {}
 
 func (x *GetBriefRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_opensre_v1_investigation_proto_msgTypes[12]
+	mi := &file_opensre_v1_investigation_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1011,7 +1112,7 @@ func (x *GetBriefRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetBriefRequest.ProtoReflect.Descriptor instead.
 func (*GetBriefRequest) Descriptor() ([]byte, []int) {
-	return file_opensre_v1_investigation_proto_rawDescGZIP(), []int{12}
+	return file_opensre_v1_investigation_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *GetBriefRequest) GetService() string {
@@ -1038,7 +1139,7 @@ type GetBriefResponse struct {
 
 func (x *GetBriefResponse) Reset() {
 	*x = GetBriefResponse{}
-	mi := &file_opensre_v1_investigation_proto_msgTypes[13]
+	mi := &file_opensre_v1_investigation_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1050,7 +1151,7 @@ func (x *GetBriefResponse) String() string {
 func (*GetBriefResponse) ProtoMessage() {}
 
 func (x *GetBriefResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_opensre_v1_investigation_proto_msgTypes[13]
+	mi := &file_opensre_v1_investigation_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1063,7 +1164,7 @@ func (x *GetBriefResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetBriefResponse.ProtoReflect.Descriptor instead.
 func (*GetBriefResponse) Descriptor() ([]byte, []int) {
-	return file_opensre_v1_investigation_proto_rawDescGZIP(), []int{13}
+	return file_opensre_v1_investigation_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *GetBriefResponse) GetBrief() string {
@@ -1098,7 +1199,7 @@ const file_opensre_v1_investigation_proto_rawDesc = "" +
 	"\n" +
 	"mitigation\x18\r \x01(\v2\x16.opensre.v1.MitigationR\n" +
 	"mitigation\x12=\n" +
-	"\fmitigated_at\x18\x0e \x01(\v2\x1a.google.protobuf.TimestampR\vmitigatedAt\"\xe6\x01\n" +
+	"\fmitigated_at\x18\x0e \x01(\v2\x1a.google.protobuf.TimestampR\vmitigatedAt\"\xc5\x02\n" +
 	"\n" +
 	"Mitigation\x12\x12\n" +
 	"\x04kind\x18\x01 \x01(\tR\x04kind\x12\x16\n" +
@@ -1111,7 +1212,17 @@ const file_opensre_v1_investigation_proto_rawDesc = "" +
 	"\n" +
 	"confidence\x18\b \x01(\tR\n" +
 	"confidence\x12\x16\n" +
-	"\x06impact\x18\t \x01(\tR\x06impact\"\x82\x02\n" +
+	"\x06impact\x18\t \x01(\tR\x06impact\x12@\n" +
+	"\x0emachine_action\x18\n" +
+	" \x01(\v2\x19.opensre.v1.MachineActionR\rmachineAction\x12\x1b\n" +
+	"\taction_id\x18\v \x01(\tR\bactionId\"\x8c\x01\n" +
+	"\rMachineAction\x12\x18\n" +
+	"\aservice\x18\x01 \x01(\tR\aservice\x12\x16\n" +
+	"\x06action\x18\x02 \x01(\tR\x06action\x12\x1f\n" +
+	"\vmachine_ids\x18\x03 \x03(\tR\n" +
+	"machineIds\x12\x16\n" +
+	"\x06region\x18\x04 \x01(\tR\x06region\x12\x10\n" +
+	"\x03app\x18\x05 \x01(\tR\x03app\"\x82\x02\n" +
 	"\x06Report\x12\x18\n" +
 	"\asummary\x18\x01 \x01(\tR\asummary\x12!\n" +
 	"\flikely_cause\x18\x02 \x01(\tR\vlikelyCause\x12\x1e\n" +
@@ -1190,57 +1301,59 @@ func file_opensre_v1_investigation_proto_rawDescGZIP() []byte {
 }
 
 var file_opensre_v1_investigation_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_opensre_v1_investigation_proto_msgTypes = make([]protoimpl.MessageInfo, 14)
+var file_opensre_v1_investigation_proto_msgTypes = make([]protoimpl.MessageInfo, 15)
 var file_opensre_v1_investigation_proto_goTypes = []any{
 	(InvestigationStatus)(0),           // 0: opensre.v1.InvestigationStatus
 	(*Investigation)(nil),              // 1: opensre.v1.Investigation
 	(*Mitigation)(nil),                 // 2: opensre.v1.Mitigation
-	(*Report)(nil),                     // 3: opensre.v1.Report
-	(*Step)(nil),                       // 4: opensre.v1.Step
-	(*StartInvestigationRequest)(nil),  // 5: opensre.v1.StartInvestigationRequest
-	(*StartInvestigationResponse)(nil), // 6: opensre.v1.StartInvestigationResponse
-	(*GetInvestigationRequest)(nil),    // 7: opensre.v1.GetInvestigationRequest
-	(*GetInvestigationResponse)(nil),   // 8: opensre.v1.GetInvestigationResponse
-	(*ListInvestigationsRequest)(nil),  // 9: opensre.v1.ListInvestigationsRequest
-	(*ListInvestigationsResponse)(nil), // 10: opensre.v1.ListInvestigationsResponse
-	(*WatchInvestigationRequest)(nil),  // 11: opensre.v1.WatchInvestigationRequest
-	(*WatchInvestigationResponse)(nil), // 12: opensre.v1.WatchInvestigationResponse
-	(*GetBriefRequest)(nil),            // 13: opensre.v1.GetBriefRequest
-	(*GetBriefResponse)(nil),           // 14: opensre.v1.GetBriefResponse
-	(*structpb.Struct)(nil),            // 15: google.protobuf.Struct
-	(*timestamppb.Timestamp)(nil),      // 16: google.protobuf.Timestamp
+	(*MachineAction)(nil),              // 3: opensre.v1.MachineAction
+	(*Report)(nil),                     // 4: opensre.v1.Report
+	(*Step)(nil),                       // 5: opensre.v1.Step
+	(*StartInvestigationRequest)(nil),  // 6: opensre.v1.StartInvestigationRequest
+	(*StartInvestigationResponse)(nil), // 7: opensre.v1.StartInvestigationResponse
+	(*GetInvestigationRequest)(nil),    // 8: opensre.v1.GetInvestigationRequest
+	(*GetInvestigationResponse)(nil),   // 9: opensre.v1.GetInvestigationResponse
+	(*ListInvestigationsRequest)(nil),  // 10: opensre.v1.ListInvestigationsRequest
+	(*ListInvestigationsResponse)(nil), // 11: opensre.v1.ListInvestigationsResponse
+	(*WatchInvestigationRequest)(nil),  // 12: opensre.v1.WatchInvestigationRequest
+	(*WatchInvestigationResponse)(nil), // 13: opensre.v1.WatchInvestigationResponse
+	(*GetBriefRequest)(nil),            // 14: opensre.v1.GetBriefRequest
+	(*GetBriefResponse)(nil),           // 15: opensre.v1.GetBriefResponse
+	(*structpb.Struct)(nil),            // 16: google.protobuf.Struct
+	(*timestamppb.Timestamp)(nil),      // 17: google.protobuf.Timestamp
 }
 var file_opensre_v1_investigation_proto_depIdxs = []int32{
 	0,  // 0: opensre.v1.Investigation.status:type_name -> opensre.v1.InvestigationStatus
-	15, // 1: opensre.v1.Investigation.alert:type_name -> google.protobuf.Struct
-	3,  // 2: opensre.v1.Investigation.report:type_name -> opensre.v1.Report
-	16, // 3: opensre.v1.Investigation.created_at:type_name -> google.protobuf.Timestamp
-	16, // 4: opensre.v1.Investigation.finished_at:type_name -> google.protobuf.Timestamp
+	16, // 1: opensre.v1.Investigation.alert:type_name -> google.protobuf.Struct
+	4,  // 2: opensre.v1.Investigation.report:type_name -> opensre.v1.Report
+	17, // 3: opensre.v1.Investigation.created_at:type_name -> google.protobuf.Timestamp
+	17, // 4: opensre.v1.Investigation.finished_at:type_name -> google.protobuf.Timestamp
 	2,  // 5: opensre.v1.Investigation.mitigation:type_name -> opensre.v1.Mitigation
-	16, // 6: opensre.v1.Investigation.mitigated_at:type_name -> google.protobuf.Timestamp
-	15, // 7: opensre.v1.Step.input:type_name -> google.protobuf.Struct
-	16, // 8: opensre.v1.Step.created_at:type_name -> google.protobuf.Timestamp
-	1,  // 9: opensre.v1.StartInvestigationResponse.investigation:type_name -> opensre.v1.Investigation
-	1,  // 10: opensre.v1.GetInvestigationResponse.investigation:type_name -> opensre.v1.Investigation
-	4,  // 11: opensre.v1.GetInvestigationResponse.steps:type_name -> opensre.v1.Step
-	1,  // 12: opensre.v1.ListInvestigationsResponse.investigations:type_name -> opensre.v1.Investigation
-	4,  // 13: opensre.v1.WatchInvestigationResponse.step:type_name -> opensre.v1.Step
-	1,  // 14: opensre.v1.WatchInvestigationResponse.finished:type_name -> opensre.v1.Investigation
-	5,  // 15: opensre.v1.InvestigationService.StartInvestigation:input_type -> opensre.v1.StartInvestigationRequest
-	7,  // 16: opensre.v1.InvestigationService.GetInvestigation:input_type -> opensre.v1.GetInvestigationRequest
-	9,  // 17: opensre.v1.InvestigationService.ListInvestigations:input_type -> opensre.v1.ListInvestigationsRequest
-	11, // 18: opensre.v1.InvestigationService.WatchInvestigation:input_type -> opensre.v1.WatchInvestigationRequest
-	13, // 19: opensre.v1.InvestigationService.GetBrief:input_type -> opensre.v1.GetBriefRequest
-	6,  // 20: opensre.v1.InvestigationService.StartInvestigation:output_type -> opensre.v1.StartInvestigationResponse
-	8,  // 21: opensre.v1.InvestigationService.GetInvestigation:output_type -> opensre.v1.GetInvestigationResponse
-	10, // 22: opensre.v1.InvestigationService.ListInvestigations:output_type -> opensre.v1.ListInvestigationsResponse
-	12, // 23: opensre.v1.InvestigationService.WatchInvestigation:output_type -> opensre.v1.WatchInvestigationResponse
-	14, // 24: opensre.v1.InvestigationService.GetBrief:output_type -> opensre.v1.GetBriefResponse
-	20, // [20:25] is the sub-list for method output_type
-	15, // [15:20] is the sub-list for method input_type
-	15, // [15:15] is the sub-list for extension type_name
-	15, // [15:15] is the sub-list for extension extendee
-	0,  // [0:15] is the sub-list for field type_name
+	17, // 6: opensre.v1.Investigation.mitigated_at:type_name -> google.protobuf.Timestamp
+	3,  // 7: opensre.v1.Mitigation.machine_action:type_name -> opensre.v1.MachineAction
+	16, // 8: opensre.v1.Step.input:type_name -> google.protobuf.Struct
+	17, // 9: opensre.v1.Step.created_at:type_name -> google.protobuf.Timestamp
+	1,  // 10: opensre.v1.StartInvestigationResponse.investigation:type_name -> opensre.v1.Investigation
+	1,  // 11: opensre.v1.GetInvestigationResponse.investigation:type_name -> opensre.v1.Investigation
+	5,  // 12: opensre.v1.GetInvestigationResponse.steps:type_name -> opensre.v1.Step
+	1,  // 13: opensre.v1.ListInvestigationsResponse.investigations:type_name -> opensre.v1.Investigation
+	5,  // 14: opensre.v1.WatchInvestigationResponse.step:type_name -> opensre.v1.Step
+	1,  // 15: opensre.v1.WatchInvestigationResponse.finished:type_name -> opensre.v1.Investigation
+	6,  // 16: opensre.v1.InvestigationService.StartInvestigation:input_type -> opensre.v1.StartInvestigationRequest
+	8,  // 17: opensre.v1.InvestigationService.GetInvestigation:input_type -> opensre.v1.GetInvestigationRequest
+	10, // 18: opensre.v1.InvestigationService.ListInvestigations:input_type -> opensre.v1.ListInvestigationsRequest
+	12, // 19: opensre.v1.InvestigationService.WatchInvestigation:input_type -> opensre.v1.WatchInvestigationRequest
+	14, // 20: opensre.v1.InvestigationService.GetBrief:input_type -> opensre.v1.GetBriefRequest
+	7,  // 21: opensre.v1.InvestigationService.StartInvestigation:output_type -> opensre.v1.StartInvestigationResponse
+	9,  // 22: opensre.v1.InvestigationService.GetInvestigation:output_type -> opensre.v1.GetInvestigationResponse
+	11, // 23: opensre.v1.InvestigationService.ListInvestigations:output_type -> opensre.v1.ListInvestigationsResponse
+	13, // 24: opensre.v1.InvestigationService.WatchInvestigation:output_type -> opensre.v1.WatchInvestigationResponse
+	15, // 25: opensre.v1.InvestigationService.GetBrief:output_type -> opensre.v1.GetBriefResponse
+	21, // [21:26] is the sub-list for method output_type
+	16, // [16:21] is the sub-list for method input_type
+	16, // [16:16] is the sub-list for extension type_name
+	16, // [16:16] is the sub-list for extension extendee
+	0,  // [0:16] is the sub-list for field type_name
 }
 
 func init() { file_opensre_v1_investigation_proto_init() }
@@ -1248,7 +1361,7 @@ func file_opensre_v1_investigation_proto_init() {
 	if File_opensre_v1_investigation_proto != nil {
 		return
 	}
-	file_opensre_v1_investigation_proto_msgTypes[11].OneofWrappers = []any{
+	file_opensre_v1_investigation_proto_msgTypes[12].OneofWrappers = []any{
 		(*WatchInvestigationResponse_Step)(nil),
 		(*WatchInvestigationResponse_Finished)(nil),
 	}
@@ -1258,7 +1371,7 @@ func file_opensre_v1_investigation_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_opensre_v1_investigation_proto_rawDesc), len(file_opensre_v1_investigation_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   14,
+			NumMessages:   15,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

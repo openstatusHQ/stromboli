@@ -27,6 +27,7 @@ type clients struct {
 	catalog       opensrev1connect.CatalogServiceClient
 	connectors    opensrev1connect.ConnectorServiceClient
 	investigation opensrev1connect.InvestigationServiceClient
+	actions       opensrev1connect.ActionServiceClient
 }
 
 func newClients() clients {
@@ -40,6 +41,7 @@ func newClients() clients {
 		catalog:       opensrev1connect.NewCatalogServiceClient(hc, url, opts),
 		connectors:    opensrev1connect.NewConnectorServiceClient(hc, url, opts),
 		investigation: opensrev1connect.NewInvestigationServiceClient(hc, url, opts),
+		actions:       opensrev1connect.NewActionServiceClient(hc, url, opts),
 	}
 }
 
@@ -58,6 +60,8 @@ func runClient(ctx context.Context, cmd string, args []string) error {
 		return listCmd(ctx, c, args)
 	case "show":
 		return showCmd(ctx, c, args)
+	case "actions":
+		return actionsCmd(ctx, c, args)
 	}
 	return fmt.Errorf("unknown command %q (run opensre help)", cmd)
 }
@@ -194,7 +198,7 @@ func connectorCmd(ctx context.Context, c clients, args []string) error {
 	switch args[0] {
 	case "add":
 		if len(pos) < 2 {
-			return errors.New("usage: opensre connector add <name> <kind> key=value... (kinds: loki, axiom, cloudwatch, prometheus, fly, github)")
+			return errors.New("usage: opensre connector add <name> <kind> key=value... (kinds: loki, axiom, cloudwatch, prometheus, fly, fly_machines, github)")
 		}
 		cfg := map[string]string{}
 		for _, kv := range pos[2:] {
@@ -396,6 +400,118 @@ func showCmd(ctx context.Context, c clients, args []string) error {
 	}
 	printResult(inv)
 	return nil
+}
+
+func actionsCmd(ctx context.Context, c clients, args []string) error {
+	const usage = "usage: opensre actions list [--investigation id] [--status proposed] | show <id> | approve <id> --as <name> [--note n] | reject <id> --as <name> [--note reason]"
+	sub := "list"
+	if len(args) > 0 && !strings.HasPrefix(args[0], "-") {
+		sub, args = args[0], args[1:]
+	}
+	fs := flag.NewFlagSet("actions", flag.ContinueOnError)
+	investigation := fs.String("investigation", "", "only the actions of this investigation")
+	status := fs.String("status", "", "only actions with this status (proposed, running, succeeded, failed, rejected, expired, superseded)")
+	limit := fs.Int("limit", 20, "max actions")
+	as := fs.String("as", os.Getenv("OPENSRE_USER"), "your name, recorded as the approver (default $OPENSRE_USER)")
+	note := fs.String("note", "", "note or reason recorded with the decision")
+	pos, err := parse(fs, args)
+	if err != nil {
+		return err
+	}
+	switch sub {
+	case "list":
+		req := &opensrev1.ListActionsRequest{InvestigationId: *investigation, Limit: int32(*limit)}
+		if *status != "" {
+			v, ok := opensrev1.ActionStatus_value["ACTION_STATUS_"+strings.ToUpper(*status)]
+			if !ok {
+				return fmt.Errorf("unknown status %q", *status)
+			}
+			req.Status = opensrev1.ActionStatus(v)
+		}
+		resp, err := c.actions.ListActions(ctx, connect.NewRequest(req))
+		if err != nil {
+			return err
+		}
+		tw := tabwriter.NewWriter(os.Stdout, 0, 4, 2, ' ', 0)
+		fmt.Fprintln(tw, "ID\tCREATED\tSTATUS\tSERVICE\tACTION\tBY")
+		for _, a := range resp.Msg.Actions {
+			fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\n", a.Id, a.CreatedAt.AsTime().Local().Format("2006-01-02 15:04"),
+				actionStatus(a.Status), a.Service, report.MachineActionText(a.MachineAction), a.DecidedBy)
+		}
+		return tw.Flush()
+	case "show", "approve", "reject":
+		if len(pos) != 1 {
+			return errors.New(usage)
+		}
+	default:
+		return errors.New(usage)
+	}
+
+	var a *opensrev1.Action
+	switch sub {
+	case "show":
+		resp, err := c.actions.GetAction(ctx, connect.NewRequest(&opensrev1.GetActionRequest{Id: pos[0]}))
+		if err != nil {
+			return err
+		}
+		a = resp.Msg.Action
+	case "approve":
+		if *as == "" {
+			return errors.New("--as <your name> is required: approvals are recorded")
+		}
+		got, err := c.actions.GetAction(ctx, connect.NewRequest(&opensrev1.GetActionRequest{Id: pos[0]}))
+		if err != nil {
+			return err
+		}
+		if got.Msg.Action.Status != opensrev1.ActionStatus_ACTION_STATUS_PROPOSED {
+			printAction(got.Msg.Action)
+			return fmt.Errorf("action is %s, not waiting for approval", actionStatus(got.Msg.Action.Status))
+		}
+		fmt.Printf("running: %s (approved by %s)…\n", report.MachineActionText(got.Msg.Action.MachineAction), *as)
+		resp, err := c.actions.ApproveAction(ctx, connect.NewRequest(&opensrev1.ApproveActionRequest{Id: pos[0], Approver: *as, Note: *note}))
+		if err != nil {
+			return err
+		}
+		a = resp.Msg.Action
+	case "reject":
+		if *as == "" {
+			return errors.New("--as <your name> is required: decisions are recorded")
+		}
+		resp, err := c.actions.RejectAction(ctx, connect.NewRequest(&opensrev1.RejectActionRequest{Id: pos[0], Approver: *as, Reason: *note}))
+		if err != nil {
+			return err
+		}
+		a = resp.Msg.Action
+	}
+	printAction(a)
+	if a.Status == opensrev1.ActionStatus_ACTION_STATUS_FAILED {
+		return errors.New("action failed")
+	}
+	return nil
+}
+
+func actionStatus(s opensrev1.ActionStatus) string {
+	return strings.ToLower(strings.TrimPrefix(s.String(), "ACTION_STATUS_"))
+}
+
+func printAction(a *opensrev1.Action) {
+	fmt.Printf("action %s: %s\n", a.Id, actionStatus(a.Status))
+	fmt.Printf("  %s (service %s, investigation %s)\n", report.MachineActionText(a.MachineAction), a.Service, a.InvestigationId)
+	switch {
+	case a.Status == opensrev1.ActionStatus_ACTION_STATUS_PROPOSED:
+		fmt.Printf("  expires %s · %s\n", a.ExpiresAt.AsTime().Local().Format(time.Kitchen), report.ApproveCommand(a.Id))
+	case a.DecidedBy != "":
+		fmt.Printf("  decided by %s at %s\n", a.DecidedBy, a.DecidedAt.AsTime().Local().Format(time.RFC1123))
+	}
+	if a.Note != "" {
+		fmt.Printf("  note: %s\n", a.Note)
+	}
+	if a.Result != "" {
+		fmt.Printf("  result:\n    %s\n", strings.ReplaceAll(a.Result, "\n", "\n    "))
+	}
+	if a.Error != "" {
+		fmt.Printf("  error: %s\n", a.Error)
+	}
 }
 
 func printIssues(issues []*opensrev1.ValidationIssue) {

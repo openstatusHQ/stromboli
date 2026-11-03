@@ -5,6 +5,7 @@
 > - The openstatus API connector (as a source of context) is not built; only the openstatus webhook trigger is.
 > - Slack steering is not built yet (milestone 5).
 > - Investigations **mitigate first, investigate second**: a triage phase proposes a generic mitigation (rollback, restart, scale_up, drain, disable_feature, block_traffic, failover, degrade, none) and publishes it before the root-cause phase. Time to mitigation is stored (`mitigated_at`). Next: a deterministic fast path (no LLM) for obvious cases, such as errors that start right after a deploy → rollback.
+> - For Fly.io services, the brief lists the app's machines and the Fly command, with its undo, for each generic mitigation. Approved actions (phase 4) are built for Fly machines only: behind `OPENSRE_ACTIONS_ENABLED`, a per-service `fly_machines` connector and allow-list, the agent can attach a `machine_action` (restart, clone, cordon, uncordon, stop, start) to its mitigation. It runs only after a named human approves it through the API/CLI, and is recorded in the `actions` table. Next: Slack approval buttons limited to service owners.
 
 An AI SRE agent, in the spirit of OpenAI's SevBot and Google's ProdAgent: it knows every service we run, and when something breaks it gathers context (logs, deploys, metrics, dependencies), forms and checks hypotheses, and reports to humans. It **suggests, it does not execute**.
 
@@ -37,7 +38,7 @@ Source: [The Pragmatic Engineer — AI SRE](https://newsletter.pragmaticengineer
 - Every tool call and LLM step is logged and replayable.
 
 **Non-goals (v1)**
-- Running mitigations (restarts, rollbacks). The agent only *proposes* them, with the exact command.
+- Running mitigations (restarts, rollbacks) on its own. The agent *proposes* them, with the exact command; the only actions it can run are opt-in Fly machine actions, after a human approves each one.
 - Writing code or PRs. It hands off context to a coding agent or an engineer instead.
 - Auto-discovering services. The catalog is declared in v1 and discovery comes later.
 

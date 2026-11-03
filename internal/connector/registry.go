@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/openstatushq/opensre/internal/connector/deploys"
+	"github.com/openstatushq/opensre/internal/connector/fly"
 	"github.com/openstatushq/opensre/internal/connector/logs"
 	"github.com/openstatushq/opensre/internal/connector/metrics"
 	"github.com/openstatushq/opensre/internal/secrets"
@@ -51,6 +52,13 @@ var Kinds = map[string]kindSpec{
 	},
 	"github": {
 		optional: []string{"token", "base_url"},
+		secret:   []string{"token"},
+	},
+	// fly_machines holds a token that can act on machines (fly tokens create
+	// deploy), kept apart from the read-only fly metrics connector.
+	"fly_machines": {
+		required: []string{"org", "token"},
+		optional: []string{"url"},
 		secret:   []string{"token"},
 	},
 }
@@ -212,6 +220,25 @@ func (r *Registry) GitHub(ctx context.Context, name string) (*deploys.GitHub, er
 	return deploys.NewGitHub(deploys.GitHubConfig{Token: cfg["token"], BaseURL: cfg["base_url"]}), nil
 }
 
+// FlyMachines returns a Machines API client from a fly_machines connector,
+// or from a fly metrics connector's token (enough to list machines).
+func (r *Registry) FlyMachines(ctx context.Context, name string) (*fly.Machines, string, error) {
+	c, cfg, err := r.Config(ctx, name)
+	if err != nil {
+		return nil, "", err
+	}
+	switch c.Kind {
+	case "fly_machines":
+		m, err := fly.NewMachines(cfg["org"], cfg["token"], cfg["url"])
+		return m, c.Kind, err
+	case "fly":
+		// Its url is the Prometheus endpoint, not the Machines API.
+		m, err := fly.NewMachines(cfg["org"], cfg["token"], "")
+		return m, c.Kind, err
+	}
+	return nil, "", fmt.Errorf("connector %q (%s) is not a fly or fly_machines connector", name, c.Kind)
+}
+
 // Check verifies connectivity for any connector kind.
 func (r *Registry) Check(ctx context.Context, name string) error {
 	c, err := r.store.GetConnector(ctx, name)
@@ -234,6 +261,12 @@ func (r *Registry) Check(ctx context.Context, name string) error {
 			return err
 		}
 		return src.Check(ctx)
+	case c.Kind == "fly_machines":
+		m, _, err := r.FlyMachines(ctx, name)
+		if err != nil {
+			return err
+		}
+		return m.Check(ctx)
 	case c.Kind == "github":
 		gh, err := r.GitHub(ctx, name)
 		if err != nil {

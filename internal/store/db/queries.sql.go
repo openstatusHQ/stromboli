@@ -28,6 +28,89 @@ func (q *Queries) AddInvestigationTokens(ctx context.Context, arg AddInvestigati
 	return err
 }
 
+const claimAction = `-- name: ClaimAction :one
+UPDATE actions SET status = 'running', decided_by = $2, note = $3, decided_at = now()
+WHERE id = $1 AND status = 'proposed' AND expires_at > now()
+RETURNING id, investigation_id, service, kind, spec, connector, status, decided_by, note, result, error, created_at, expires_at, decided_at, finished_at
+`
+
+type ClaimActionParams struct {
+	ID        uuid.UUID
+	DecidedBy pgtype.Text
+	Note      pgtype.Text
+}
+
+// Claiming is atomic: only one approval of a proposed, unexpired action wins.
+func (q *Queries) ClaimAction(ctx context.Context, arg ClaimActionParams) (Action, error) {
+	row := q.db.QueryRow(ctx, claimAction, arg.ID, arg.DecidedBy, arg.Note)
+	var i Action
+	err := row.Scan(
+		&i.ID,
+		&i.InvestigationID,
+		&i.Service,
+		&i.Kind,
+		&i.Spec,
+		&i.Connector,
+		&i.Status,
+		&i.DecidedBy,
+		&i.Note,
+		&i.Result,
+		&i.Error,
+		&i.CreatedAt,
+		&i.ExpiresAt,
+		&i.DecidedAt,
+		&i.FinishedAt,
+	)
+	return i, err
+}
+
+const createAction = `-- name: CreateAction :one
+INSERT INTO actions (id, investigation_id, service, kind, spec, connector, status, expires_at)
+VALUES ($1, $2, $3, $4, $5, $6, 'proposed', $7)
+RETURNING id, investigation_id, service, kind, spec, connector, status, decided_by, note, result, error, created_at, expires_at, decided_at, finished_at
+`
+
+type CreateActionParams struct {
+	ID              uuid.UUID
+	InvestigationID uuid.UUID
+	Service         string
+	Kind            string
+	Spec            json.RawMessage
+	Connector       string
+	ExpiresAt       pgtype.Timestamptz
+}
+
+func (q *Queries) CreateAction(ctx context.Context, arg CreateActionParams) (Action, error) {
+	row := q.db.QueryRow(ctx, createAction,
+		arg.ID,
+		arg.InvestigationID,
+		arg.Service,
+		arg.Kind,
+		arg.Spec,
+		arg.Connector,
+		arg.ExpiresAt,
+	)
+	var i Action
+	err := row.Scan(
+		&i.ID,
+		&i.InvestigationID,
+		&i.Service,
+		&i.Kind,
+		&i.Spec,
+		&i.Connector,
+		&i.Status,
+		&i.DecidedBy,
+		&i.Note,
+		&i.Result,
+		&i.Error,
+		&i.CreatedAt,
+		&i.ExpiresAt,
+		&i.DecidedAt,
+		&i.FinishedAt,
+	)
+	return i, err
+}
+
 const createConnector = `-- name: CreateConnector :exec
 INSERT INTO connectors (name, kind, config, secrets) VALUES ($1, $2, $3, $4)
 `
@@ -146,6 +229,32 @@ func (q *Queries) DeleteServicesNotIn(ctx context.Context, names []string) (int6
 	return result.RowsAffected(), nil
 }
 
+const expireActions = `-- name: ExpireActions :execrows
+UPDATE actions SET status = 'expired' WHERE status = 'proposed' AND expires_at <= now()
+`
+
+func (q *Queries) ExpireActions(ctx context.Context) (int64, error) {
+	result, err := q.db.Exec(ctx, expireActions)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const failRunningActions = `-- name: FailRunningActions :execrows
+UPDATE actions SET status = 'failed', finished_at = now(),
+    error = 'server restarted while the action was running: check the machines'
+WHERE status = 'running'
+`
+
+func (q *Queries) FailRunningActions(ctx context.Context) (int64, error) {
+	result, err := q.db.Exec(ctx, failRunningActions)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const failRunningInvestigations = `-- name: FailRunningInvestigations :execrows
 UPDATE investigations SET status = 'failed', error = 'server restarted during investigation', finished_at = now()
 WHERE status = 'running'
@@ -196,6 +305,47 @@ func (q *Queries) FindOpenInvestigation(ctx context.Context, arg FindOpenInvesti
 	return i, err
 }
 
+const finishAction = `-- name: FinishAction :one
+UPDATE actions SET status = $2, result = $3, error = $4, finished_at = now()
+WHERE id = $1
+RETURNING id, investigation_id, service, kind, spec, connector, status, decided_by, note, result, error, created_at, expires_at, decided_at, finished_at
+`
+
+type FinishActionParams struct {
+	ID     uuid.UUID
+	Status string
+	Result pgtype.Text
+	Error  pgtype.Text
+}
+
+func (q *Queries) FinishAction(ctx context.Context, arg FinishActionParams) (Action, error) {
+	row := q.db.QueryRow(ctx, finishAction,
+		arg.ID,
+		arg.Status,
+		arg.Result,
+		arg.Error,
+	)
+	var i Action
+	err := row.Scan(
+		&i.ID,
+		&i.InvestigationID,
+		&i.Service,
+		&i.Kind,
+		&i.Spec,
+		&i.Connector,
+		&i.Status,
+		&i.DecidedBy,
+		&i.Note,
+		&i.Result,
+		&i.Error,
+		&i.CreatedAt,
+		&i.ExpiresAt,
+		&i.DecidedAt,
+		&i.FinishedAt,
+	)
+	return i, err
+}
+
 const finishInvestigation = `-- name: FinishInvestigation :exec
 UPDATE investigations SET status = $2, report = $3, error = $4, finished_at = now() WHERE id = $1
 `
@@ -215,6 +365,33 @@ func (q *Queries) FinishInvestigation(ctx context.Context, arg FinishInvestigati
 		arg.Error,
 	)
 	return err
+}
+
+const getAction = `-- name: GetAction :one
+SELECT id, investigation_id, service, kind, spec, connector, status, decided_by, note, result, error, created_at, expires_at, decided_at, finished_at FROM actions WHERE id = $1
+`
+
+func (q *Queries) GetAction(ctx context.Context, id uuid.UUID) (Action, error) {
+	row := q.db.QueryRow(ctx, getAction, id)
+	var i Action
+	err := row.Scan(
+		&i.ID,
+		&i.InvestigationID,
+		&i.Service,
+		&i.Kind,
+		&i.Spec,
+		&i.Connector,
+		&i.Status,
+		&i.DecidedBy,
+		&i.Note,
+		&i.Result,
+		&i.Error,
+		&i.CreatedAt,
+		&i.ExpiresAt,
+		&i.DecidedAt,
+		&i.FinishedAt,
+	)
+	return i, err
 }
 
 const getConnector = `-- name: GetConnector :one
@@ -319,6 +496,56 @@ func (q *Queries) InsertStep(ctx context.Context, arg InsertStepParams) error {
 		arg.DurationMs,
 	)
 	return err
+}
+
+const listActions = `-- name: ListActions :many
+SELECT id, investigation_id, service, kind, spec, connector, status, decided_by, note, result, error, created_at, expires_at, decided_at, finished_at FROM actions
+WHERE ($2::uuid IS NULL OR investigation_id = $2::uuid)
+  AND ($3::text = '' OR status = $3::text)
+ORDER BY created_at DESC
+LIMIT $1
+`
+
+type ListActionsParams struct {
+	Limit           int32
+	InvestigationID pgtype.UUID
+	Status          string
+}
+
+func (q *Queries) ListActions(ctx context.Context, arg ListActionsParams) ([]Action, error) {
+	rows, err := q.db.Query(ctx, listActions, arg.Limit, arg.InvestigationID, arg.Status)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Action{}
+	for rows.Next() {
+		var i Action
+		if err := rows.Scan(
+			&i.ID,
+			&i.InvestigationID,
+			&i.Service,
+			&i.Kind,
+			&i.Spec,
+			&i.Connector,
+			&i.Status,
+			&i.DecidedBy,
+			&i.Note,
+			&i.Result,
+			&i.Error,
+			&i.CreatedAt,
+			&i.ExpiresAt,
+			&i.DecidedAt,
+			&i.FinishedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listConnectors = `-- name: ListConnectors :many
@@ -486,6 +713,41 @@ func (q *Queries) ListSteps(ctx context.Context, arg ListStepsParams) ([]Step, e
 	return items, nil
 }
 
+const rejectAction = `-- name: RejectAction :one
+UPDATE actions SET status = 'rejected', decided_by = $2, note = $3, decided_at = now()
+WHERE id = $1 AND status = 'proposed'
+RETURNING id, investigation_id, service, kind, spec, connector, status, decided_by, note, result, error, created_at, expires_at, decided_at, finished_at
+`
+
+type RejectActionParams struct {
+	ID        uuid.UUID
+	DecidedBy pgtype.Text
+	Note      pgtype.Text
+}
+
+func (q *Queries) RejectAction(ctx context.Context, arg RejectActionParams) (Action, error) {
+	row := q.db.QueryRow(ctx, rejectAction, arg.ID, arg.DecidedBy, arg.Note)
+	var i Action
+	err := row.Scan(
+		&i.ID,
+		&i.InvestigationID,
+		&i.Service,
+		&i.Kind,
+		&i.Spec,
+		&i.Connector,
+		&i.Status,
+		&i.DecidedBy,
+		&i.Note,
+		&i.Result,
+		&i.Error,
+		&i.CreatedAt,
+		&i.ExpiresAt,
+		&i.DecidedAt,
+		&i.FinishedAt,
+	)
+	return i, err
+}
+
 const replaceConnector = `-- name: ReplaceConnector :exec
 INSERT INTO connectors (name, kind, config, secrets) VALUES ($1, $2, $3, $4)
 ON CONFLICT (name) DO UPDATE SET kind = EXCLUDED.kind, config = EXCLUDED.config,
@@ -589,6 +851,18 @@ type SetInvestigationSlackParams struct {
 func (q *Queries) SetInvestigationSlack(ctx context.Context, arg SetInvestigationSlackParams) error {
 	_, err := q.db.Exec(ctx, setInvestigationSlack, arg.ID, arg.SlackChannel, arg.SlackTs)
 	return err
+}
+
+const supersedeActions = `-- name: SupersedeActions :execrows
+UPDATE actions SET status = 'superseded' WHERE investigation_id = $1 AND status = 'proposed'
+`
+
+func (q *Queries) SupersedeActions(ctx context.Context, investigationID uuid.UUID) (int64, error) {
+	result, err := q.db.Exec(ctx, supersedeActions, investigationID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const upsertRunbook = `-- name: UpsertRunbook :exec

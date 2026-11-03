@@ -23,6 +23,7 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 
 	opensrev1 "github.com/openstatushq/opensre/gen/opensre/v1"
+	"github.com/openstatushq/opensre/internal/action"
 	"github.com/openstatushq/opensre/internal/catalog"
 	"github.com/openstatushq/opensre/internal/config"
 	"github.com/openstatushq/opensre/internal/connector"
@@ -56,12 +57,15 @@ type Engine struct {
 	connectors *connector.Registry
 	messages   Messages
 	notifier   Notifier
+	actions    *action.Service
 	wg         sync.WaitGroup
 	baseCtx    context.Context
 }
 
-func New(baseCtx context.Context, cfg config.Config, s *store.Store, reg *connector.Registry, msgs Messages, n Notifier) *Engine {
-	return &Engine{cfg: cfg, store: s, connectors: reg, messages: msgs, notifier: n, baseCtx: baseCtx}
+// New returns an engine. acts may be nil, in which case mitigations are
+// suggestions only.
+func New(baseCtx context.Context, cfg config.Config, s *store.Store, reg *connector.Registry, msgs Messages, n Notifier, acts *action.Service) *Engine {
+	return &Engine{cfg: cfg, store: s, connectors: reg, messages: msgs, notifier: n, actions: acts, baseCtx: baseCtx}
 }
 
 // Wait blocks until running investigations finish (used on shutdown).
@@ -283,7 +287,7 @@ func (e *Engine) investigate(ctx context.Context, rec *recorder, inv db.Investig
 		for i, u := range uses {
 			switch u.Name {
 			case submitMitigationTool:
-				out, isErr := e.mitigate(ctx, rec, &inv, u)
+				out, isErr := e.mitigate(ctx, rec, tc, &inv, u)
 				if !isErr {
 					mitigated = true
 					log.Info("mitigation proposed", "after", time.Since(tc.now).Round(time.Second))
@@ -351,7 +355,7 @@ func (e *Engine) investigate(ctx context.Context, rec *recorder, inv db.Investig
 
 // mitigate validates, stores and publishes a proposed mitigation. It returns
 // the tool result for the model.
-func (e *Engine) mitigate(ctx context.Context, rec *recorder, inv *db.Investigation, u anthropic.BetaToolUseBlock) (string, bool) {
+func (e *Engine) mitigate(ctx context.Context, rec *recorder, tc *toolContext, inv *db.Investigation, u anthropic.BetaToolUseBlock) (string, bool) {
 	m := &opensrev1.Mitigation{}
 	if err := (protojson.UnmarshalOptions{DiscardUnknown: true}).Unmarshal([]byte(u.JSON.Input.Raw()), m); err != nil {
 		return "invalid mitigation: " + err.Error(), true
@@ -359,6 +363,8 @@ func (e *Engine) mitigate(ctx context.Context, rec *recorder, inv *db.Investigat
 	if !slices.Contains(mitigationKinds, m.Kind) {
 		return fmt.Sprintf("invalid kind %q: use one of %s", m.Kind, strings.Join(mitigationKinds, ", ")), true
 	}
+	m.ActionId = "" // set by opensre only
+	actionNote := e.proposeAction(ctx, tc, inv, m)
 	raw, _ := protojson.MarshalOptions{UseProtoNames: true}.Marshal(m)
 	revised := len(inv.Mitigation) > 0
 	rec.record(ctx, step{Kind: "mitigation", Name: m.Kind, Output: string(raw)})
@@ -378,8 +384,41 @@ func (e *Engine) mitigate(ctx context.Context, rec *recorder, inv *db.Investigat
 	if revised {
 		verb = "revised and republished"
 	}
-	return fmt.Sprintf("Mitigation %s to the on-call engineer. Now find the root cause (phase 2), then call submit_report. "+
-		"If the evidence shows this mitigation will not help, call submit_mitigation again with a better one.", verb), false
+	return fmt.Sprintf("Mitigation %s to the on-call engineer.%s Now find the root cause (phase 2), then call submit_report. "+
+		"If the evidence shows this mitigation will not help, call submit_mitigation again with a better one.", verb, actionNote), false
+}
+
+// proposeAction turns the mitigation's machine_action into an action waiting
+// for approval. A revised mitigation supersedes the previous pending action.
+// When the action is not accepted it is dropped and the mitigation stays a
+// suggestion; the returned note tells the model why.
+func (e *Engine) proposeAction(ctx context.Context, tc *toolContext, inv *db.Investigation, m *opensrev1.Mitigation) string {
+	if e.actions != nil {
+		if err := e.actions.Supersede(ctx, inv.ID); err != nil {
+			slog.Warn("supersede actions", "investigation", inv.ID, "err", err)
+		}
+	}
+	ma := m.MachineAction
+	if ma == nil || ma.Action == "" {
+		m.MachineAction = nil
+		return ""
+	}
+	if m.Kind == "none" {
+		m.MachineAction = nil
+		return " machine_action was ignored: the mitigation kind is none."
+	}
+	if e.actions == nil {
+		m.MachineAction = nil
+		return " machine_action was ignored: this opensre instance cannot run actions, the mitigation is a suggestion."
+	}
+	a, err := e.actions.Propose(ctx, *inv, tc.graph, ma)
+	if err != nil {
+		m.MachineAction = nil
+		return fmt.Sprintf(" machine_action was not accepted (%v): the mitigation is published as a suggestion only.", err)
+	}
+	m.ActionId = a.ID.String()
+	return fmt.Sprintf(" opensre will %s %s of app %s once a human approves action %s; you cannot run it yourself.",
+		ma.Action, strings.Join(ma.MachineIds, ", "), ma.App, a.ID)
 }
 
 // maxToolResult bounds what a single tool call adds to the context.

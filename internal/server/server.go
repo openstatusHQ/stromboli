@@ -16,6 +16,7 @@ import (
 	"github.com/anthropics/anthropic-sdk-go/v2/option"
 
 	"github.com/openstatushq/opensre/gen/opensre/v1/opensrev1connect"
+	"github.com/openstatushq/opensre/internal/action"
 	"github.com/openstatushq/opensre/internal/agent"
 	"github.com/openstatushq/opensre/internal/api"
 	"github.com/openstatushq/opensre/internal/config"
@@ -45,6 +46,11 @@ func Run(ctx context.Context, cfg config.Config) error {
 	} else if n > 0 {
 		slog.Warn("marked interrupted investigations as failed", "count", n)
 	}
+	if n, err := st.FailRunningActions(ctx); err != nil {
+		return err
+	} else if n > 0 {
+		slog.Warn("marked interrupted actions as failed: check their machines", "count", n)
+	}
 
 	reg := connector.NewRegistry(st, box)
 
@@ -56,8 +62,10 @@ func Run(ctx context.Context, cfg config.Config) error {
 		slog.Warn("ANTHROPIC_API_KEY is not set: briefs work, investigations are disabled")
 	}
 	var notifier agent.Notifier
+	var actionNotifier action.Notifier
 	if cfg.SlackBotToken != "" && cfg.SlackChannel != "" {
-		notifier = report.NewSlack(cfg.SlackBotToken, cfg.SlackChannel)
+		slack := report.NewSlack(cfg.SlackBotToken, cfg.SlackChannel)
+		notifier, actionNotifier = slack, slack
 	} else {
 		slog.Info("Slack is not configured (SLACK_BOT_TOKEN, SLACK_CHANNEL): reports are available through the API only")
 	}
@@ -65,7 +73,11 @@ func Run(ctx context.Context, cfg config.Config) error {
 	// Investigations outlive the request that started them, but not the server.
 	engineCtx, cancelEngine := context.WithCancel(context.Background())
 	defer cancelEngine()
-	engine := agent.New(engineCtx, cfg, st, reg, msgs, notifier)
+	actions := action.New(cfg, st, reg, actionNotifier)
+	if cfg.ActionsEnabled {
+		slog.Info("machine actions are enabled: investigations can propose them, a human approves each one", "ttl", cfg.ActionTTL)
+	}
+	engine := agent.New(engineCtx, cfg, st, reg, msgs, notifier, actions)
 
 	if cfg.APIToken == "" {
 		slog.Warn("OPENSRE_API_TOKEN is not set: the API is unauthenticated, do not expose this instance")
@@ -76,15 +88,18 @@ func Run(ctx context.Context, cfg config.Config) error {
 	mux.Handle(opensrev1connect.NewCatalogServiceHandler(api.NewCatalogService(st, reg), opts))
 	mux.Handle(opensrev1connect.NewConnectorServiceHandler(api.NewConnectorService(st, box, reg), opts))
 	mux.Handle(opensrev1connect.NewInvestigationServiceHandler(api.NewInvestigationService(st, engine), opts))
+	mux.Handle(opensrev1connect.NewActionServiceHandler(api.NewActionService(actions), opts))
 	mux.Handle(grpchealth.NewHandler(grpchealth.NewStaticChecker(
 		opensrev1connect.CatalogServiceName,
 		opensrev1connect.ConnectorServiceName,
 		opensrev1connect.InvestigationServiceName,
+		opensrev1connect.ActionServiceName,
 	)))
 	reflector := grpcreflect.NewStaticReflector(
 		opensrev1connect.CatalogServiceName,
 		opensrev1connect.ConnectorServiceName,
 		opensrev1connect.InvestigationServiceName,
+		opensrev1connect.ActionServiceName,
 	)
 	mux.Handle(grpcreflect.NewHandlerV1(reflector))
 	mux.Handle(grpcreflect.NewHandlerV1Alpha(reflector))

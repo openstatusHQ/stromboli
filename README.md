@@ -1,6 +1,6 @@
 # opensre
 
-An open-source AI SRE agent you host yourself. It knows your services (owners, dependencies, logs, metrics, deploys, runbooks). When an alert fires, it gathers the context, **proposes a mitigation first, then investigates the root cause** with Claude using read-only tools, and posts both to Slack. It **suggests, it never executes**.
+An open-source AI SRE agent you host yourself. It knows your services (owners, dependencies, logs, metrics, deploys, runbooks). When an alert fires, it gathers the context, **proposes a mitigation first, then investigates the root cause** with Claude using read-only tools, and posts both to Slack. It **suggests; it never acts on its own**. The one exception is opt-in: for services on Fly.io, opensre can run a machine action (restart, clone, cordon…) after a named human approves it ([Machine actions](#machine-actions)).
 
 See [PLAN.md](PLAN.md) for the design and roadmap.
 
@@ -14,6 +14,7 @@ See [PLAN.md](PLAN.md) for the design and roadmap.
    - recent deploys or commits of the service and its dependencies
    - its runbooks
    - similar past investigations
+   - for services on Fly.io: the app's machines (ID, region, state, process group, size, image) and the Fly command, with its undo, for each generic mitigation
 3. **Mitigate first:** what matters most is how fast user impact stops, not how fast the bug is understood (as in [Google's SRE practice](https://cloud.google.com/blog/topics/developers-practitioners/how-google-sres-use-gemini-cli-to-solve-real-world-outages)). From the brief and a few tool calls, Claude picks one generic mitigation from a closed set: `rollback`, `restart`, `scale_up`, `drain`, `disable_feature`, `block_traffic`, `failover`, `degrade` or `none`. It fills in the target and exact command, how to verify it worked, how to undo it, and the risk (`safe`, `reversible`, `destructive`). The mitigation is published right away to the API, Slack (with a thread reply so on-call gets notified) and the audit trail, and its time is stored as `mitigated_at`. After `OPENSRE_MITIGATION_TOOL_CALLS` tool calls the agent is told to propose one. A report submitted before a mitigation is rejected.
 4. **Investigate:** with a mitigation in hand, Claude looks for the root cause and tests hypotheses with read-only tools:
    - `log_patterns`, `query_logs`, `log_timeline`
@@ -77,6 +78,7 @@ Point your alerts at it:
     selectors: ['app="api"']           # PromQL label matchers, ANDed
   runbooks: [runbooks/api-5xx.md]
   monitors: ["openstatus:1234"]        # alert → service mapping
+  runtime: fly.io                      # or a fly: block, see Machine actions
 ```
 
 ### Log connectors
@@ -150,9 +152,55 @@ The shipper writes JSON events (`message`, `log.level`, `fly.app.name`, `fly.reg
 
 The catalog lives in opensre's database. YAML is its import/export format, so you can keep it in git and sync it from CI with `opensre catalog import --prune`.
 
+#### Mitigation commands
+
+For a service with `runtime: fly.io` or a `fly:` block, the brief gets a **Fly.io** section. It lists the app's machines from the [Machines API](https://fly.io/docs/machines/api/), so the agent can name real machine IDs and regions (the `instance` label of the Fly metrics is the machine ID). It also gives the Fly command and its undo for each generic mitigation:
+
+| Mitigation | Command | Undo |
+|---|---|---|
+| restart one machine | `fly machine restart <id> -a <app>` | none needed |
+| restart every machine | `fly apps restart <app>` | none needed |
+| scale_up, one more machine | `fly machine clone <id> -a <app> --region <region>` | `fly machine destroy <new-id> -a <app> --force` |
+| scale_up, more machines / memory | `fly scale count <n>` / `fly scale memory <MB>` | the previous value |
+| drain | `fly machine cordon <id>` (no traffic, keeps running) or `fly machine stop <id>` | `uncordon` / `start` |
+| rollback | `fly releases --image`, then `fly deploy --image <previous image>` | redeploy the bad image |
+
+Machines with a volume are flagged: a clone would start with an empty volume. The app name is `fly.app`, else the `app="..."` metrics selector, else the service name. The machines are listed with the `fly.actions` connector, else the `fly` metrics connector's token.
+
+#### Machine actions
+
+opensre can run some of these commands itself, behind several guardrails:
+
+```sh
+export OPENSRE_ACTIONS_ENABLED=true          # off by default; requires OPENSRE_API_TOKEN
+opensre connector add fly-deploy fly_machines org=<org-slug> token="$(fly tokens create deploy -a <app>)"
+```
+
+```yaml
+- name: checker
+  fly:
+    app: openstatus-checker            # defaults as above
+    actions: fly-deploy                # fly_machines connector; without it, mitigations stay text
+    allow: [restart, cordon, uncordon] # default: restart, clone, cordon, uncordon (stop and start are opt-in)
+```
+
+1. When the brief says actions can run for the service, the agent may add a `machine_action` (`restart`, `clone`, `cordon`, `uncordon`, `stop` or `start`, plus machine IDs and, for `clone`, a region) to its mitigation. opensre checks it against the allow-list and the app's current machines (at most 10 per action; machines with a volume are never cloned). It then stores it as a **proposed** action. A refused action is dropped, the mitigation stays a suggestion, and the agent is told why. Revising the mitigation supersedes the pending action.
+2. Nothing runs until a human approves it, before `OPENSRE_ACTION_TTL` (30m) runs out:
+
+   ```sh
+   opensre actions --status proposed
+   opensre actions approve <action-id> --as alice --note "ok from the incident call"
+   opensre actions reject <action-id> --as alice --note "the db is the cause"
+   ```
+
+   The approval is checked again against the catalog and the machines, then claimed atomically, so an action runs at most once. It then runs machine by machine. A restart, start or clone waits for the machine to reach `started` (60s) and stops at the first failure, so a rolling restart never takes down more than one machine that did not come back. The result lists what was done and how to undo it (for a clone, the `fly machine destroy` of the new machine).
+3. Every action keeps who approved or rejected it, when, their note, the result and the error (`opensre actions show <id>`, `ActionService`), and is posted in the investigation's Slack thread.
+
+The approver name is recorded as given: anyone with the API token can approve. Slack approval buttons limited to service owners are not built yet.
+
 ## API
 
-The API is [ConnectRPC](https://connectrpc.com), defined in [`proto/opensre/v1`](proto/opensre/v1): `CatalogService`, `ConnectorService`, `InvestigationService`. The same endpoints speak Connect, gRPC and gRPC-Web, plus plain JSON:
+The API is [ConnectRPC](https://connectrpc.com), defined in [`proto/opensre/v1`](proto/opensre/v1): `CatalogService`, `ConnectorService`, `InvestigationService`, `ActionService`. The same endpoints speak Connect, gRPC and gRPC-Web, plus plain JSON:
 
 ```sh
 curl -H "Authorization: Bearer $OPENSRE_API_TOKEN" -H 'Content-Type: application/json' \
@@ -176,6 +224,8 @@ grpcurl -plaintext -H "Authorization: Bearer $OPENSRE_API_TOKEN" localhost:8080 
 | `OPENSRE_MITIGATION_TOOL_CALLS` | `6` | tool calls before the agent must propose a mitigation |
 | `OPENSRE_INVESTIGATION_TIMEOUT` | `8m` | |
 | `OPENSRE_DEDUPE_WINDOW` | `30m` | |
+| `OPENSRE_ACTIONS_ENABLED` | `false` | let investigations propose machine actions a human can approve (requires `OPENSRE_API_TOKEN`) |
+| `OPENSRE_ACTION_TTL` | `30m` | how long a proposed action can be approved |
 | `SLACK_BOT_TOKEN`, `SLACK_CHANNEL` | | bot needs `chat:write` |
 
 ## Development
