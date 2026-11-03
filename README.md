@@ -36,6 +36,13 @@ Generate the secret key with `openssl rand -base64 32`. Slack is optional: set `
 
 Already have Postgres? Run the image alone with `OPENSRE_DB_URL=postgres://...`. Migrations run on startup.
 
+Or deploy opensre and Postgres to Railway in one command, with the secrets generated for you. The setup is code, in [`.railway/railway.go`](.railway/railway.go) ([details](docs/deploy/railway.md)):
+
+```sh
+railway login
+ANTHROPIC_API_KEY=sk-ant-... deploy/railway/setup.sh
+```
+
 ### 2. Connect your logs, metrics and deploys
 
 opensre is configured with its CLI (the same binary, so `docker compose exec opensre opensre ...` works too):
