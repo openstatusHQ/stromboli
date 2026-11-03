@@ -43,12 +43,20 @@ Then configure it with the CLI (the same binary; `docker compose exec opensre op
 export OPENSRE_URL=http://localhost:8080 OPENSRE_API_TOKEN=...
 
 opensre connector add loki loki url=http://loki:3100            # + tenant_id, username, password, bearer_token
-opensre connector add github github token=ghp_...                # for deploys and commits
+opensre connector add github github token                        # for deploys and commits; prompts for the token
 opensre catalog discover loki > services.yaml                    # proposes one service per log stream/dataset/group (see below)
 opensre catalog import services.yaml --runbooks runbooks/        # add --prune to make the file authoritative
 opensre brief api --since 1h                                     # the context brief, no LLM involved
 opensre investigate api --description "5xx on /v1/monitors"      # streams the investigation live
 ```
+
+Every command has `--help` with examples. Some conventions:
+
+- **Secrets stay off the command line.** For a secret connector key, pass `token` alone to be prompted (input is hidden), `token=@file` to read a file, or `token=-` to read stdin.
+- **Scripting:** data goes to stdout and messages to stderr. `--json` prints JSON (`investigate --json` prints one event per line), `-q` silences messages, and `investigate --no-watch` prints only the investigation ID. Exit codes: `0` success, `1` error, `2` bad usage, `130` interrupted.
+- **Destructive actions ask first:** `connector rm`, `actions approve`, and `catalog import --prune` when it would delete something. Without a terminal, or with `--no-input`, they fail unless you pass `--yes`.
+- **Ctrl-C** stops watching an investigation, but the investigation keeps running on the server. Resume with `opensre show <id> --follow`.
+- `opensre completion bash|zsh|fish|powershell` prints shell completions.
 
 Point your alerts at it:
 
@@ -150,7 +158,7 @@ fly secrets set -a log-shipper AWS_ACCESS_KEY_ID=... AWS_SECRET_ACCESS_KEY=... A
 
 The shipper writes JSON events (`message`, `log.level`, `fly.app.name`, `fly.region`, `host`). opensre shows the `message` with its level, so pattern grouping isn't split by region or instance. The CloudWatch shipper writes every app to one log group, so `service_field` makes discovery split it per app with one Insights query (`log_group_prefix` keeps that query to the Fly group).
 
-The catalog lives in opensre's database. YAML is its import/export format, so you can keep it in git and sync it from CI with `opensre catalog import --prune`.
+The catalog lives in opensre's database. YAML is its import/export format, so you can keep it in git and sync it from CI with `opensre catalog import services.yaml --runbooks runbooks/ --prune --yes`.
 
 #### Mitigation commands
 
@@ -189,7 +197,7 @@ opensre connector add fly-deploy fly_machines org=<org-slug> token="$(fly tokens
 
    ```sh
    opensre actions --status proposed
-   opensre actions approve <action-id> --as alice --note "ok from the incident call"
+   opensre actions approve <action-id> --as alice --note "ok from the incident call"   # asks to confirm; --yes skips
    opensre actions reject <action-id> --as alice --note "the db is the cause"
    ```
 
