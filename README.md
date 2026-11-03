@@ -1,6 +1,6 @@
 # opensre
 
-An open-source AI SRE agent you host yourself. It knows your services (owners, dependencies, logs, metrics, deploys, runbooks). When an alert fires, it gathers the context, **proposes a mitigation first, then investigates the root cause** with Claude using read-only tools, and posts both to Slack. It **suggests; it never acts on its own**. The one exception is opt-in: for services on Fly.io, opensre can run a machine action (restart, clone, cordon…) after a named human approves it ([Machine actions](#machine-actions)).
+An open-source AI SRE agent you host yourself. It knows your services (owners, dependencies, logs, metrics, deploys, runbooks). When an alert fires, it gathers the context, **proposes a mitigation first, then investigates the root cause** with the LLM of your choice (Claude by default) using read-only tools, and posts both to Slack. It **suggests; it never acts on its own**. The one exception is opt-in: for services on Fly.io, opensre can run a machine action (restart, clone, cordon…) after a named human approves it ([Machine actions](#machine-actions)).
 
 See [PLAN.md](PLAN.md) for the design and roadmap.
 
@@ -31,7 +31,7 @@ Logs and metrics are queried on demand. opensre never ingests or stores them, on
 ## Run it
 
 ```sh
-cp .env.example .env   # set OPENSRE_SECRET_KEY, OPENSRE_API_TOKEN, ANTHROPIC_API_KEY, Slack (optional)
+cp .env.example .env   # set OPENSRE_SECRET_KEY, OPENSRE_API_TOKEN, an LLM key (ANTHROPIC_API_KEY...), Slack (optional)
 docker compose up -d   # opensre + Postgres on :8080
 ```
 
@@ -274,8 +274,11 @@ grpcurl -plaintext -H "Authorization: Bearer $OPENSRE_API_TOKEN" localhost:8080 
 | `OPENSRE_SECRET_KEY` | (required) | encrypts connector credentials (AES-256-GCM) |
 | `OPENSRE_API_TOKEN` | empty = no auth | bearer token for the API |
 | `OPENSRE_WEBHOOK_TOKEN` | API token | token for `/webhooks/*` |
-| `ANTHROPIC_API_KEY` | | required for investigations |
-| `OPENSRE_MODEL` / `OPENSRE_EFFORT` | `claude-opus-5-5` / `high` | |
+| `OPENSRE_MODEL` | `anthropic:claude-opus-5-5` | default model for every task, as `provider:model` ([Models](#models)) |
+| `OPENSRE_EFFORT` | provider default | `low`, `medium`, `high`, `xhigh`, `max` |
+| `OPENSRE_TRIAGE_MODEL` / `OPENSRE_TRIAGE_EFFORT` | `OPENSRE_MODEL` / `OPENSRE_EFFORT` | model until the mitigation is published |
+| `OPENSRE_INVESTIGATE_MODEL` / `OPENSRE_INVESTIGATE_EFFORT` | `OPENSRE_MODEL` / `OPENSRE_EFFORT` | model for the root cause and report |
+| `AI_GATEWAY_API_KEY`, `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY`, `OPENROUTER_API_KEY`, `DEEPSEEK_API_KEY`, `OLLAMA_BASE_URL` | | credentials of the providers you use |
 | `OPENSRE_MAX_TOOL_CALLS` | `30` | per investigation |
 | `OPENSRE_MITIGATION_TOOL_CALLS` | `6` | tool calls before the agent must propose a mitigation |
 | `OPENSRE_INVESTIGATION_TIMEOUT` | `8m` | |
@@ -283,6 +286,40 @@ grpcurl -plaintext -H "Authorization: Bearer $OPENSRE_API_TOKEN" localhost:8080 
 | `OPENSRE_ACTIONS_ENABLED` | `false` | let investigations propose machine actions a human can approve (requires `OPENSRE_API_TOKEN`) |
 | `OPENSRE_ACTION_TTL` | `30m` | how long a proposed action can be approved |
 | `SLACK_BOT_TOKEN`, `SLACK_CHANNEL` | | bot needs `chat:write` |
+
+### Models
+
+opensre is not tied to one LLM vendor. As with the [AI SDK](https://ai-sdk.dev/docs/reference/ai-sdk-core/provider-registry), a model is `provider:model`, and each task can use its own:
+
+```sh
+OPENSRE_TRIAGE_MODEL=anthropic:claude-haiku-5-5     # fast: time to mitigation matters most
+OPENSRE_TRIAGE_EFFORT=low
+OPENSRE_INVESTIGATE_MODEL=openai:gpt-5              # thorough: root cause and report
+OPENSRE_INVESTIGATE_EFFORT=high
+```
+
+The investigate model takes over the triage conversation once the mitigation is published, so it sees everything triage saw.
+
+The simplest setup is [Vercel AI Gateway](https://vercel.com/ai-gateway): one key, every model. As in the AI SDK, an id like `openai/gpt-5` (no `provider:` prefix, a slash) goes through the gateway:
+
+```sh
+AI_GATEWAY_API_KEY=...
+OPENSRE_TRIAGE_MODEL=anthropic/claude-haiku-5.5
+OPENSRE_INVESTIGATE_MODEL=openai/gpt-5
+```
+
+| Provider | Model id | Configuration |
+|---|---|---|
+| Vercel AI Gateway | `openai/gpt-5`, `anthropic/claude-opus-5.5`, `deepseek/deepseek-v4-pro`… (or `gateway:<id>`) | `AI_GATEWAY_API_KEY` or `VERCEL_OIDC_TOKEN`, optional `AI_GATEWAY_BASE_URL` |
+| Anthropic | `anthropic:claude-opus-5-5` (or a bare `claude-…` id) | `ANTHROPIC_API_KEY` |
+| OpenAI | `openai:gpt-5` | `OPENAI_API_KEY`, optional `OPENAI_BASE_URL` (Azure, proxies) |
+| Google Gemini | `google:gemini-2.5-pro` | `GEMINI_API_KEY` |
+| OpenRouter | `openrouter:meta-llama/llama-3.3-70b-instruct` | `OPENROUTER_API_KEY` |
+| DeepSeek | `deepseek:deepseek-v4-pro`, `deepseek:deepseek-flash` | `DEEPSEEK_API_KEY`, optional `DEEPSEEK_BASE_URL` |
+| Ollama | `ollama:qwen3:32b` | `OLLAMA_BASE_URL` (default `http://localhost:11434/v1`) |
+| Any OpenAI-compatible API | `<name>:<model>`, e.g. `groq:llama-3.3-70b-versatile` | `OPENSRE_PROVIDER_<NAME>_BASE_URL`, `OPENSRE_PROVIDER_<NAME>_API_KEY` |
+
+Anthropic models use prompt caching, effort and server-side refusal fallbacks; through the gateway they use its Anthropic Messages API, so caching, effort and thinking blocks are kept (fallbacks are the gateway's own). Other providers go through the OpenAI Chat Completions format, where effort becomes `reasoning_effort` (only sent when set; DeepSeek accepts up to `max`). Reasoning that a provider returns (DeepSeek's `reasoning_content`, the gateway's `reasoning_details`) is sent back to that provider on later turns, as its tool loop requires. The model has to support tool calling. Switching models between tasks resets the prompt cache once, at the switch.
 
 ## Development
 

@@ -12,8 +12,6 @@ import (
 	"connectrpc.com/connect"
 	"connectrpc.com/grpchealth"
 	"connectrpc.com/grpcreflect"
-	"github.com/anthropics/anthropic-sdk-go/v2"
-	"github.com/anthropics/anthropic-sdk-go/v2/option"
 
 	"github.com/openstatushq/opensre/gen/opensre/v1/opensrev1connect"
 	"github.com/openstatushq/opensre/internal/action"
@@ -21,6 +19,7 @@ import (
 	"github.com/openstatushq/opensre/internal/api"
 	"github.com/openstatushq/opensre/internal/config"
 	"github.com/openstatushq/opensre/internal/connector"
+	"github.com/openstatushq/opensre/internal/llm"
 	"github.com/openstatushq/opensre/internal/report"
 	"github.com/openstatushq/opensre/internal/secrets"
 	"github.com/openstatushq/opensre/internal/store"
@@ -56,12 +55,9 @@ func Run(ctx context.Context, cfg config.Config) error {
 	// Ends MCP sessions and stops local MCP servers (flyctl) on shutdown.
 	defer reg.Close()
 
-	var msgs agent.Messages
-	if cfg.AnthropicAPIKey != "" {
-		client := anthropic.NewClient(option.WithAPIKey(cfg.AnthropicAPIKey))
-		msgs = &client.Beta.Messages
-	} else {
-		slog.Warn("ANTHROPIC_API_KEY is not set: briefs work, investigations are disabled")
+	models, err := resolveModels(cfg)
+	if err != nil {
+		slog.Warn("LLM is not configured: briefs work, investigations are disabled", "err", err)
 	}
 	var notifier agent.Notifier
 	var actionNotifier action.Notifier
@@ -92,7 +88,7 @@ func Run(ctx context.Context, cfg config.Config) error {
 	case cfg.SlackSigningSecret != "":
 		slog.Warn("SLACK_SIGNING_SECRET is set but Slack buttons need SLACK_BOT_TOKEN, SLACK_CHANNEL and OPENSRE_ACTIONS_ENABLED=true")
 	}
-	engine := agent.New(engineCtx, cfg, st, reg, msgs, notifier, actions)
+	engine := agent.New(engineCtx, cfg, st, reg, models, notifier, actions)
 
 	if cfg.APIToken == "" {
 		slog.Warn("OPENSRE_API_TOKEN is not set: the API is unauthenticated, do not expose this instance")
@@ -143,7 +139,7 @@ func Run(ctx context.Context, cfg config.Config) error {
 
 	errc := make(chan error, 1)
 	go func() {
-		slog.Info("opensre listening", "addr", cfg.Addr, "model", cfg.Model)
+		slog.Info("opensre listening", "addr", cfg.Addr, "triage_model", cfg.Triage.Model, "investigate_model", cfg.Investigate.Model)
 		errc <- srv.ListenAndServe()
 	}()
 
@@ -172,4 +168,19 @@ func logRequests(next http.Handler) http.Handler {
 			slog.Debug("request", "method", r.Method, "path", r.URL.Path, "duration", time.Since(start))
 		}
 	})
+}
+
+// resolveModels resolves each task's model from the environment. Any error
+// leaves investigations disabled.
+func resolveModels(cfg config.Config) (agent.Models, error) {
+	reg := llm.FromEnv(nil)
+	triage, err := reg.Model(cfg.Triage.Model)
+	if err != nil {
+		return agent.Models{}, fmt.Errorf("triage: %w", err)
+	}
+	investigate, err := reg.Model(cfg.Investigate.Model)
+	if err != nil {
+		return agent.Models{}, fmt.Errorf("investigate: %w", err)
+	}
+	return agent.Models{Triage: triage, Investigate: investigate}, nil
 }

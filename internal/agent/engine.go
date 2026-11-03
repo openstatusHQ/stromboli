@@ -1,4 +1,4 @@
-// Package agent runs investigations: a deterministic brief, then a Claude
+// Package agent runs investigations: a deterministic brief, then an LLM
 // tool-use loop over read-only tools in two phases. The triage phase proposes
 // a generic mitigation and publishes it right away; the investigation phase
 // then looks for the root cause and ends with a report.
@@ -15,9 +15,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/anthropics/anthropic-sdk-go/v2"
-	"github.com/anthropics/anthropic-sdk-go/v2/option"
-	"github.com/anthropics/anthropic-sdk-go/v2/shared/constant"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -27,6 +24,7 @@ import (
 	"github.com/openstatushq/opensre/internal/catalog"
 	"github.com/openstatushq/opensre/internal/config"
 	"github.com/openstatushq/opensre/internal/connector"
+	"github.com/openstatushq/opensre/internal/llm"
 	"github.com/openstatushq/opensre/internal/store"
 	"github.com/openstatushq/opensre/internal/store/db"
 )
@@ -37,10 +35,15 @@ const (
 	StatusFailed    = "failed"
 )
 
-// Messages is the subset of the Anthropic client the engine uses.
-type Messages interface {
-	New(ctx context.Context, params anthropic.BetaMessageNewParams, opts ...option.RequestOption) (*anthropic.BetaMessage, error)
+// Models are the models of each LLM task. They may be the same model.
+type Models struct {
+	// Triage runs until a mitigation is published.
+	Triage llm.Model
+	// Investigate takes over the same conversation to find the root cause.
+	Investigate llm.Model
 }
+
+func (m Models) ok() bool { return m.Triage != nil && m.Investigate != nil }
 
 // Notifier publishes investigation progress, e.g. to Slack.
 type Notifier interface {
@@ -55,7 +58,7 @@ type Engine struct {
 	cfg        config.Config
 	store      *store.Store
 	connectors *connector.Registry
-	messages   Messages
+	models     Models
 	notifier   Notifier
 	actions    *action.Service
 	wg         sync.WaitGroup
@@ -64,8 +67,8 @@ type Engine struct {
 
 // New returns an engine. acts may be nil, in which case mitigations are
 // suggestions only.
-func New(baseCtx context.Context, cfg config.Config, s *store.Store, reg *connector.Registry, msgs Messages, n Notifier, acts *action.Service) *Engine {
-	return &Engine{cfg: cfg, store: s, connectors: reg, messages: msgs, notifier: n, actions: acts, baseCtx: baseCtx}
+func New(baseCtx context.Context, cfg config.Config, s *store.Store, reg *connector.Registry, models Models, n Notifier, acts *action.Service) *Engine {
+	return &Engine{cfg: cfg, store: s, connectors: reg, models: models, notifier: n, actions: acts, baseCtx: baseCtx}
 }
 
 // Wait blocks until running investigations finish (used on shutdown).
@@ -88,8 +91,8 @@ type StartRequest struct {
 // investigation with the same fingerprint is running or finished recently,
 // it is returned instead and reused is true.
 func (e *Engine) Start(ctx context.Context, req StartRequest) (inv db.Investigation, reused bool, err error) {
-	if e.messages == nil {
-		return inv, false, errors.New("ANTHROPIC_API_KEY is not configured")
+	if !e.models.ok() {
+		return inv, false, errors.New("no LLM is configured (OPENSRE_MODEL and the provider's API key)")
 	}
 	if len(req.Services) == 0 {
 		return inv, false, errors.New("no service to investigate")
@@ -196,10 +199,6 @@ func (e *Engine) run(inv db.Investigation, req StartRequest) {
 	}
 }
 
-// fallbackBeta enables server-side refusal fallbacks: a declined request is
-// re-served by a fallback model inside the same call.
-const fallbackBeta anthropic.AnthropicBeta = "server-side-fallback-2026-07-01"
-
 func (e *Engine) investigate(ctx context.Context, rec *recorder, inv db.Investigation, req StartRequest) (*opensrev1.Report, error) {
 	_, graph, err := catalog.Load(ctx, e.store.Queries)
 	if err != nil {
@@ -225,18 +224,11 @@ func (e *Engine) investigate(ctx context.Context, rec *recorder, inv db.Investig
 	first := fmt.Sprintf("Investigation: %s\nSource: %s\nAffected services: %s\nCurrent time: %s\n\nAlert payload:\n```json\n%s\n```\n\n%s",
 		inv.Title, inv.Source, strings.Join(inv.Services, ", "), tc.now.UTC().Format(time.RFC3339), alert, strings.Join(briefs, "\n\n---\n\n"))
 
-	params := anthropic.BetaMessageNewParams{
-		Model:     anthropic.Model(e.cfg.Model),
+	params := llm.Request{
+		System:    systemPrompt,
+		Tools:     toolDefs(),
 		MaxTokens: 16000,
-		System:    []anthropic.BetaTextBlockParam{{Text: systemPrompt}},
-		Tools:     toolParams(),
-		Messages:  []anthropic.BetaMessageParam{anthropic.NewBetaUserMessage(anthropic.NewBetaTextBlock(first))},
-		// Automatic caching: the breakpoint moves to the last block each turn,
-		// so every turn re-reads the previous turns from cache.
-		CacheControl: anthropic.NewBetaCacheControlEphemeralParam(),
-		OutputConfig: anthropic.BetaOutputConfigParam{Effort: anthropic.BetaOutputConfigEffort(e.cfg.Effort)},
-		Fallbacks:    anthropic.BetaFallbacksParamUnion{OfDefault: constant.ValueOf[constant.Default]()},
-		Betas:        []anthropic.AnthropicBeta{fallbackBeta},
+		Messages:  []llm.Message{llm.UserText(first)},
 	}
 
 	toolCalls, nudged, mitigated := 0, false, false
@@ -244,44 +236,44 @@ func (e *Engine) investigate(ctx context.Context, rec *recorder, inv db.Investig
 		if err := ctx.Err(); err != nil {
 			return nil, fmt.Errorf("investigation timed out after %s: %w", e.cfg.InvestigationTimeout, err)
 		}
+		// Triage until a mitigation is out, then the investigate model takes
+		// over the same conversation.
+		task, model, effort := "investigate", e.models.Investigate, e.cfg.Investigate.Effort
+		if !mitigated {
+			task, model, effort = "triage", e.models.Triage, e.cfg.Triage.Effort
+		}
+		params.Effort = effort
 		start := time.Now()
-		resp, err := e.messages.New(ctx, params)
+		resp, err := model.Generate(ctx, params)
 		if err != nil {
-			return nil, fmt.Errorf("claude: %w", err)
+			return nil, fmt.Errorf("%s: %w", model.ID(), err)
 		}
 		_ = e.store.AddInvestigationTokens(ctx, db.AddInvestigationTokensParams{
-			ID: inv.ID, InputTokens: resp.Usage.InputTokens + resp.Usage.CacheReadInputTokens + resp.Usage.CacheCreationInputTokens,
-			OutputTokens: resp.Usage.OutputTokens,
+			ID: inv.ID, InputTokens: resp.Usage.TotalInput(), OutputTokens: resp.Usage.OutputTokens,
 		})
 		rec.record(ctx, step{
-			Kind: "llm", Name: string(resp.Model),
+			Kind: "llm", Name: resp.Model,
 			Input: map[string]any{
-				"turn": turn, "stop_reason": resp.StopReason,
-				"input_tokens": resp.Usage.InputTokens, "cache_read_tokens": resp.Usage.CacheReadInputTokens,
-				"cache_write_tokens": resp.Usage.CacheCreationInputTokens, "output_tokens": resp.Usage.OutputTokens,
+				"turn": turn, "task": task, "model": model.ID(), "stop_reason": resp.RawStop,
+				"input_tokens": resp.Usage.InputTokens, "cache_read_tokens": resp.Usage.CacheReadTokens,
+				"cache_write_tokens": resp.Usage.CacheWriteTokens, "output_tokens": resp.Usage.OutputTokens,
 			},
-			Output:   textOf(resp),
+			Output:   resp.Text(),
 			Duration: time.Since(start),
 		})
 
-		switch resp.StopReason {
-		case anthropic.BetaStopReasonRefusal:
+		switch resp.Stop {
+		case llm.StopRefusal:
 			return nil, errors.New("the model declined to continue this investigation")
-		case anthropic.BetaStopReasonMaxTokens:
+		case llm.StopMaxTokens:
 			return nil, errors.New("the model hit the output token limit")
 		}
-		params.Messages = append(params.Messages, resp.ToParam())
-
-		var uses []anthropic.BetaToolUseBlock
-		for _, block := range resp.Content {
-			if u, ok := block.AsAny().(anthropic.BetaToolUseBlock); ok {
-				uses = append(uses, u)
-			}
-		}
+		params.Messages = append(params.Messages, resp.Message)
+		uses := resp.ToolCalls()
 
 		// Mitigations are handled first so a report in the same turn sees them.
-		results := make([]anthropic.BetaContentBlockParamUnion, len(uses))
-		var lookups []anthropic.BetaToolUseBlock
+		results := make([]llm.Part, len(uses))
+		var lookups []llm.ToolCall
 		var lookupIdx []int
 		reportIdx := -1
 		for i, u := range uses {
@@ -292,7 +284,7 @@ func (e *Engine) investigate(ctx context.Context, rec *recorder, inv db.Investig
 					mitigated = true
 					log.Info("mitigation proposed", "after", time.Since(tc.now).Round(time.Second))
 				}
-				results[i] = anthropic.NewBetaToolResultBlock(u.ID, out, isErr)
+				results[i] = llm.ToolResultPart(u.ID, out, isErr)
 			case submitReportTool:
 				reportIdx = i
 			default:
@@ -304,27 +296,27 @@ func (e *Engine) investigate(ctx context.Context, rec *recorder, inv db.Investig
 			u := uses[reportIdx]
 			if mitigated {
 				report := &opensrev1.Report{}
-				if err := (protojson.UnmarshalOptions{DiscardUnknown: true}).Unmarshal([]byte(u.JSON.Input.Raw()), report); err != nil {
+				if err := (protojson.UnmarshalOptions{DiscardUnknown: true}).Unmarshal(u.Input, report); err != nil {
 					return nil, fmt.Errorf("invalid report: %w", err)
 				}
 				return report, nil
 			}
 			// Mitigate first: send the model back to phase 1.
-			results[reportIdx] = anthropic.NewBetaToolResultBlock(u.ID,
+			results[reportIdx] = llm.ToolResultPart(u.ID,
 				"Rejected: call submit_mitigation first. The on-call engineer needs a way to stop user impact before the root cause; then submit the report.", true)
 		}
 
 		if len(uses) == 0 {
 			if nudged {
 				// The model answered in prose twice; keep its text as the summary.
-				return &opensrev1.Report{Summary: textOf(resp), LikelyCause: "unknown", Confidence: "low"}, nil
+				return &opensrev1.Report{Summary: resp.Text(), LikelyCause: "unknown", Confidence: "low"}, nil
 			}
 			nudged = true
 			nudge := "Call submit_report now with your findings."
 			if !mitigated {
 				nudge = "Call submit_mitigation now, then submit_report."
 			}
-			params.Messages = append(params.Messages, anthropic.NewBetaUserMessage(anthropic.NewBetaTextBlock(nudge)))
+			params.Messages = append(params.Messages, llm.UserText(nudge))
 			continue
 		}
 
@@ -343,21 +335,21 @@ func (e *Engine) investigate(ctx context.Context, rec *recorder, inv db.Investig
 			if !mitigated {
 				next = "submit_mitigation and then submit_report"
 			}
-			results = append(results, anthropic.NewBetaTextBlock(fmt.Sprintf(
+			results = append(results, llm.TextPart(fmt.Sprintf(
 				"Tool budget reached (%d calls). Do not call any more investigation tools; call %s now with what you have.", toolCalls, next)))
 		case !mitigated && toolCalls >= e.cfg.MitigationToolCalls:
-			results = append(results, anthropic.NewBetaTextBlock(fmt.Sprintf(
+			results = append(results, llm.TextPart(fmt.Sprintf(
 				"%d tool calls and no mitigation yet. Users may still be affected: call submit_mitigation now with the best generic mitigation the evidence supports (or kind \"none\"), then continue the investigation.", toolCalls)))
 		}
-		params.Messages = append(params.Messages, anthropic.NewBetaUserMessage(results...))
+		params.Messages = append(params.Messages, llm.UserMessage(results...))
 	}
 }
 
 // mitigate validates, stores and publishes a proposed mitigation. It returns
 // the tool result for the model.
-func (e *Engine) mitigate(ctx context.Context, rec *recorder, tc *toolContext, inv *db.Investigation, u anthropic.BetaToolUseBlock) (string, bool) {
+func (e *Engine) mitigate(ctx context.Context, rec *recorder, tc *toolContext, inv *db.Investigation, u llm.ToolCall) (string, bool) {
 	m := &opensrev1.Mitigation{}
-	if err := (protojson.UnmarshalOptions{DiscardUnknown: true}).Unmarshal([]byte(u.JSON.Input.Raw()), m); err != nil {
+	if err := (protojson.UnmarshalOptions{DiscardUnknown: true}).Unmarshal(u.Input, m); err != nil {
 		return "invalid mitigation: " + err.Error(), true
 	}
 	if !slices.Contains(mitigationKinds, m.Kind) {
@@ -425,8 +417,8 @@ func (e *Engine) proposeAction(ctx context.Context, tc *toolContext, inv *db.Inv
 const maxToolResult = 24 << 10
 
 // runTools executes tool calls in parallel and returns their results in order.
-func (e *Engine) runTools(ctx context.Context, rec *recorder, tc *toolContext, uses []anthropic.BetaToolUseBlock) []anthropic.BetaContentBlockParamUnion {
-	results := make([]anthropic.BetaContentBlockParamUnion, len(uses))
+func (e *Engine) runTools(ctx context.Context, rec *recorder, tc *toolContext, uses []llm.ToolCall) []llm.Part {
+	results := make([]llm.Part, len(uses))
 	var wg sync.WaitGroup
 	for i, u := range uses {
 		wg.Add(1)
@@ -442,23 +434,23 @@ func (e *Engine) runTools(ctx context.Context, rec *recorder, tc *toolContext, u
 				out = out[:maxToolResult] + "\n… (truncated: narrow the query)"
 			}
 			var input any
-			_ = json.Unmarshal([]byte(u.JSON.Input.Raw()), &input)
+			_ = json.Unmarshal(u.Input, &input)
 			rec.record(ctx, step{Kind: "tool_call", Name: u.Name, Input: input, Output: out, IsError: isErr, Duration: time.Since(start)})
-			results[i] = anthropic.NewBetaToolResultBlock(u.ID, out, isErr)
+			results[i] = llm.ToolResultPart(u.ID, out, isErr)
 		}()
 	}
 	wg.Wait()
 	return results
 }
 
-func (e *Engine) callTool(ctx context.Context, tc *toolContext, u anthropic.BetaToolUseBlock) (string, error) {
+func (e *Engine) callTool(ctx context.Context, tc *toolContext, u llm.ToolCall) (string, error) {
 	t, ok := findTool(u.Name)
 	if !ok || t.run == nil {
 		return "", fmt.Errorf("unknown tool %q", u.Name)
 	}
 	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
 	defer cancel()
-	out, err := t.run(ctx, tc, json.RawMessage(u.JSON.Input.Raw()))
+	out, err := t.run(ctx, tc, u.Input)
 	if err != nil {
 		return "", err
 	}
@@ -467,14 +459,4 @@ func (e *Engine) callTool(ctx context.Context, tc *toolContext, u anthropic.Beta
 	}
 	b, err := json.Marshal(out)
 	return string(b), err
-}
-
-func textOf(m *anthropic.BetaMessage) string {
-	var parts []string
-	for _, block := range m.Content {
-		if t, ok := block.AsAny().(anthropic.BetaTextBlock); ok && t.Text != "" {
-			parts = append(parts, t.Text)
-		}
-	}
-	return strings.Join(parts, "\n")
 }

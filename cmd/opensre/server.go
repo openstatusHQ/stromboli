@@ -19,7 +19,7 @@ func serveCmd() *cobra.Command {
 		Long: `Run the opensre server: the API, the alert webhooks and the investigation agent.
 
 It is configured with environment variables (OPENSRE_DB_URL, OPENSRE_SECRET_KEY,
-OPENSRE_API_TOKEN, ANTHROPIC_API_KEY, ...). Migrations run on startup.
+OPENSRE_API_TOKEN, OPENSRE_MODEL, ANTHROPIC_API_KEY, ...). Migrations run on startup.
 See ` + docsURL + ` for the full list.`,
 		Example: `  OPENSRE_DB_URL=postgres://localhost/opensre opensre serve`,
 		Args:    noArgs,

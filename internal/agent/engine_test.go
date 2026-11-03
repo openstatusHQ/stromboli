@@ -21,6 +21,7 @@ import (
 	"github.com/openstatushq/opensre/internal/catalog"
 	"github.com/openstatushq/opensre/internal/config"
 	"github.com/openstatushq/opensre/internal/connector"
+	"github.com/openstatushq/opensre/internal/llm"
 	"github.com/openstatushq/opensre/internal/secrets"
 	"github.com/openstatushq/opensre/internal/store"
 	"github.com/openstatushq/opensre/internal/store/db"
@@ -46,6 +47,14 @@ func (s *scripted) New(_ context.Context, p anthropic.BetaMessageNewParams, _ ..
 	}
 	s.responses = s.responses[1:]
 	return &m, nil
+}
+
+// models routes every task through the Anthropic adapter backed by s, with
+// a different model per task.
+func (s *scripted) models() Models {
+	triage, _ := llm.Anthropic(s)("claude-haiku-5-5")
+	investigate, _ := llm.Anthropic(s)("claude-opus-5-5")
+	return Models{Triage: triage, Investigate: investigate}
 }
 
 func message(stop string, content ...string) string {
@@ -287,9 +296,10 @@ func runInvestigation(t *testing.T, st *store.Store, b logBackend) {
 		message("tool_use", toolUse("t6", "submit_report", reportJSON)),
 	}}
 
-	cfg := config.Config{Model: "claude-opus-5-5", Effort: "high", MaxToolCalls: 10, MitigationToolCalls: 2, InvestigationTimeout: time.Minute, DedupeWindow: time.Minute}
+	cfg := config.Config{MaxToolCalls: 10, MitigationToolCalls: 2, InvestigationTimeout: time.Minute, DedupeWindow: time.Minute,
+		Triage: config.Task{Effort: "low"}, Investigate: config.Task{Effort: "max"}}
 	notifier := &recordingNotifier{}
-	engine := New(ctx, cfg, st, connector.NewRegistry(st, box), model, notifier, nil)
+	engine := New(ctx, cfg, st, connector.NewRegistry(st, box), model.models(), notifier, nil)
 
 	inv, _, err := engine.Start(ctx, StartRequest{Title: "api errors", Source: "manual", Services: []string{svcName}})
 	if err != nil {
@@ -310,6 +320,18 @@ func runInvestigation(t *testing.T, st *store.Store, b logBackend) {
 	}
 	if rep.LikelyCause != "database connection limit reached" || rep.Confidence != "medium" || rep.Fix == "" {
 		t.Errorf("unexpected report: %v", rep)
+	}
+
+	// Triage runs on its model until the mitigation is out (turn 3), then the
+	// investigate model continues the same conversation.
+	for i, want := range []string{"claude-haiku-5-5/low", "claude-haiku-5-5/low", "claude-haiku-5-5/low", "claude-opus-5-5/max", "claude-opus-5-5/max"} {
+		r := model.requests[i]
+		if got := string(r.Model) + "/" + string(r.OutputConfig.Effort); got != want {
+			t.Errorf("request %d ran on %s, want %s", i, got, want)
+		}
+	}
+	if n := len(model.requests[3].Messages); n != 7 {
+		t.Errorf("the investigate model should see the whole triage conversation, got %d messages", n)
 	}
 
 	// Mitigate first: the mitigation is stored and published before the report.
