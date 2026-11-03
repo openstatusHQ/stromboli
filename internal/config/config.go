@@ -18,9 +18,15 @@ type Config struct {
 	// WebhookToken protects /webhooks/*. Falls back to APIToken.
 	WebhookToken string // OPENSRE_WEBHOOK_TOKEN
 
-	AnthropicAPIKey string // ANTHROPIC_API_KEY
-	Model           string // OPENSRE_MODEL
-	Effort          string // OPENSRE_EFFORT
+	// Models are "provider:model" ids (see internal/llm), e.g.
+	// "anthropic:claude-opus-5-5", "openai:gpt-5", "ollama:qwen3:32b".
+	// Model and Effort are the defaults; each task can override them.
+	Model  string // OPENSRE_MODEL
+	Effort string // OPENSRE_EFFORT: empty = the provider's default
+	// Triage runs until a mitigation is published: it should be fast.
+	Triage Task // OPENSRE_TRIAGE_MODEL, OPENSRE_TRIAGE_EFFORT
+	// Investigate finds the root cause and writes the report.
+	Investigate Task // OPENSRE_INVESTIGATE_MODEL, OPENSRE_INVESTIGATE_EFFORT
 	// MaxToolCalls bounds one investigation.
 	MaxToolCalls int // OPENSRE_MAX_TOOL_CALLS
 	// MitigationToolCalls is how many tool calls the triage phase gets before
@@ -47,18 +53,23 @@ type Config struct {
 	ActionTTL time.Duration // OPENSRE_ACTION_TTL
 }
 
+// Task is the model settings of one LLM task.
+type Task struct {
+	Model  string
+	Effort string
+}
+
 func Load() (Config, error) {
 	c := Config{
-		Addr:            env("OPENSRE_ADDR", ":8080"),
-		DBURL:           os.Getenv("OPENSRE_DB_URL"),
-		SecretKey:       os.Getenv("OPENSRE_SECRET_KEY"),
-		APIToken:        os.Getenv("OPENSRE_API_TOKEN"),
-		WebhookToken:    os.Getenv("OPENSRE_WEBHOOK_TOKEN"),
-		AnthropicAPIKey: os.Getenv("ANTHROPIC_API_KEY"),
-		Model:           env("OPENSRE_MODEL", "claude-opus-5-5"),
-		Effort:          env("OPENSRE_EFFORT", "high"),
-		SlackBotToken:   os.Getenv("SLACK_BOT_TOKEN"),
-		SlackChannel:    os.Getenv("SLACK_CHANNEL"),
+		Addr:          env("OPENSRE_ADDR", ":8080"),
+		DBURL:         os.Getenv("OPENSRE_DB_URL"),
+		SecretKey:     os.Getenv("OPENSRE_SECRET_KEY"),
+		APIToken:      os.Getenv("OPENSRE_API_TOKEN"),
+		WebhookToken:  os.Getenv("OPENSRE_WEBHOOK_TOKEN"),
+		Model:         env("OPENSRE_MODEL", "anthropic:claude-opus-5-5"),
+		Effort:        os.Getenv("OPENSRE_EFFORT"),
+		SlackBotToken: os.Getenv("SLACK_BOT_TOKEN"),
+		SlackChannel:  os.Getenv("SLACK_CHANNEL"),
 
 		SlackSigningSecret: os.Getenv("SLACK_SIGNING_SECRET"),
 	}
@@ -67,6 +78,8 @@ func Load() (Config, error) {
 			c.SlackApprovers = append(c.SlackApprovers, id)
 		}
 	}
+	c.Triage = Task{Model: env("OPENSRE_TRIAGE_MODEL", c.Model), Effort: env("OPENSRE_TRIAGE_EFFORT", c.Effort)}
+	c.Investigate = Task{Model: env("OPENSRE_INVESTIGATE_MODEL", c.Model), Effort: env("OPENSRE_INVESTIGATE_EFFORT", c.Effort)}
 	if c.WebhookToken == "" {
 		c.WebhookToken = c.APIToken
 	}

@@ -88,7 +88,9 @@ func newActionEnv(t *testing.T, enabled bool, allow ...string) *actionEnv {
 	reg := connector.NewRegistry(st, box)
 	env := &actionEnv{st: st, fly: srv, svc: svcName, cfg: cfg}
 	env.actions = action.New(cfg, st, reg, nil)
-	env.engine = func(model *scripted) *Engine { return New(ctx, cfg, st, reg, model, &recordingNotifier{}, env.actions) }
+	env.engine = func(model *scripted) *Engine {
+		return New(ctx, cfg, st, reg, model.models(), &recordingNotifier{}, env.actions)
+	}
 	return env
 }
 

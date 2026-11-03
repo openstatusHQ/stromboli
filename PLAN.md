@@ -118,7 +118,7 @@ deploy/                 Dockerfile, docker-compose.yml (opensre + Postgres), doc
   - The client is generated with `@connectrpc/connect-es` / `protoc-gen-es`, and data fetching uses `@connectrpc/connect-query` (TanStack Query).
   - A multi-stage Docker build compiles the app, and the output is embedded in the Go binary with `go:embed`, so it's still a single image.
   - In dev, Vite proxies Connect paths (`/opensre.v1.*`) to Go.
-- Integrations: `slack-go/slack` and `anthropic-sdk-go`. Anthropic sits behind an `llm.Provider` interface so OpenAI-compatible providers can be added later, since self-hosters will ask for that.
+- Integrations: `slack-go/slack` and `anthropic-sdk-go`. Models sit behind `internal/llm` (provider registry, `provider:model` ids, AI SDK style) with Anthropic and OpenAI-compatible adapters; each task (triage, investigate) picks its own model.
 - Observability: `log/slog` for logs, and OpenTelemetry to trace the agent itself.
 
 ---

@@ -7,11 +7,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/anthropics/anthropic-sdk-go/v2"
-
 	opensrev1 "github.com/openstatushq/opensre/gen/opensre/v1"
 	"github.com/openstatushq/opensre/internal/catalog"
 	"github.com/openstatushq/opensre/internal/connector/logs"
+	"github.com/openstatushq/opensre/internal/llm"
 	"github.com/openstatushq/opensre/internal/policy"
 	"github.com/openstatushq/opensre/internal/store/db"
 )
@@ -435,23 +434,15 @@ func (tc *toolContext) logTarget(ctx context.Context, args logArgs) (logs.Source
 	return src, svc.Logs.Selector, w, nil
 }
 
-// toolParams converts the tool table into API definitions.
-func toolParams() []anthropic.BetaToolUnionParam {
-	out := make([]anthropic.BetaToolUnionParam, 0, len(tools))
+// toolDefs converts the tool table into provider-neutral definitions.
+func toolDefs() []llm.ToolDef {
+	out := make([]llm.ToolDef, 0, len(tools))
 	for _, t := range tools {
-		p := anthropic.BetaToolParam{
-			Name:        t.name,
-			Description: anthropic.String(t.description),
-			InputSchema: anthropic.BetaToolInputSchemaParam{
-				Properties:  t.properties,
-				Required:    t.required,
-				ExtraFields: map[string]any{"additionalProperties": false},
-			},
+		schema := map[string]any{"type": "object", "properties": t.properties, "additionalProperties": false}
+		if len(t.required) > 0 {
+			schema["required"] = t.required
 		}
-		if t.strict {
-			p.Strict = anthropic.Bool(true)
-		}
-		out = append(out, anthropic.BetaToolUnionParam{OfTool: &p})
+		out = append(out, llm.ToolDef{Name: t.name, Description: t.description, Schema: schema, Strict: t.strict})
 	}
 	return out
 }
