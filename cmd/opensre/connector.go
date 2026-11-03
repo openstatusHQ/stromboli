@@ -92,7 +92,7 @@ history and the process list. Instead pass:
 				return err
 			}
 			if !a.json {
-				if slices.Contains([]string{"loki", "axiom", "cloudwatch", "prometheus", "fly"}, kind) {
+				if slices.Contains([]string{"loki", "axiom", "cloudwatch", "gcp_logging", "prometheus", "fly", "gcp_monitoring"}, kind) {
 					a.info("Next: propose catalog entries from it with `opensre catalog discover %s > services.yaml`", name)
 				}
 			}

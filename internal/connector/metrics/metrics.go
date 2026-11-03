@@ -12,7 +12,7 @@ import (
 )
 
 // Kinds lists the connector kinds that are metric sources.
-var Kinds = []string{"prometheus", "fly"}
+var Kinds = []string{"prometheus", "fly", "gcp_monitoring"}
 
 // Sample is one point of a series.
 type Sample struct {
@@ -56,6 +56,15 @@ type Preset struct {
 	Expr string
 	// Brief marks presets shown in the incident brief.
 	Brief bool
+	// Requires is a label the service's selectors must set for the preset
+	// to apply, e.g. subscription_id for Pub/Sub presets on a GCP connector
+	// that also serves Cloud Run and Cloud Tasks.
+	Requires string
+}
+
+// Applies reports whether the preset fits a service with these matchers.
+func (p Preset) Applies(matchers string) bool {
+	return p.Requires == "" || strings.Contains(matchers, p.Requires+"=")
 }
 
 // FlyPresets are queries over the metrics Fly.io exposes for every app
@@ -145,8 +154,11 @@ var FlyPresets = []Preset{
 
 // PresetsFor returns the presets available for a connector kind.
 func PresetsFor(kind string) []Preset {
-	if kind == "fly" {
+	switch kind {
+	case "fly":
 		return FlyPresets
+	case "gcp_monitoring":
+		return GCPPresets
 	}
 	return nil
 }

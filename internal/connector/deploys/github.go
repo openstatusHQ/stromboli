@@ -1,5 +1,10 @@
 // Package deploys lists recent changes to a service: deploy workflow runs,
 // GitHub deployments, or commits as a fallback.
+//
+// With a token, it goes through GitHub's remote MCP server (read-only
+// toolsets repos and actions). Deployments have no MCP tool and use the REST
+// API; without a token (public repositories only) everything does, since the
+// MCP server requires authentication.
 package deploys
 
 import (
@@ -11,6 +16,8 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/openstatushq/opensre/internal/connector/mcpconn"
 )
 
 // Target is the catalog's deploy config for one service.
@@ -52,6 +59,33 @@ type Commit struct {
 type GitHubConfig struct {
 	Token   string
 	BaseURL string // defaults to https://api.github.com
+	// MCP, when set, serves everything but deployments.
+	MCP *mcpconn.Client
+}
+
+// GitHubMCPURL is GitHub's remote MCP server.
+const GitHubMCPURL = "https://api.githubcopilot.com/mcp/"
+
+// GitHubTools are the MCP tools the connector calls.
+var GitHubTools = []string{"list_commits", "get_commit", "actions_list"}
+
+// GitHubMCP is the MCP client config for a token: only the repos and actions
+// toolsets, and the server's read-only mode on top of the allow-list.
+func GitHubMCP(token, endpoint string) mcpconn.Config {
+	if endpoint == "" {
+		endpoint = GitHubMCPURL
+	}
+	return mcpconn.Config{
+		Name:     "github",
+		Endpoint: endpoint,
+		Header: http.Header{
+			"Authorization":  {"Bearer " + token},
+			"X-MCP-Toolsets": {"repos,actions"},
+			"X-MCP-Readonly": {"true"},
+		},
+		Allow:           GitHubTools,
+		RequireReadOnly: true,
+	}
 }
 
 type GitHub struct {
@@ -65,6 +99,15 @@ func NewGitHub(cfg GitHubConfig) *GitHub {
 	}
 	cfg.BaseURL = strings.TrimRight(cfg.BaseURL, "/")
 	return &GitHub{cfg: cfg, http: &http.Client{Timeout: 20 * time.Second}}
+}
+
+// splitRepo splits owner/name.
+func splitRepo(repo string) (owner, name string, err error) {
+	owner, name, ok := strings.Cut(repo, "/")
+	if !ok || owner == "" || name == "" {
+		return "", "", fmt.Errorf("github: repo %q is not owner/name", repo)
+	}
+	return owner, name, nil
 }
 
 // Recent lists changes to the target since the given time, newest first.
@@ -87,26 +130,35 @@ func (g *GitHub) workflowRuns(ctx context.Context, t Target, since time.Time) ([
 	if t.Branch != "" {
 		params.Set("branch", t.Branch)
 	}
-	var resp struct {
-		WorkflowRuns []struct {
-			HeadSHA      string    `json:"head_sha"`
-			DisplayTitle string    `json:"display_title"`
-			Status       string    `json:"status"`
-			Conclusion   string    `json:"conclusion"`
-			HTMLURL      string    `json:"html_url"`
-			CreatedAt    time.Time `json:"created_at"`
-			UpdatedAt    time.Time `json:"updated_at"`
-			Actor        struct {
-				Login string `json:"login"`
-			} `json:"actor"`
-		} `json:"workflow_runs"`
-	}
-	path := fmt.Sprintf("/repos/%s/actions/workflows/%s/runs", t.Repo, url.PathEscape(t.Workflow))
-	if err := g.get(ctx, path, params, &resp); err != nil {
-		return nil, err
+	var resp workflowRuns
+	if g.cfg.MCP != nil {
+		owner, repo, err := splitRepo(t.Repo)
+		if err != nil {
+			return nil, err
+		}
+		args := map[string]any{"method": "list_workflow_runs", "owner": owner, "repo": repo, "resource_id": t.Workflow, "perPage": 30}
+		if t.Branch != "" {
+			args["workflow_runs_filter"] = map[string]any{"branch": t.Branch}
+		}
+		var raw json.RawMessage
+		if err := g.cfg.MCP.Call(ctx, "actions_list", args, &raw); err != nil {
+			return nil, err
+		}
+		if err := resp.decodeMCP(raw); err != nil {
+			return nil, err
+		}
+	} else {
+		path := fmt.Sprintf("/repos/%s/actions/workflows/%s/runs", t.Repo, url.PathEscape(t.Workflow))
+		if err := g.get(ctx, path, params, &resp); err != nil {
+			return nil, err
+		}
 	}
 	out := make([]Deploy, 0, len(resp.WorkflowRuns))
 	for _, r := range resp.WorkflowRuns {
+		// The MCP tool has no created filter; runs come newest first.
+		if r.CreatedAt.Before(since) {
+			continue
+		}
 		status := r.Status
 		if r.Conclusion != "" {
 			status = r.Conclusion
@@ -117,6 +169,40 @@ func (g *GitHub) workflowRuns(ctx context.Context, t Target, since time.Time) ([
 		})
 	}
 	return out, nil
+}
+
+type workflowRuns struct {
+	WorkflowRuns []struct {
+		HeadSHA      string    `json:"head_sha"`
+		DisplayTitle string    `json:"display_title"`
+		Status       string    `json:"status"`
+		Conclusion   string    `json:"conclusion"`
+		HTMLURL      string    `json:"html_url"`
+		CreatedAt    time.Time `json:"created_at"`
+		UpdatedAt    time.Time `json:"updated_at"`
+		Actor        struct {
+			Login string `json:"login"`
+		} `json:"actor"`
+	} `json:"workflow_runs"`
+}
+
+// decodeMCP reads actions_list's answer, which is the REST response or,
+// depending on the negotiated protocol version, that response wrapped as
+// {"method": ..., "workflow_runs": <REST response>}.
+func (w *workflowRuns) decodeMCP(raw json.RawMessage) error {
+	var probe struct {
+		WorkflowRuns json.RawMessage `json:"workflow_runs"`
+	}
+	if err := json.Unmarshal(raw, &probe); err != nil {
+		return fmt.Errorf("github: actions_list: %w", err)
+	}
+	if t := strings.TrimSpace(string(probe.WorkflowRuns)); strings.HasPrefix(t, "{") {
+		raw = probe.WorkflowRuns
+	}
+	if err := json.Unmarshal(raw, w); err != nil {
+		return fmt.Errorf("github: actions_list: %w", err)
+	}
+	return nil
 }
 
 func (g *GitHub) deployments(ctx context.Context, t Target, since time.Time) ([]Deploy, error) {
@@ -157,7 +243,19 @@ func (g *GitHub) commits(ctx context.Context, t Target, since time.Time) ([]Depl
 		params.Set("sha", t.Branch)
 	}
 	var resp []rawCommit
-	if err := g.get(ctx, fmt.Sprintf("/repos/%s/commits", t.Repo), params, &resp); err != nil {
+	if g.cfg.MCP != nil {
+		owner, repo, err := splitRepo(t.Repo)
+		if err != nil {
+			return nil, err
+		}
+		args := map[string]any{"owner": owner, "repo": repo, "since": since.UTC().Format(time.RFC3339), "perPage": 30}
+		if t.Branch != "" {
+			args["sha"] = t.Branch
+		}
+		if err := g.cfg.MCP.Call(ctx, "list_commits", args, &resp); err != nil {
+			return nil, err
+		}
+	} else if err := g.get(ctx, fmt.Sprintf("/repos/%s/commits", t.Repo), params, &resp); err != nil {
 		return nil, err
 	}
 	out := make([]Deploy, 0, len(resp))
@@ -176,7 +274,16 @@ const maxPatch = 1500
 // Commit returns a commit with its changed files and truncated patches.
 func (g *GitHub) Commit(ctx context.Context, repo, sha string) (*Commit, error) {
 	var c rawCommit
-	if err := g.get(ctx, fmt.Sprintf("/repos/%s/commits/%s", repo, url.PathEscape(sha)), nil, &c); err != nil {
+	if g.cfg.MCP != nil {
+		owner, name, err := splitRepo(repo)
+		if err != nil {
+			return nil, err
+		}
+		args := map[string]any{"owner": owner, "repo": name, "sha": sha, "detail": "full_patch", "perPage": 40}
+		if err := g.cfg.MCP.Call(ctx, "get_commit", args, &c); err != nil {
+			return nil, err
+		}
+	} else if err := g.get(ctx, fmt.Sprintf("/repos/%s/commits/%s", repo, url.PathEscape(sha)), nil, &c); err != nil {
 		return nil, err
 	}
 	out := &Commit{SHA: c.SHA, Message: c.Commit.Message, Author: c.author(), Time: c.Commit.Committer.Date, URL: c.HTMLURL}
@@ -194,6 +301,9 @@ func (g *GitHub) Commit(ctx context.Context, repo, sha string) (*Commit, error) 
 }
 
 func (g *GitHub) Check(ctx context.Context) error {
+	if g.cfg.MCP != nil {
+		return g.cfg.MCP.Check(ctx)
+	}
 	var resp map[string]any
 	return g.get(ctx, "/rate_limit", nil, &resp)
 }

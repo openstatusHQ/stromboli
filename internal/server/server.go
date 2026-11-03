@@ -53,6 +53,8 @@ func Run(ctx context.Context, cfg config.Config) error {
 	}
 
 	reg := connector.NewRegistry(st, box)
+	// Ends MCP sessions and stops local MCP servers (flyctl) on shutdown.
+	defer reg.Close()
 
 	var msgs agent.Messages
 	if cfg.AnthropicAPIKey != "" {

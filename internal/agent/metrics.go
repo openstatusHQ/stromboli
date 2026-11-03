@@ -25,7 +25,7 @@ type metricAnalysis struct {
 
 // analyzeMetric runs expr over the window and its baseline and summarises
 // each series against its own baseline average.
-func analyzeMetric(ctx context.Context, src *metrics.Prometheus, expr string, w Window, limit, points int) (*metricAnalysis, error) {
+func analyzeMetric(ctx context.Context, src metrics.Source, expr string, w Window, limit, points int) (*metricAnalysis, error) {
 	var (
 		cur, base     []metrics.Series
 		errCur, errBs error
@@ -77,7 +77,7 @@ func (e *Engine) briefMetrics(ctx context.Context, svc *opensrev1.Service, w Win
 	}
 	var presets []metrics.Preset
 	for _, p := range metrics.PresetsFor(kind) {
-		if p.Brief {
+		if p.Brief && p.Applies(matchers) {
 			presets = append(presets, p)
 		}
 	}
