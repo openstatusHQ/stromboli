@@ -15,6 +15,7 @@ import (
 
 	opensrev1 "github.com/openstatushq/opensre/gen/opensre/v1"
 	"github.com/openstatushq/opensre/internal/connector/logs"
+	"github.com/openstatushq/opensre/internal/connector/metrics"
 )
 
 var (
@@ -130,6 +131,18 @@ func Validate(services []*opensrev1.Service, opts ValidateOptions) []*opensrev1.
 				add(s.Name, "logs.source", fmt.Sprintf("unknown connector %q", s.Logs.Source), true)
 			} else if !slices.Contains(logs.Kinds, kind) {
 				add(s.Name, "logs.source", fmt.Sprintf("connector %q is a %s connector, not a log connector", s.Logs.Source, kind), false)
+			}
+		}
+		if m := s.Metrics; m != nil && m.Source != "" {
+			if metrics.Matchers(m.Selectors) == "" {
+				add(s.Name, "metrics.selectors", `required when metrics.source is set, e.g. ['app="api"']`, false)
+			}
+			if opts.Connectors != nil {
+				if kind, ok := opts.Connectors[m.Source]; !ok {
+					add(s.Name, "metrics.source", fmt.Sprintf("unknown connector %q", m.Source), true)
+				} else if !slices.Contains(metrics.Kinds, kind) {
+					add(s.Name, "metrics.source", fmt.Sprintf("connector %q is a %s connector, not a metrics connector", m.Source, kind), false)
+				}
 			}
 		}
 		if d := s.Deploys; d != nil && d.Source != "" {

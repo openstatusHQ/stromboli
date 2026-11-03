@@ -46,7 +46,10 @@ message DeploysConfig {
 }
 
 message MetricsConfig {
+  // Name of a configured metrics connector (prometheus or fly).
   string source = 1;
+  // PromQL label matchers selecting the service's series, ANDed together,
+  // e.g. `app="checker"` (fly) or `job="api"`. Queries reference them as $selector.
   repeated string selectors = 2;
 }
 
@@ -133,12 +136,13 @@ message ValidateCatalogResponse {
 }
 
 message DiscoverServicesRequest {
-  // Log connector to inspect.
+  // Log or metrics connector to inspect.
   string connector = 1;
 }
 
 message DiscoverServicesResponse {
-  // Proposed services not yet in the catalog.
+  // Proposed services not yet in the catalog. For a metrics connector, also
+  // existing services without metrics, with their metrics config filled in.
   repeated Service candidates = 1;
 }
 

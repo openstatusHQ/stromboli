@@ -25,7 +25,7 @@ Client (uses OPENSRE_URL and OPENSRE_API_TOKEN):
   opensre catalog import <services.yaml> [--runbooks dir] [--prune] [--dry-run]
   opensre catalog export [--runbooks dir]
   opensre catalog validate [--check-connectors]
-  opensre catalog discover <log-connector>
+  opensre catalog discover <log-or-metrics-connector>
   opensre connector add <name> <kind> key=value...  [--replace]
   opensre connector list | test <name> | rm <name>
   opensre brief <service> [--since 1h]

@@ -70,7 +70,7 @@ func catalogCmd(ctx context.Context, c clients, args []string) error {
 	runbooks := fs.String("runbooks", "", "directory of runbook markdown files")
 	prune := fs.Bool("prune", false, "delete services and runbooks not in the file")
 	dryRun := fs.Bool("dry-run", false, "validate only")
-	checkConnectors := fs.Bool("check-connectors", false, "run a test query per log selector")
+	checkConnectors := fs.Bool("check-connectors", false, "run a test query per log and metrics selector")
 	pos, err := parse(fs, args[1:])
 	if err != nil {
 		return err
@@ -139,7 +139,7 @@ func catalogCmd(ctx context.Context, c clients, args []string) error {
 
 	case "discover":
 		if len(pos) != 1 {
-			return errors.New("usage: opensre catalog discover <log-connector>")
+			return errors.New("usage: opensre catalog discover <log-or-metrics-connector>")
 		}
 		resp, err := c.catalog.DiscoverServices(ctx, connect.NewRequest(&opensrev1.DiscoverServicesRequest{Connector: pos[0]}))
 		if err != nil {
@@ -194,7 +194,7 @@ func connectorCmd(ctx context.Context, c clients, args []string) error {
 	switch args[0] {
 	case "add":
 		if len(pos) < 2 {
-			return errors.New("usage: opensre connector add <name> <kind> key=value... (kinds: loki, axiom, cloudwatch, github)")
+			return errors.New("usage: opensre connector add <name> <kind> key=value... (kinds: loki, axiom, cloudwatch, prometheus, fly, github)")
 		}
 		cfg := map[string]string{}
 		for _, kv := range pos[2:] {

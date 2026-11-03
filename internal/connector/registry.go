@@ -11,6 +11,7 @@ import (
 
 	"github.com/openstatushq/opensre/internal/connector/deploys"
 	"github.com/openstatushq/opensre/internal/connector/logs"
+	"github.com/openstatushq/opensre/internal/connector/metrics"
 	"github.com/openstatushq/opensre/internal/secrets"
 	"github.com/openstatushq/opensre/internal/store"
 	"github.com/openstatushq/opensre/internal/store/db"
@@ -37,6 +38,16 @@ var Kinds = map[string]kindSpec{
 	"cloudwatch": {
 		optional: []string{"region", "access_key_id", "secret_access_key", "session_token", "endpoint", "log_group_prefix", "service_field"},
 		secret:   []string{"secret_access_key", "session_token"},
+	},
+	"prometheus": {
+		required: []string{"url"},
+		optional: []string{"tenant_id", "username", "password", "bearer_token", "service_label"},
+		secret:   []string{"password", "bearer_token"},
+	},
+	"fly": {
+		required: []string{"org", "token"},
+		optional: []string{"url"},
+		secret:   []string{"token"},
 	},
 	"github": {
 		optional: []string{"token", "base_url"},
@@ -168,6 +179,27 @@ func (r *Registry) Logs(ctx context.Context, name string) (logs.Source, error) {
 	}
 }
 
+// Metrics returns the metric source named name and its kind (presets depend on it).
+func (r *Registry) Metrics(ctx context.Context, name string) (*metrics.Prometheus, string, error) {
+	c, cfg, err := r.Config(ctx, name)
+	if err != nil {
+		return nil, "", err
+	}
+	var p *metrics.Prometheus
+	switch c.Kind {
+	case "prometheus":
+		p, err = metrics.NewPrometheus(metrics.PrometheusConfig{
+			URL: cfg["url"], TenantID: cfg["tenant_id"], Username: cfg["username"],
+			Password: cfg["password"], BearerToken: cfg["bearer_token"], ServiceLabel: cfg["service_label"],
+		})
+	case "fly":
+		p, err = metrics.NewFly(cfg["org"], cfg["token"], cfg["url"])
+	default:
+		return nil, "", fmt.Errorf("connector %q (%s) is not a metrics source", name, c.Kind)
+	}
+	return p, c.Kind, err
+}
+
 // GitHub returns the deploy source named name.
 func (r *Registry) GitHub(ctx context.Context, name string) (*deploys.GitHub, error) {
 	c, cfg, err := r.Config(ctx, name)
@@ -192,6 +224,12 @@ func (r *Registry) Check(ctx context.Context, name string) error {
 	switch {
 	case slices.Contains(logs.Kinds, c.Kind):
 		src, err := r.Logs(ctx, name)
+		if err != nil {
+			return err
+		}
+		return src.Check(ctx)
+	case slices.Contains(metrics.Kinds, c.Kind):
+		src, _, err := r.Metrics(ctx, name)
 		if err != nil {
 			return err
 		}
