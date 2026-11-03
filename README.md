@@ -242,7 +242,17 @@ opensre connector add fly-deploy fly_machines org=<org-slug> token="$(fly tokens
    The approval is checked again against the catalog and the machines, then claimed atomically, so an action runs at most once. It then runs machine by machine. A restart, start or clone waits for the machine to reach `started` (60s) and stops at the first failure, so a rolling restart never takes down more than one machine that did not come back. The result lists what was done and how to undo it (for a clone, the `fly machine destroy` of the new machine).
 3. Every action keeps who approved or rejected it, when, their note, the result and the error (`opensre actions show <id>`, `ActionService`), and is posted in the investigation's Slack thread.
 
-The approver name is recorded as given: anyone with the API token can approve. Slack approval buttons limited to service owners are not built yet.
+The approver name is recorded as given: anyone with the API token can approve.
+
+### Approve from Slack
+
+With `SLACK_SIGNING_SECRET` set (and `OPENSRE_ACTIONS_ENABLED=true`), the Slack message of an investigation shows **Apply** and **Reject** buttons under a proposed action instead of the CLI command. Apply asks to confirm, showing the risk and the undo. The click goes through the same `Approve`/`Reject` as the CLI, with the Slack user recorded as the approver (`@alice (Slack U0123)`). The outcome is posted in the thread and the buttons are replaced by it. Expired or superseded actions lose their buttons on the next redraw, and a click on one is answered with why it cannot run.
+
+1. In your Slack app, turn on **Interactivity & Shortcuts** with Request URL `https://<opensre>/slack/interactions`.
+2. Set `SLACK_SIGNING_SECRET` (Basic Information → Signing Secret). Requests without a valid Slack signature, or older than 5 minutes, are refused.
+3. Optional but recommended: `SLACK_APPROVERS=U0123,U0456` limits the buttons to those Slack user IDs. Without it, anyone who can see the channel can approve.
+
+Only machine actions have buttons. A text-only mitigation (rollback, failover…) is still applied by a human outside opensre.
 
 ## API
 
