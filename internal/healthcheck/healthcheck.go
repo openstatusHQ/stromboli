@@ -30,7 +30,9 @@ const (
 	Renotify = 6 * time.Hour
 	// firstRunDelay lets the server settle before the first check.
 	firstRunDelay = time.Minute
-	runTimeout    = 2 * time.Minute
+	// serviceTimeout bounds one service's checks and investigation start, so
+	// a slow service does not use up the time of the services after it.
+	serviceTimeout = 2 * time.Minute
 )
 
 // Check is a threshold on a metric preset.
@@ -70,7 +72,8 @@ func (f Finding) String() string {
 	return s
 }
 
-// Starter starts investigations; *agent.Engine implements it.
+// Starter starts investigations; *agent.Engine implements it. A nil Starter
+// only logs findings (no LLM is configured).
 type Starter interface {
 	Start(ctx context.Context, req agent.StartRequest) (db.Investigation, bool, error)
 }
@@ -104,9 +107,7 @@ func (c *Checker) Run(ctx context.Context) {
 			return
 		case <-t.C:
 		}
-		runCtx, cancel := context.WithTimeout(ctx, runTimeout)
-		c.RunOnce(runCtx)
-		cancel()
+		c.RunOnce(ctx)
 		t.Reset(c.interval)
 	}
 }
@@ -131,23 +132,23 @@ func (c *Checker) RunOnce(ctx context.Context) []Result {
 		return nil
 	}
 	var results []Result
-	healthy := 0
+	unhealthy, failed := 0, 0
 	for _, svc := range services {
 		if svc.Metrics == nil || svc.Metrics.Source == "" {
 			continue
 		}
-		r := c.checkService(ctx, svc)
-		if len(r.Findings) == 0 {
-			if len(r.Errors) == 0 {
-				healthy++
-			}
-			results = append(results, r)
-			continue
+		svcCtx, cancel := context.WithTimeout(ctx, serviceTimeout)
+		r := c.checkService(svcCtx, svc)
+		if len(r.Findings) > 0 {
+			unhealthy++
+			c.investigate(svcCtx, svc, &r)
+		} else if len(r.Errors) > 0 {
+			failed++
 		}
-		c.investigate(ctx, svc, &r)
+		cancel()
 		results = append(results, r)
 	}
-	slog.Info("health check done", "services", len(results), "healthy", healthy, "unhealthy", len(results)-healthy)
+	slog.Info("health check done", "services", len(results), "healthy", len(results)-unhealthy-failed, "unhealthy", unhealthy, "failed", failed)
 	return results
 }
 
@@ -251,8 +252,12 @@ func (c *Checker) investigate(ctx context.Context, svc *opensrev1.Service, r *Re
 		DedupeWindow: Renotify,
 		At:           c.now(),
 	}
-	inv, reused, err := c.starter.Start(ctx, req)
 	log := slog.With("service", svc.Name, "findings", len(r.Findings), "first", r.Findings[0].String())
+	if c.starter == nil {
+		log.Warn("health check: unhealthy (no LLM is configured, so it is not investigated)", "details", strings.Join(lines, "; "))
+		return
+	}
+	inv, reused, err := c.starter.Start(ctx, req)
 	if err != nil {
 		r.Errors = append(r.Errors, "start investigation: "+err.Error())
 		log.Error("health check: unhealthy, but the investigation did not start", "err", err)

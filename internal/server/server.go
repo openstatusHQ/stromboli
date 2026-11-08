@@ -93,14 +93,16 @@ func Run(ctx context.Context, cfg config.Config) error {
 	}
 	engine := agent.New(engineCtx, cfg, st, reg, models, notifier, actions)
 	if cfg.HealthcheckInterval > 0 {
+		var starter healthcheck.Starter = engine
 		if models.Triage == nil || models.Investigate == nil {
 			slog.Warn("health checks are enabled but no LLM is configured: findings are logged, not investigated")
+			starter = nil
 		}
 		services := func(ctx context.Context) ([]*opensrev1.Service, error) {
 			s, _, err := catalog.Load(ctx, st.Queries)
 			return s, err
 		}
-		go healthcheck.New(cfg.HealthcheckInterval, services, reg.Metrics, engine).Run(engineCtx)
+		go healthcheck.New(cfg.HealthcheckInterval, services, reg.Metrics, starter).Run(engineCtx)
 	}
 
 	if cfg.APIToken == "" {
