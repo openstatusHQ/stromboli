@@ -51,6 +51,11 @@ type Config struct {
 	ActionsEnabled bool // OPENSRE_ACTIONS_ENABLED
 	// ActionTTL is how long a proposed action can be approved.
 	ActionTTL time.Duration // OPENSRE_ACTION_TTL
+
+	// HealthcheckInterval is how often machine metrics are checked against
+	// thresholds (memory, CPU, disk, volume); a breach starts an
+	// investigation. Zero (the default) disables health checks.
+	HealthcheckInterval time.Duration // OPENSRE_HEALTHCHECK_INTERVAL
 }
 
 // Task is the model settings of one LLM task.
@@ -103,6 +108,14 @@ func Load() (Config, error) {
 	}
 	if c.ActionTTL, err = time.ParseDuration(env("OPENSRE_ACTION_TTL", "30m")); err != nil || c.ActionTTL <= 0 {
 		return c, fmt.Errorf("OPENSRE_ACTION_TTL: invalid duration %q", os.Getenv("OPENSRE_ACTION_TTL"))
+	}
+	if v := os.Getenv("OPENSRE_HEALTHCHECK_INTERVAL"); v != "" {
+		if c.HealthcheckInterval, err = time.ParseDuration(v); err != nil || c.HealthcheckInterval < 0 {
+			return c, fmt.Errorf("OPENSRE_HEALTHCHECK_INTERVAL: invalid duration %q, e.g. 1h (0 disables)", v)
+		}
+		if c.HealthcheckInterval > 0 && c.HealthcheckInterval < 5*time.Minute {
+			return c, fmt.Errorf("OPENSRE_HEALTHCHECK_INTERVAL: %s is too short, use at least 5m", v)
+		}
 	}
 	if c.ActionsEnabled && c.APIToken == "" {
 		// Approving an action changes production: it must not be open to anyone.

@@ -13,12 +13,15 @@ import (
 	"connectrpc.com/grpchealth"
 	"connectrpc.com/grpcreflect"
 
+	opensrev1 "github.com/openstatushq/opensre/gen/opensre/v1"
 	"github.com/openstatushq/opensre/gen/opensre/v1/opensrev1connect"
 	"github.com/openstatushq/opensre/internal/action"
 	"github.com/openstatushq/opensre/internal/agent"
 	"github.com/openstatushq/opensre/internal/api"
+	"github.com/openstatushq/opensre/internal/catalog"
 	"github.com/openstatushq/opensre/internal/config"
 	"github.com/openstatushq/opensre/internal/connector"
+	"github.com/openstatushq/opensre/internal/healthcheck"
 	"github.com/openstatushq/opensre/internal/llm"
 	"github.com/openstatushq/opensre/internal/report"
 	"github.com/openstatushq/opensre/internal/secrets"
@@ -89,6 +92,16 @@ func Run(ctx context.Context, cfg config.Config) error {
 		slog.Warn("SLACK_SIGNING_SECRET is set but Slack buttons need SLACK_BOT_TOKEN, SLACK_CHANNEL and OPENSRE_ACTIONS_ENABLED=true")
 	}
 	engine := agent.New(engineCtx, cfg, st, reg, models, notifier, actions)
+	if cfg.HealthcheckInterval > 0 {
+		if models.Triage == nil || models.Investigate == nil {
+			slog.Warn("health checks are enabled but no LLM is configured: findings are logged, not investigated")
+		}
+		services := func(ctx context.Context) ([]*opensrev1.Service, error) {
+			s, _, err := catalog.Load(ctx, st.Queries)
+			return s, err
+		}
+		go healthcheck.New(cfg.HealthcheckInterval, services, reg.Metrics, engine).Run(engineCtx)
+	}
 
 	if cfg.APIToken == "" {
 		slog.Warn("OPENSRE_API_TOKEN is not set: the API is unauthenticated, do not expose this instance")
