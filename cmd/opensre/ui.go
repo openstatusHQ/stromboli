@@ -3,11 +3,13 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	neturl "net/url"
 	"os"
 	"strings"
 
@@ -126,25 +128,60 @@ func (a *app) writeJSON(m proto.Message, indent string) error {
 	return err
 }
 
+// canPrompt reports whether the user may be asked for input.
+func (a *app) canPrompt() bool { return !a.noInput && a.interactive() }
+
 // confirm asks a yes/no question on stderr before doing action. With --yes it
 // returns nil; when prompting is impossible it fails and says how to proceed.
-func (a *app) confirm(yes bool, action, question string) error {
+func (a *app) confirm(ctx context.Context, yes bool, action, question string) error {
 	if yes {
 		return nil
 	}
-	if a.noInput || !a.interactive() {
+	if !a.canPrompt() {
 		return fmt.Errorf("refusing to %s without confirmation: re-run with --yes", action)
 	}
-	fmt.Fprintf(a.stderr, "%s [y/N] ", question)
-	line, err := bufio.NewReader(a.stdin).ReadString('\n')
-	if err != nil && !errors.Is(err, io.EOF) {
+	line, err := a.prompt(ctx, question+" [y/N] ")
+	if err != nil {
 		return err
 	}
-	switch strings.ToLower(strings.TrimSpace(line)) {
+	switch strings.ToLower(line) {
 	case "y", "yes":
 		return nil
 	}
 	return errors.New("aborted")
+}
+
+// prompt asks for one line of input on stderr. Ctrl-C cancels it right away
+// instead of waiting for Enter.
+func (a *app) prompt(ctx context.Context, question string) (string, error) {
+	fmt.Fprint(a.stderr, question)
+	return a.cancelable(ctx, func() (string, error) {
+		line, err := bufio.NewReader(a.stdin).ReadString('\n')
+		if err != nil && !errors.Is(err, io.EOF) {
+			return "", err
+		}
+		return strings.TrimSpace(line), nil
+	})
+}
+
+// cancelable runs a blocking read and returns early when ctx is canceled.
+func (a *app) cancelable(ctx context.Context, read func() (string, error)) (string, error) {
+	type result struct {
+		s   string
+		err error
+	}
+	ch := make(chan result, 1)
+	go func() {
+		s, err := read()
+		ch <- result{s, err}
+	}()
+	select {
+	case r := <-ch:
+		return r.s, r.err
+	case <-ctx.Done():
+		fmt.Fprintln(a.stderr) // end the prompt line
+		return "", ctx.Err()
+	}
 }
 
 func isTerminal(f any) bool {
@@ -152,13 +189,34 @@ func isTerminal(f any) bool {
 	return ok && term.IsTerminal(int(file.Fd()))
 }
 
-func readPassword(stdin io.Reader) (string, error) {
+// readPassword reads a line without echo. If ctx is canceled (Ctrl-C) while
+// waiting, it restores the terminal so echo is not left off after we exit.
+func readPassword(ctx context.Context, stdin io.Reader) (string, error) {
 	file, ok := stdin.(*os.File)
 	if !ok {
 		return "", errors.New("stdin is not a terminal")
 	}
-	b, err := term.ReadPassword(int(file.Fd()))
-	return string(b), err
+	fd := int(file.Fd())
+	state, err := term.GetState(fd)
+	if err != nil {
+		return "", err
+	}
+	type result struct {
+		b   []byte
+		err error
+	}
+	ch := make(chan result, 1)
+	go func() {
+		b, err := term.ReadPassword(fd)
+		ch <- result{b, err}
+	}()
+	select {
+	case r := <-ch:
+		return string(r.b), r.err
+	case <-ctx.Done():
+		_ = term.Restore(fd, state)
+		return "", ctx.Err()
+	}
 }
 
 // hinted adds a suggestion for what to do next to an error.
@@ -221,6 +279,9 @@ func (a *app) api() (*clients, error) {
 		token = strings.TrimSpace(string(b))
 	}
 	url := strings.TrimRight(a.url, "/")
+	if u, err := neturl.Parse(url); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+		return nil, usageError{err: fmt.Errorf("invalid server URL %q: use a full URL such as http://localhost:8080 (set with --url or OPENSRE_URL)", a.url)}
+	}
 	opts := connect.WithInterceptors(api.BearerToken(token))
 	hc := &http.Client{}
 	a.clients = &clients{

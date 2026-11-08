@@ -124,7 +124,7 @@ func (a *app) confirmPrune(cmd *cobra.Command, c *clients, file string, req *ope
 		parts = append(parts, fmt.Sprintf("%s (%s)", plural(int32(len(goneRunbooks)), "runbook"), strings.Join(goneRunbooks, ", ")))
 	}
 	gone := strings.Join(parts, " and ")
-	return a.confirm(yes, "delete "+gone, fmt.Sprintf("--prune will delete %s. Continue?", gone))
+	return a.confirm(cmd.Context(), yes, "delete "+gone, fmt.Sprintf("--prune will delete %s. Continue?", gone))
 }
 
 func (a *app) catalogExportCmd() *cobra.Command {

@@ -51,8 +51,8 @@ func (a *app) actionsListCmd() *cobra.Command {
 			req := &opensrev1.ListActionsRequest{InvestigationId: investigation, Limit: limit}
 			if statusFlag != "" {
 				v, ok := opensrev1.ActionStatus_value["ACTION_STATUS_"+strings.ToUpper(statusFlag)]
-				if !ok {
-					return usagef(cmd, "unknown status %q", statusFlag)
+				if !ok || v == 0 {
+					return usagef(cmd, "unknown status %q (valid: %s)", statusFlag, strings.Join(actionStatuses(), ", "))
 				}
 				req.Status = opensrev1.ActionStatus(v)
 			}
@@ -82,7 +82,7 @@ func (a *app) actionsListCmd() *cobra.Command {
 	}
 	f := cmd.Flags()
 	f.StringVar(&investigation, "investigation", "", "only the actions of this investigation")
-	f.StringVar(&statusFlag, "status", "", "only actions with this status (proposed, running, succeeded, failed, rejected, expired, superseded)")
+	f.StringVar(&statusFlag, "status", "", "only actions with this status ("+strings.Join(actionStatuses(), ", ")+")")
 	f.Int32Var(&limit, "limit", 20, "maximum number of actions to list")
 	return cmd
 }
@@ -119,8 +119,9 @@ approver. You are asked to confirm unless --yes is given.`,
   OPENSRE_USER=alice opensre actions approve 3f2b8c1e-... --yes --note "error rate spiking"`,
 		Args: exactArgs(1, "<action-id>"),
 		RunE: func(cmd *cobra.Command, pos []string) error {
-			if as == "" {
-				return usagef(cmd, "--as <your name> is required: approvals are recorded")
+			as, err := a.askName(cmd, as, "approvals")
+			if err != nil {
+				return err
 			}
 			c, err := a.api()
 			if err != nil {
@@ -138,7 +139,7 @@ approver. You are asked to confirm unless --yes is given.`,
 				return fmt.Errorf("action is %s, not waiting for approval", actionStatus(act.Status))
 			}
 			text := report.MachineActionText(act.MachineAction)
-			if err := a.confirm(yes, "run this action", fmt.Sprintf("Run %s on service %s?", text, act.Service)); err != nil {
+			if err := a.confirm(cmd.Context(), yes, "run this action", fmt.Sprintf("Run %s on service %s?", text, act.Service)); err != nil {
 				return err
 			}
 			a.info("Running: %s (approved by %s)…", text, as)
@@ -164,8 +165,9 @@ func (a *app) actionsRejectCmd() *cobra.Command {
 		Example: `  opensre actions reject 3f2b8c1e-... --as alice --note "traffic already recovering"`,
 		Args:    exactArgs(1, "<action-id>"),
 		RunE: func(cmd *cobra.Command, pos []string) error {
-			if as == "" {
-				return usagef(cmd, "--as <your name> is required: decisions are recorded")
+			as, err := a.askName(cmd, as, "decisions")
+			if err != nil {
+				return err
 			}
 			c, err := a.api()
 			if err != nil {
@@ -182,6 +184,36 @@ func (a *app) actionsRejectCmd() *cobra.Command {
 	f.StringVar(&as, "as", os.Getenv("OPENSRE_USER"), "your name, recorded with the decision (env OPENSRE_USER)")
 	f.StringVar(&note, "note", "", "reason recorded with the rejection")
 	return cmd
+}
+
+// askName returns the name recorded with a decision: --as (or OPENSRE_USER),
+// else asked interactively.
+func (a *app) askName(cmd *cobra.Command, as, what string) (string, error) {
+	if as != "" {
+		return as, nil
+	}
+	if !a.canPrompt() {
+		return "", usagef(cmd, "--as <your name> is required: %s are recorded (or set OPENSRE_USER)", what)
+	}
+	name, err := a.prompt(cmd.Context(), "Your name (recorded with the decision): ")
+	if err != nil {
+		return "", err
+	}
+	if name == "" {
+		return "", usagef(cmd, "a name is required: %s are recorded", what)
+	}
+	return name, nil
+}
+
+// actionStatuses lists the values --status accepts, in lifecycle order.
+func actionStatuses() []string {
+	var out []string
+	for i := int32(1); ; i++ {
+		if _, ok := opensrev1.ActionStatus_name[i]; !ok {
+			return out
+		}
+		out = append(out, actionStatus(opensrev1.ActionStatus(i)))
+	}
 }
 
 func actionStatus(s opensrev1.ActionStatus) string {
