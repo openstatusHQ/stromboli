@@ -101,13 +101,13 @@ var FlyPresets = []Preset{
 		Expr:        `max by (instance, region) (fly_instance_load_average{$selector, minutes="1"})`,
 	},
 	{
-		Name: "disk_used_percent", Unit: "%",
-		Description: "Root filesystem in use, per instance.",
+		Name: "disk_used_percent", Unit: "%", Brief: true,
+		Description: "Root filesystem in use, per instance. The root filesystem is reset from the image when the machine restarts.",
 		Expr:        `100 * (1 - max by (instance, region) (fly_instance_filesystem_blocks_avail{$selector}) / max by (instance, region) (fly_instance_filesystem_blocks{$selector}))`,
 	},
 	{
-		Name: "volume_used_percent", Unit: "%",
-		Description: "Fly volume space in use, per volume.",
+		Name: "volume_used_percent", Unit: "%", Brief: true,
+		Description: "Fly volume space in use, per volume (id is the volume ID). Data on a volume survives restarts: a full volume needs more space or less data.",
 		Expr:        `max by (id, region) (fly_volume_used_pct{$selector})`,
 	},
 	{

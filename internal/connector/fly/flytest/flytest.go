@@ -36,7 +36,7 @@ const machinesJSON = `[
   "image_ref":{"registry":"registry.fly.io","repository":"api","tag":"deployment-01"},
   "config":{"image":"registry.fly.io/api:deployment-01","guest":{"cpu_kind":"shared","cpus":1,"memory_mb":512},"metadata":{"fly_process_group":"app"}}},
  {"id":"d91v","name":"api-db","state":"started","region":"fra","updated_at":"2026-11-03T10:00:00Z",
-  "config":{"image":"postgres:17","mounts":[{"volume":"vol_123","path":"/data"}]}}
+  "config":{"image":"postgres:17","mounts":[{"volume":"vol_123","path":"/data","size_gb":10}]}}
 ]`
 
 // New starts a fake for app.
