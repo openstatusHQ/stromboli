@@ -40,7 +40,7 @@ func (r *recorder) record(ctx context.Context, s step) {
 	}
 	out := s.Output
 	if len(out) > maxStepOutput {
-		out = out[:maxStepOutput] + "\n… (truncated)"
+		out = cut(out, maxStepOutput) + "\n… (truncated)"
 	}
 
 	r.mu.Lock()

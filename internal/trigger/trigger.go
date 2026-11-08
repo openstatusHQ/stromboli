@@ -143,8 +143,9 @@ func (h *Handler) authorized(r *http.Request) bool {
 		return true
 	}
 	got := r.URL.Query().Get("token")
-	if v := r.Header.Get("Authorization"); v != "" {
-		got = strings.TrimPrefix(v, "Bearer ")
+	// Only a Bearer token overrides ?token=: a proxy may add another scheme.
+	if v, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer "); ok {
+		got = v
 	}
 	if v := r.Header.Get("X-Webhook-Secret"); v != "" {
 		got = v

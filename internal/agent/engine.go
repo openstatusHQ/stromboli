@@ -178,7 +178,8 @@ func (e *Engine) run(inv db.Investigation, req StartRequest) {
 	}
 
 	rec := &recorder{store: e.store, id: inv.ID}
-	report, err := e.investigate(ctx, rec, inv, req)
+	// investigate updates inv (its mitigation), which Finished then renders.
+	report, err := e.investigate(ctx, rec, &inv, req)
 
 	status, errText := StatusCompleted, ""
 	var reportJSON []byte
@@ -205,7 +206,7 @@ func (e *Engine) run(inv db.Investigation, req StartRequest) {
 	}
 }
 
-func (e *Engine) investigate(ctx context.Context, rec *recorder, inv db.Investigation, req StartRequest) (*opensrev1.Report, error) {
+func (e *Engine) investigate(ctx context.Context, rec *recorder, inv *db.Investigation, req StartRequest) (*opensrev1.Report, error) {
 	_, graph, err := catalog.Load(ctx, e.store.Queries)
 	if err != nil {
 		return nil, err
@@ -213,8 +214,19 @@ func (e *Engine) investigate(ctx context.Context, rec *recorder, inv db.Investig
 	tc := &toolContext{engine: e, graph: graph, now: time.Now()}
 	log := slog.With("investigation", inv.ID)
 
-	// Orient: deterministic brief for every affected service.
-	w := Window{Start: req.At.Add(-30 * time.Minute), End: tc.now}
+	// Orient: deterministic brief for every affected service. The window
+	// starts 30 minutes before the problem was observed, bounded to the last
+	// day (an alert that has fired for days, or a timestamp in the future,
+	// must not produce a huge or inverted window).
+	at := req.At
+	if at.After(tc.now) {
+		at = tc.now
+	}
+	start := at.Add(-30 * time.Minute)
+	if earliest := tc.now.Add(-24 * time.Hour); start.Before(earliest) {
+		start = earliest
+	}
+	w := Window{Start: start, End: tc.now}
 	var briefs []string
 	for _, svc := range inv.Services {
 		start := time.Now()
@@ -285,13 +297,17 @@ func (e *Engine) investigate(ctx context.Context, rec *recorder, inv db.Investig
 		for i, u := range uses {
 			switch u.Name {
 			case submitMitigationTool:
-				out, isErr := e.mitigate(ctx, rec, tc, &inv, u)
+				out, isErr := e.mitigate(ctx, rec, tc, inv, u)
 				if !isErr {
 					mitigated = true
 					log.Info("mitigation proposed", "after", time.Since(tc.now).Round(time.Second))
 				}
 				results[i] = llm.ToolResultPart(u.ID, out, isErr)
 			case submitReportTool:
+				if reportIdx >= 0 {
+					// Every tool call needs a result, or the next request is invalid.
+					results[reportIdx] = llm.ToolResultPart(uses[reportIdx].ID, "Ignored: submit_report was called more than once in this turn.", true)
+				}
 				reportIdx = i
 			default:
 				lookups = append(lookups, u)
@@ -437,7 +453,7 @@ func (e *Engine) runTools(ctx context.Context, rec *recorder, tc *toolContext, u
 				out = "error: " + err.Error()
 			}
 			if len(out) > maxToolResult {
-				out = out[:maxToolResult] + "\n… (truncated: narrow the query)"
+				out = cut(out, maxToolResult) + "\n… (truncated: narrow the query)"
 			}
 			var input any
 			_ = json.Unmarshal(u.Input, &input)

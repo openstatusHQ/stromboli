@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	opensrev1 "github.com/openstatushq/opensre/gen/opensre/v1"
 	"github.com/openstatushq/opensre/internal/catalog"
@@ -467,5 +468,17 @@ func truncate(s string, n int) string {
 	if len(s) <= n {
 		return s
 	}
-	return s[:n] + "…"
+	return cut(s, n) + "…"
+}
+
+// cut returns at most the first n bytes of s without splitting a UTF-8
+// character: Postgres rejects text with invalid UTF-8.
+func cut(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	for n > 0 && !utf8.RuneStart(s[n]) {
+		n--
+	}
+	return s[:n]
 }

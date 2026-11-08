@@ -251,12 +251,12 @@ func (s *Slack) blocks(ctx context.Context, inv db.Investigation, r *opensrev1.R
 	out = append(out, s.mitigationBlocks(ctx, inv, Mitigation(inv))...)
 
 	if r == nil {
-		return append(out, slack.NewSectionBlock(md(fmt.Sprintf("❌ Investigation failed: %s", inv.Error.String)), nil, nil))
+		return append(out, slack.NewSectionBlock(md(clip(fmt.Sprintf("❌ Investigation failed: %s", inv.Error.String))), nil, nil))
 	}
 
-	out = append(out, slack.NewSectionBlock(md(fmt.Sprintf("*Likely cause* (confidence: %s): %s", r.Confidence, r.LikelyCause)), nil, nil))
+	out = append(out, slack.NewSectionBlock(md(clip(fmt.Sprintf("*Likely cause* (confidence: %s): %s", r.Confidence, r.LikelyCause))), nil, nil))
 	if r.Summary != "" {
-		out = append(out, slack.NewSectionBlock(md(r.Summary), nil, nil))
+		out = append(out, slack.NewSectionBlock(md(clip(r.Summary)), nil, nil))
 	}
 	bullets := func(title string, items []string) {
 		if len(items) == 0 {
