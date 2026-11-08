@@ -2,7 +2,6 @@ package main
 
 import (
 	"errors"
-	"fmt"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -33,7 +32,7 @@ See ` + docsURL + ` for the full list.`,
 	}
 }
 
-func migrateCmd() *cobra.Command {
+func (a *app) migrateCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:     "migrate",
 		Short:   "Apply database migrations and exit",
@@ -53,7 +52,7 @@ func migrateCmd() *cobra.Command {
 			if err := st.Migrate(cmd.Context()); err != nil {
 				return err
 			}
-			fmt.Fprintln(cmd.OutOrStdout(), "migrations applied")
+			a.out("Migrations applied.")
 			return nil
 		},
 	}

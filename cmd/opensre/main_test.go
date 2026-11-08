@@ -80,7 +80,7 @@ func run(t *testing.T, f *fake, stdin string, interactive bool, args ...string) 
 	var stdout, stderr bytes.Buffer
 	a := newApp(strings.NewReader(stdin), &stdout, &stderr)
 	a.interactive = func() bool { return interactive }
-	a.readSecret = func() (string, error) { return "prompted-secret", nil }
+	a.readSecret = func(context.Context) (string, error) { return "prompted-secret", nil }
 	code := a.run(context.Background(), append([]string{"--url", srv.URL}, args...))
 	return result{code, stdout.String(), stderr.String()}
 }
@@ -96,6 +96,8 @@ func TestUsageErrors(t *testing.T) {
 		{[]string{"show", "a", "b"}, `unexpected argument "b"`},
 		{[]string{"investigations", "--limit", "x"}, `invalid argument "x"`},
 		{[]string{"connector", "add", "x", "nope"}, `unknown connector kind "nope"`},
+		{[]string{"actions", "list", "--status", "nope"}, "valid: proposed, running, succeeded"},
+		{[]string{"actions", "approve", "x"}, "OPENSRE_USER"},
 	} {
 		r := run(t, &fake{}, "", false, tc.args...)
 		if r.code != exitUsage || !strings.Contains(r.stderr, tc.want) || !strings.Contains(r.stderr, "--help' for usage") {
@@ -219,5 +221,40 @@ func TestExplain(t *testing.T) {
 		if got := a.explain(tc.err); !strings.Contains(got, tc.want) {
 			t.Errorf("explain(%v) = %q, want %q", tc.err, got, tc.want)
 		}
+	}
+}
+
+func TestInvalidURL(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	a := newApp(strings.NewReader(""), &stdout, &stderr)
+	code := a.run(context.Background(), []string{"--url", "localhost:8080", "connector", "list"})
+	if code != exitUsage || !strings.Contains(stderr.String(), "use a full URL such as http://") {
+		t.Fatalf("exit %d, stderr %q", code, stderr.String())
+	}
+}
+
+func TestEnvBool(t *testing.T) {
+	for v, want := range map[string]bool{"": false, "0": false, "false": false, "off": false, "1": true, "true": true, "yes": true} {
+		t.Setenv("OPENSRE_TEST_BOOL", v)
+		if got := envBool("OPENSRE_TEST_BOOL"); got != want {
+			t.Errorf("envBool(%q) = %v, want %v", v, got, want)
+		}
+	}
+}
+
+func TestPromptCanceled(t *testing.T) {
+	// A reader that never returns, like a terminal waiting for Enter.
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { r.Close(); w.Close() })
+	var stderr bytes.Buffer
+	a := newApp(r, &bytes.Buffer{}, &stderr)
+	a.interactive = func() bool { return true }
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if err := a.confirm(ctx, false, "do it", "Do it?"); !errors.Is(err, context.Canceled) {
+		t.Fatalf("confirm after Ctrl-C = %v, want context.Canceled", err)
 	}
 }

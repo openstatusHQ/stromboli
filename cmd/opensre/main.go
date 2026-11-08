@@ -15,6 +15,7 @@ import (
 	"os"
 	"os/signal"
 	"runtime/debug"
+	"strings"
 	"syscall"
 
 	"github.com/spf13/cobra"
@@ -118,7 +119,7 @@ which talk to a running server.`,
 	pf.BoolVar(&a.json, "json", false, "print machine-readable JSON on stdout")
 	pf.BoolVarP(&a.quiet, "quiet", "q", false, "only print errors, warnings and requested data")
 	pf.BoolVar(&a.noInput, "no-input", false, "never prompt; fail instead of asking for confirmation or secrets")
-	pf.BoolVar(&a.debug, "debug", os.Getenv("OPENSRE_DEBUG") != "", "print debug logs on stderr (env OPENSRE_DEBUG)")
+	pf.BoolVar(&a.debug, "debug", envBool("OPENSRE_DEBUG"), "print debug logs on stderr (env OPENSRE_DEBUG)")
 
 	root.AddGroup(
 		&cobra.Group{ID: "setup", Title: "Setup:"},
@@ -133,7 +134,7 @@ which talk to a running server.`,
 		c.GroupID = "investigate"
 		root.AddCommand(c)
 	}
-	for _, c := range []*cobra.Command{serveCmd(), migrateCmd()} {
+	for _, c := range []*cobra.Command{serveCmd(), a.migrateCmd()} {
 		c.GroupID = "server"
 		root.AddCommand(c)
 	}
@@ -142,7 +143,8 @@ which talk to a running server.`,
 Environment:
   OPENSRE_URL         server URL (default http://localhost:8080)
   OPENSRE_API_TOKEN   API token sent to the server
-  OPENSRE_DEBUG       set to enable debug logs
+  OPENSRE_USER        your name, recorded when you approve or reject an action
+  OPENSRE_DEBUG       set to 1 to enable debug logs
 
 Docs: ` + docsURL + "\n")
 	return root
@@ -167,6 +169,16 @@ func buildVersion() string {
 	return version
 }
 
+// envBool reports whether a flag-like environment variable is turned on:
+// any non-empty value except 0, false, no and off.
+func envBool(key string) bool {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv(key))) {
+	case "", "0", "false", "no", "off":
+		return false
+	}
+	return true
+}
+
 func envOr(key, def string) string {
 	if v := os.Getenv(key); v != "" {
 		return v
@@ -185,7 +197,7 @@ type app struct {
 	// interactive reports whether we may prompt; overridable in tests.
 	interactive func() bool
 	// readSecret reads a line without echo; overridable in tests.
-	readSecret func() (string, error)
+	readSecret func(context.Context) (string, error)
 
 	clients *clients
 }
@@ -193,6 +205,6 @@ type app struct {
 func newApp(stdin io.Reader, stdout, stderr io.Writer) *app {
 	a := &app{stdin: stdin, stdout: stdout, stderr: stderr}
 	a.interactive = func() bool { return isTerminal(stdin) && isTerminal(stderr) }
-	a.readSecret = func() (string, error) { return readPassword(stdin) }
+	a.readSecret = func(ctx context.Context) (string, error) { return readPassword(ctx, stdin) }
 	return a
 }

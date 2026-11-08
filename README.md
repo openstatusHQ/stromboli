@@ -409,8 +409,8 @@ All settings are environment variables; [`.env.example`](.env.example) has them 
 Every command has `--help` with examples.
 
 - **Secrets stay off the command line.** For a secret connector key, pass `token` alone to be prompted (input is hidden), `token=@file` to read a file, or `token=-` to read stdin.
-- **Ctrl-C** stops watching an investigation, but it keeps running on the server. Resume with `opensre show <id> --follow`.
-- **Destructive commands ask first:** `connector rm`, `actions approve`, and `catalog import --prune` when it would delete something. Without a terminal, or with `--no-input`, they fail unless you pass `--yes`.
+- **Ctrl-C** cancels a prompt right away, and stops watching an investigation, but it keeps running on the server. Resume with `opensre show <id> --follow`.
+- **Destructive commands ask first:** `connector rm`, `actions approve`, and `catalog import --prune` when it would delete something. Without a terminal, or with `--no-input`, they fail unless you pass `--yes`. `actions approve` and `reject` ask for your name when neither `--as` nor `OPENSRE_USER` is set.
 - **Scripting:** data goes to stdout and messages to stderr. `--json` prints JSON (`investigate --json` prints one event per line), `-q` silences messages, and `investigate --no-watch` prints only the investigation ID. Exit codes: `0` success, `1` error, `2` bad usage, `130` interrupted.
 - **Completions:** `opensre completion bash|zsh|fish|powershell`.
 

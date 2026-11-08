@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -71,7 +72,7 @@ history and the process list. Instead pass:
 			if _, ok := connector.Kinds[kind]; !ok {
 				return usagef(cmd, "unknown connector kind %q (supported: %s)", kind, strings.Join(connector.KindNames(), ", "))
 			}
-			cfg, err := a.readConfig(kind, pos[2:])
+			cfg, err := a.readConfig(cmd.Context(), kind, pos[2:])
 			if err != nil {
 				return usageError{cmd: cmd.CommandPath(), err: err}
 			}
@@ -105,7 +106,7 @@ history and the process list. Instead pass:
 
 // readConfig parses key=value arguments, resolving @file, - (stdin) and
 // prompts, and warns when a secret was typed on the command line.
-func (a *app) readConfig(kind string, kvs []string) (map[string]string, error) {
+func (a *app) readConfig(ctx context.Context, kind string, kvs []string) (map[string]string, error) {
 	cfg := map[string]string{}
 	stdinUsed := false
 	for _, kv := range kvs {
@@ -119,12 +120,15 @@ func (a *app) readConfig(kind string, kvs []string) (map[string]string, error) {
 		secret := connector.IsSecret(kind, k)
 		switch {
 		case !hasValue:
-			if a.noInput || !a.interactive() {
+			if !a.canPrompt() {
 				return nil, fmt.Errorf("no value for %s: pass %s=@file or %s=- to read it from a file or stdin", k, k, k)
 			}
 			fmt.Fprintf(a.stderr, "%s: ", k)
-			val, err := a.readSecret()
+			val, err := a.readSecret(ctx)
 			fmt.Fprintln(a.stderr)
+			if ctx.Err() != nil {
+				return nil, ctx.Err()
+			}
 			if err != nil {
 				return nil, fmt.Errorf("reading %s: %w", k, err)
 			}
@@ -252,7 +256,7 @@ func (a *app) connectorRmCmd() *cobra.Command {
 		Args: exactArgs(1, "<name>"),
 		RunE: func(cmd *cobra.Command, pos []string) error {
 			name := pos[0]
-			if err := a.confirm(yes, fmt.Sprintf("delete connector %q", name), fmt.Sprintf("Delete connector %q? Services using it lose that data source.", name)); err != nil {
+			if err := a.confirm(cmd.Context(), yes, fmt.Sprintf("delete connector %q", name), fmt.Sprintf("Delete connector %q? Services using it lose that data source.", name)); err != nil {
 				return err
 			}
 			c, err := a.api()
