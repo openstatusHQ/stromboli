@@ -92,7 +92,21 @@ func renderFly(app string, machines []fly.Machine, listErr error, ex flyExec) st
 				dash(m.Size()), dash(m.ImageRef.Image()), m.UpdatedAt.UTC().Format(time.RFC3339))
 		}
 		if volumes {
-			b.WriteString("\nMachines with a volume hold state: do not clone them (the clone gets an empty volume); restart or scale count instead.\n")
+			b.WriteString("\nVolumes (the `id` label of volume_used_percent is the volume ID):\n")
+			for i, m := range machines {
+				if i == maxMachinesInBrief {
+					break
+				}
+				for _, v := range m.Volumes() {
+					size := ""
+					if v.SizeGB > 0 {
+						size = fmt.Sprintf(", %d GB", v.SizeGB)
+					}
+					fmt.Fprintf(&b, "- %s on machine %s (%s) at %s%s\n", v.Volume, m.ID, m.Region, dash(v.Path), size)
+				}
+			}
+			b.WriteString("Machines with a volume hold state: do not clone them (the clone gets an empty volume); restart or scale count instead. " +
+				"A restart does not free space on a volume: when one is full, extend it or delete data.\n")
 		}
 		b.WriteString("\n")
 	}
@@ -107,6 +121,8 @@ func renderFly(app string, machines []fly.Machine, listErr error, ex flyExec) st
 		{"scale_up: more memory (OOM kills, memory at the limit)", "fly scale memory <MB> " + a, "fly scale memory <previous MB> " + a},
 		{"drain one bad machine, keep it running for debugging", "fly machine cordon <id> " + a, "fly machine uncordon <id> " + a},
 		{"drain by stopping it", "fly machine stop <id> " + a, "fly machine start <id> " + a},
+		{"scale_up: more disk when a volume is full (volume_used_percent near 100, \"no space left on device\")", "fly volumes extend <vol-id> -s <new size in GB> " + a, "none: a volume cannot shrink; check the size with `fly volumes list " + a + "`, and restart the machine if `df` does not show the new size"},
+		{"free space on a full volume or root filesystem: open a shell, then delete or rotate data (logs, temp files, old backups)", "fly ssh console " + a + " --machine <id>", "none: deleted data is gone, so prefer extending the volume first"},
 		{"rollback a bad deploy", "fly releases " + a + " --image` to find the previous image, then `fly deploy " + a + " --image <previous image>", "fly deploy " + a + " --image <bad image>"},
 	} {
 		fmt.Fprintf(&b, "- %s: `%s` · undo: %s\n", c[0], c[1], c[2])

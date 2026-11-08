@@ -238,7 +238,7 @@ Tokens from `fly tokens create` are sent with the `FlyV1` scheme, others (from `
 | `http_requests_per_second`, `http_5xx_per_second`, `http_p95_seconds`, `concurrency` | `fly_app_http_responses_count`, `fly_app_http_response_time_seconds`, `fly_app_concurrency` |
 | `instances_up` | `fly_instance_up` |
 
-The brief shows memory, CPU, throttling, OOM kills, request rate, 5xx and p95 latency; the agent can query the rest with `get_metrics`.
+The brief shows memory, CPU, throttling, OOM kills, root filesystem and volume usage, request rate, 5xx and p95 latency; the agent can query the rest with `get_metrics`.
 
 #### Logs
 
@@ -272,9 +272,11 @@ For a service with `runtime: fly.io` or a `fly:` block, the brief gets a **Fly.i
 | scale_up, one more machine | `fly machine clone <id> -a <app> --region <region>` | `fly machine destroy <new-id> -a <app> --force` |
 | scale_up, more machines / memory | `fly scale count <n>` / `fly scale memory <MB>` | the previous value |
 | drain | `fly machine cordon <id>` (no traffic, keeps running) or `fly machine stop <id>` | `uncordon` / `start` |
+| scale_up, more disk (full volume) | `fly volumes extend <vol-id> -s <GB> -a <app>` | none: volumes cannot shrink |
+| free space | `fly ssh console -a <app> --machine <id>`, then delete or rotate data | none |
 | rollback | `fly releases --image`, then `fly deploy --image <previous image>` | redeploy the bad image |
 
-Machines with a volume are flagged: a clone would start with an empty volume. The app name is `fly.app`, else the `app="..."` metrics selector, else the service name. The machines are listed with the `fly.actions` connector, else the `fly` metrics connector's token.
+Machines with a volume are flagged and their volumes listed (ID, mount path, size), so a full volume can be extended by ID: a restart does not free space on a volume, and a clone would start with an empty one. The app name is `fly.app`, else the `app="..."` metrics selector, else the service name. The machines are listed with the `fly.actions` connector, else the `fly` metrics connector's token.
 
 ## Machine actions
 

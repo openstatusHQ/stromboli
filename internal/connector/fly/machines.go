@@ -99,7 +99,7 @@ func (r ImageRef) Image() string {
 
 // machineConfig is the part of a machine config the actions inspect.
 type machineConfig struct {
-	Mounts   []json.RawMessage `json:"mounts"`
+	Mounts   []Mount           `json:"mounts"`
 	Metadata map[string]string `json:"metadata"`
 	Guest    struct {
 		CPUKind  string `json:"cpu_kind"`
@@ -117,8 +117,18 @@ func (m Machine) config() machineConfig {
 // ProcessGroup is the fly.toml process group of the machine, if any.
 func (m Machine) ProcessGroup() string { return m.config().Metadata["fly_process_group"] }
 
+// Mount is a volume mounted by a machine.
+type Mount struct {
+	Volume string `json:"volume"`
+	Path   string `json:"path"`
+	SizeGB int    `json:"size_gb"`
+}
+
 // HasVolumes reports whether the machine mounts a volume.
 func (m Machine) HasVolumes() bool { return len(m.config().Mounts) > 0 }
+
+// Volumes returns the volumes the machine mounts.
+func (m Machine) Volumes() []Mount { return m.config().Mounts }
 
 // Size describes the machine's guest, e.g. "shared-cpu-1x, 512MB".
 func (m Machine) Size() string {
