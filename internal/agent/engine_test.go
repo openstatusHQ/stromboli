@@ -421,6 +421,20 @@ func runInvestigation(t *testing.T, st *store.Store, b logBackend) {
 		!strings.Contains(first, "**cpu_percent**: no data") {
 		t.Errorf("brief should show machine metrics against the baseline, got: %s", first[strings.Index(first, "## Metrics"):])
 	}
+
+	// A per-request dedupe window outlasts OPENSRE_DEDUPE_WINDOW (1m here):
+	// an investigation finished 10 minutes ago is reused, without a new run.
+	if _, err := st.Pool.Exec(ctx, `UPDATE investigations SET fingerprint = 'healthcheck:x', finished_at = now() - interval '10 minutes' WHERE id = $1`, inv.ID); err != nil {
+		t.Fatal(err)
+	}
+	again, reused, err := engine.Start(ctx, StartRequest{Title: "again", Source: "healthcheck", Services: []string{svcName},
+		Fingerprint: "healthcheck:x", DedupeWindow: time.Hour})
+	if err != nil || !reused || again.ID != inv.ID {
+		t.Errorf("want the finished investigation reused, got %v reused=%v err=%v", again.ID, reused, err)
+	}
+	if len(model.requests) != 5 {
+		t.Errorf("a deduplicated start must not call the model, got %d requests", len(model.requests))
+	}
 }
 
 const (
