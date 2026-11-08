@@ -278,6 +278,19 @@ For a service with `runtime: fly.io` or a `fly:` block, the brief gets a **Fly.i
 
 Machines with a volume are flagged and their volumes listed (ID, mount path, size), so a full volume can be extended by ID: a restart does not free space on a volume, and a clone would start with an empty one. The app name is `fly.app`, else the `app="..."` metrics selector, else the service name. The machines are listed with the `fly.actions` connector, else the `fly` metrics connector's token.
 
+#### Health checks
+
+Some failures never fire an alert until it is too late, like a volume filling up over days. With `OPENSRE_HEALTHCHECK_INTERVAL=1h`, opensre reads the metrics of every service with a `fly` metrics source once an hour (the first run is a minute after startup) and starts an investigation, with source `healthcheck`, when a machine or volume crosses a threshold over the last 15 minutes:
+
+| Check | Threshold |
+|---|---|
+| `volume_used_percent` | last value ≥ 85% |
+| `disk_used_percent` (root filesystem) | last value ≥ 90% |
+| `memory_used_percent` | last value ≥ 90% |
+| `cpu_percent` | 15-minute average ≥ 90% |
+
+When everything is fine, it only logs a line. Each unhealthy service gets one investigation, with the findings in its alert payload, posted to Slack like any other. While the same checks keep failing, it is not investigated again for 6 hours. Without an LLM, findings are only logged.
+
 ## Machine actions
 
 By default, every mitigation is text for a human to apply. For Fly.io services you can let opensre run some of them itself, always after a human approves.
@@ -386,6 +399,7 @@ All settings are environment variables; [`.env.example`](.env.example) has them 
 | `OPENSRE_DEDUPE_WINDOW` | `30m` | |
 | `OPENSRE_ACTIONS_ENABLED` | `false` | let investigations propose machine actions a human can approve (requires `OPENSRE_API_TOKEN`) |
 | `OPENSRE_ACTION_TTL` | `30m` | how long a proposed action can be approved |
+| `OPENSRE_HEALTHCHECK_INTERVAL` | empty = off | check Fly machine metrics on this schedule, e.g. `1h` (at least `5m`), and investigate breaches ([Health checks](#health-checks)) |
 | `SLACK_BOT_TOKEN`, `SLACK_CHANNEL` | | bot needs `chat:write` |
 | `SLACK_SIGNING_SECRET` | | enables Apply/Reject buttons ([Approve from Slack](#approve-from-slack)) |
 | `SLACK_APPROVERS` | empty = anyone in the channel | Slack user IDs allowed to click Apply/Reject |

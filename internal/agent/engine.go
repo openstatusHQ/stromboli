@@ -83,6 +83,8 @@ type StartRequest struct {
 	Alert       map[string]any
 	// Fingerprint dedupes repeated alerts; empty disables dedupe.
 	Fingerprint string
+	// DedupeWindow overrides OPENSRE_DEDUPE_WINDOW for this fingerprint.
+	DedupeWindow time.Duration
 	// At is when the problem was observed; defaults to now.
 	At time.Time
 }
@@ -108,9 +110,13 @@ func (e *Engine) Start(ctx context.Context, req StartRequest) (inv db.Investigat
 	}
 
 	if req.Fingerprint != "" {
+		window := e.cfg.DedupeWindow
+		if req.DedupeWindow > 0 {
+			window = req.DedupeWindow
+		}
 		existing, err := e.store.FindOpenInvestigation(ctx, db.FindOpenInvestigationParams{
 			Fingerprint:   pgtype.Text{String: req.Fingerprint, Valid: true},
-			WindowMinutes: int32(e.cfg.DedupeWindow.Minutes()),
+			WindowMinutes: int32(window.Minutes()),
 		})
 		if err == nil {
 			return existing, true, nil
