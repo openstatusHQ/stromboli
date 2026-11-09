@@ -1,0 +1,221 @@
+[
+  {
+    "name": "get_action",
+    "annotations": {
+      "idempotentHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": true
+    },
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "description": "action ID",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "name": "get_brief",
+    "annotations": {
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": true
+    },
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "service": {
+          "description": "catalog service name",
+          "type": "string"
+        },
+        "since": {
+          "description": "look-back window as a duration, e.g. 30m or 2h (default 1h, max 168h)",
+          "type": "string"
+        }
+      },
+      "required": [
+        "service"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "name": "get_investigation",
+    "annotations": {
+      "idempotentHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": true
+    },
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "after_seq": {
+          "description": "with include_steps, only steps after this sequence number",
+          "type": "integer"
+        },
+        "id": {
+          "description": "investigation ID",
+          "type": "string"
+        },
+        "include_steps": {
+          "description": "also return the audit trail: brief, tool calls, model turns",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "name": "get_service",
+    "annotations": {
+      "idempotentHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": true
+    },
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "description": "catalog service name, as listed by list_services",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "name": "list_actions",
+    "annotations": {
+      "idempotentHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": true
+    },
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "investigation_id": {
+          "description": "only the actions of this investigation",
+          "type": "string"
+        },
+        "limit": {
+          "description": "maximum number of actions (default 20, max 50)",
+          "type": "integer"
+        },
+        "status": {
+          "description": "only actions with this status: proposed, running, succeeded, failed, rejected, expired or superseded",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    }
+  },
+  {
+    "name": "list_investigations",
+    "annotations": {
+      "idempotentHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": true
+    },
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "limit": {
+          "description": "maximum number of investigations (default 10, max 50)",
+          "type": "integer"
+        },
+        "service": {
+          "description": "only investigations of this service",
+          "type": "string"
+        },
+        "status": {
+          "description": "only investigations with this status: running, completed or failed",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    }
+  },
+  {
+    "name": "list_services",
+    "annotations": {
+      "idempotentHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": true
+    },
+    "inputSchema": {
+      "additionalProperties": false,
+      "type": "object"
+    }
+  },
+  {
+    "name": "start_investigation",
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
+    },
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "description": {
+          "description": "what was observed, e.g. '5xx on /v1/monitors since 14:05'",
+          "type": "string"
+        },
+        "service": {
+          "description": "catalog service to investigate",
+          "type": "string"
+        },
+        "title": {
+          "description": "short title (default: Investigation of \u003cservice\u003e)",
+          "type": "string"
+        }
+      },
+      "required": [
+        "service"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "name": "wait_investigation",
+    "annotations": {
+      "idempotentHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": true
+    },
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "description": "investigation ID",
+          "type": "string"
+        },
+        "timeout_s": {
+          "description": "maximum seconds to wait (default 60, max 300)",
+          "type": "integer"
+        },
+        "until": {
+          "description": "mitigation (default): return once the mitigation is published; finished: once the report is written",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "type": "object"
+    }
+  }
+]

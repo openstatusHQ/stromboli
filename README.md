@@ -22,7 +22,7 @@ See [docs/adr](docs/adr) for the design decisions behind opensre and what is pla
 - [Models](#models)
 - [Configuration](#configuration)
 - [CLI tips](#cli-tips)
-- [API](#api)
+- [API](#api) and [MCP server](#mcp-server)
 - [Development](#development)
 - [Contributing](#contributing)
 - [License](#license)
@@ -409,6 +409,8 @@ All settings are environment variables; [`.env.example`](.env.example) has them 
 | `SLACK_BOT_TOKEN`, `SLACK_CHANNEL` | | bot needs `chat:write` |
 | `SLACK_SIGNING_SECRET` | | enables Apply/Reject buttons ([Approve from Slack](#approve-from-slack)) |
 | `SLACK_APPROVERS` | empty = anyone in the channel | Slack user IDs allowed to click Apply/Reject |
+| `OPENSRE_MCP_ENABLED` | `false` | serve the [MCP tools](#mcp-server) at `/mcp` (requires `OPENSRE_API_TOKEN`) |
+| `OPENSRE_MCP_TOKEN` | API token | the only token `/mcp` accepts when set; it reaches the MCP tools, not the whole API |
 
 ## CLI tips
 
@@ -431,6 +433,35 @@ grpcurl -plaintext -H "Authorization: Bearer $OPENSRE_API_TOKEN" localhost:8080 
 ```
 
 `InvestigationService/WatchInvestigation` streams steps live.
+
+## MCP server
+
+opensre is also an MCP server, so you can use it from Claude Code, Claude Desktop, Cursor or a coding agent: read what opensre sees on a service, the mitigation and report of an investigation, or start one ([ADR 0021](docs/adr/0021-mcp-server.md)).
+
+| Tool | |
+|---|---|
+| `list_services`, `get_service` | the catalog |
+| `get_brief` | the brief of a service, without the LLM (free) |
+| `list_investigations`, `get_investigation` | investigations, their mitigation and report; `include_steps` for the audit trail |
+| `wait_investigation` | wait until the mitigation is published (or the report written), with progress |
+| `start_investigation` | start an investigation: spends LLM tokens and posts to Slack |
+| `list_actions`, `get_action` | proposed machine actions and their outcome |
+
+Every tool is read-only except `start_investigation`, which only starts what a webhook or `opensre investigate` would. MCP clients cannot approve machine actions or change the catalog or connectors: approval stays with a named human, in the CLI or Slack.
+
+**Over stdio**, for clients that launch a command. `opensre mcp` calls your server with the API token:
+
+```sh
+claude mcp add opensre -e OPENSRE_URL=https://opensre.example.com -e OPENSRE_API_TOKEN=... -- opensre mcp
+```
+
+**Over HTTP**, at `/mcp` on the server, with `OPENSRE_MCP_ENABLED=true` (requires `OPENSRE_API_TOKEN`). Clients send `Authorization: Bearer <token>`. Set `OPENSRE_MCP_TOKEN` to give MCP clients a token that reaches only these tools, not the whole API:
+
+```sh
+claude mcp add --transport http opensre https://opensre.example.com/mcp --header "Authorization: Bearer $OPENSRE_MCP_TOKEN"
+```
+
+Investigations started from MCP have source `mcp`, with the client's name in their alert.
 
 ## Development
 

@@ -23,6 +23,7 @@ import (
 	"github.com/openstatushq/opensre/internal/connector"
 	"github.com/openstatushq/opensre/internal/healthcheck"
 	"github.com/openstatushq/opensre/internal/llm"
+	"github.com/openstatushq/opensre/internal/mcpserver"
 	"github.com/openstatushq/opensre/internal/report"
 	"github.com/openstatushq/opensre/internal/secrets"
 	"github.com/openstatushq/opensre/internal/store"
@@ -110,11 +111,24 @@ func Run(ctx context.Context, cfg config.Config) error {
 	}
 	opts := connect.WithInterceptors(api.NewAuthInterceptor(cfg.APIToken))
 
+	catalogAPI := api.NewCatalogService(st, reg)
+	investigationAPI := api.NewInvestigationService(st, engine)
+	actionAPI := api.NewActionService(actions)
+
 	mux := http.NewServeMux()
-	mux.Handle(opensrev1connect.NewCatalogServiceHandler(api.NewCatalogService(st, reg), opts))
+	mux.Handle(opensrev1connect.NewCatalogServiceHandler(catalogAPI, opts))
 	mux.Handle(opensrev1connect.NewConnectorServiceHandler(api.NewConnectorService(st, box, reg), opts))
-	mux.Handle(opensrev1connect.NewInvestigationServiceHandler(api.NewInvestigationService(st, engine), opts))
-	mux.Handle(opensrev1connect.NewActionServiceHandler(api.NewActionService(actions), opts))
+	mux.Handle(opensrev1connect.NewInvestigationServiceHandler(investigationAPI, opts))
+	mux.Handle(opensrev1connect.NewActionServiceHandler(actionAPI, opts))
+	if cfg.MCPEnabled {
+		token := cfg.APIToken
+		if cfg.MCPToken != "" {
+			token = cfg.MCPToken
+		}
+		mcpSrv := mcpserver.New(mcpserver.API{Catalog: catalogAPI, Investigations: investigationAPI, Actions: actionAPI}, mcpserver.Options{})
+		mux.Handle("/mcp", mcpserver.Handler(mcpSrv, token))
+		slog.Info("MCP server is enabled at /mcp", "own_token", cfg.MCPToken != "")
+	}
 	mux.Handle(grpchealth.NewHandler(grpchealth.NewStaticChecker(
 		opensrev1connect.CatalogServiceName,
 		opensrev1connect.ConnectorServiceName,

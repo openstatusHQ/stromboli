@@ -56,6 +56,12 @@ type Config struct {
 	// thresholds (memory, CPU, disk, volume); a breach starts an
 	// investigation. Zero (the default) disables health checks.
 	HealthcheckInterval time.Duration // OPENSRE_HEALTHCHECK_INTERVAL
+
+	// MCPEnabled serves opensre's MCP tools at /mcp (ADR 0021).
+	MCPEnabled bool // OPENSRE_MCP_ENABLED
+	// MCPToken, when set, is the only token /mcp accepts, instead of the API
+	// token: it reaches the MCP tools, not the whole API.
+	MCPToken string // OPENSRE_MCP_TOKEN
 }
 
 // Task is the model settings of one LLM task.
@@ -77,6 +83,7 @@ func Load() (Config, error) {
 		SlackChannel:  os.Getenv("SLACK_CHANNEL"),
 
 		SlackSigningSecret: os.Getenv("SLACK_SIGNING_SECRET"),
+		MCPToken:           os.Getenv("OPENSRE_MCP_TOKEN"),
 	}
 	for _, id := range strings.Split(os.Getenv("SLACK_APPROVERS"), ",") {
 		if id = strings.TrimSpace(id); id != "" {
@@ -116,6 +123,13 @@ func Load() (Config, error) {
 		if c.HealthcheckInterval > 0 && c.HealthcheckInterval < 5*time.Minute {
 			return c, fmt.Errorf("OPENSRE_HEALTHCHECK_INTERVAL: %s is too short, use at least 5m", v)
 		}
+	}
+	if c.MCPEnabled, err = strconv.ParseBool(env("OPENSRE_MCP_ENABLED", "false")); err != nil {
+		return c, fmt.Errorf("OPENSRE_MCP_ENABLED: %w", err)
+	}
+	if c.MCPEnabled && c.APIToken == "" {
+		// MCP clients are driven by models: never serve them unauthenticated.
+		return c, fmt.Errorf("OPENSRE_MCP_ENABLED requires OPENSRE_API_TOKEN")
 	}
 	if c.ActionsEnabled && c.APIToken == "" {
 		// Approving an action changes production: it must not be open to anyone.
