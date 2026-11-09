@@ -4,7 +4,7 @@ Thanks for helping! Bug reports, new connectors, docs fixes and design discussio
 
 ## Before you start
 
-- **Bugs:** open an issue with the [bug template](https://github.com/openstatushq/opensre/issues/new?template=bug_report.yml): version (`opensre --version`), how you run it, what you expected and what happened.
+- **Bugs:** [open an issue](https://github.com/openstatushq/opensre/issues/new) with the version (`opensre --version`), how you run it, what you expected and what happened.
 - **Features and new connectors:** open an issue first so we can agree on the approach before you write code. Bigger design changes start as an [ADR](docs/adr/README.md) in **Proposed** status.
 - **Security issues:** don't open a public issue, see [SECURITY.md](SECURITY.md).
 
