@@ -125,6 +125,7 @@ which talk to a running server.`,
 		&cobra.Group{ID: "setup", Title: "Setup:"},
 		&cobra.Group{ID: "investigate", Title: "Investigations:"},
 		&cobra.Group{ID: "server", Title: "Server:"},
+		&cobra.Group{ID: "integrations", Title: "Integrations:"},
 	)
 	for _, c := range []*cobra.Command{a.connectorCmd(), a.catalogCmd()} {
 		c.GroupID = "setup"
@@ -138,6 +139,9 @@ which talk to a running server.`,
 		c.GroupID = "server"
 		root.AddCommand(c)
 	}
+	mcpCmd := a.mcpCmd()
+	mcpCmd.GroupID = "integrations"
+	root.AddCommand(mcpCmd)
 
 	root.SetHelpTemplate(root.HelpTemplate() + `
 Environment:

@@ -17,14 +17,14 @@ Constraints:
 
 ### Transport
 
-- **Streamable HTTP at `POST /mcp`**, on the same mux and port as the Connect API, served with `mcp.NewStreamableHTTPHandler`. Stateless: no session state is kept between requests beyond what the SDK needs for one call.
+- **Streamable HTTP at `POST /mcp`**, on the same mux and port as the Connect API, served with `mcp.NewStreamableHTTPHandler`. Sessions are kept in memory only for the client's name (for the audit trail) and dropped after 30 minutes idle; a restart makes clients reconnect, which they do on their own.
 - **`opensre mcp`**, a CLI subcommand serving the same tools over **stdio**, for clients that only launch local processes. It is a client of the public API (`OPENSRE_URL`, `OPENSRE_API_TOKEN`), like every other CLI command.
 - Off by default: `OPENSRE_MCP_ENABLED=true` turns on `/mcp`, and requires `OPENSRE_API_TOKEN` (as `OPENSRE_ACTIONS_ENABLED` does).
 
 ### One implementation, on top of the API
 
 - A new package `internal/mcpserver` registers the tools. It depends only on the Connect service interfaces (`opensrev1connect.*ServiceHandler` unary methods), never on the store or the engine.
-- In `opensre serve` it is given the in-process `api.*Service` values; in `opensre mcp` it is given Connect clients. Connect's generated unary client and handler methods have the same signatures, so both modes share the tool code, and the MCP surface can never do something the API cannot. The one streaming RPC, `WatchInvestigation`, has different client and handler shapes, so `wait_investigation` takes a small `watch(ctx, id, afterSeq) iter.Seq2[*Step, error]` function with one adapter per mode.
+- In `opensre serve` it is given the in-process `api.*Service` values; in `opensre mcp` it is given Connect clients. Connect's generated unary client and handler methods have the same signatures, so both modes share the tool code, and the MCP surface can never do something the API cannot. `wait_investigation` polls `GetInvestigation` every second, as `WatchInvestigation` polls the database, so the one streaming RPC (whose client and handler shapes differ) is not needed.
 
 ### Auth
 
@@ -46,7 +46,7 @@ Every tool is annotated. All but one are `readOnlyHint: true`.
 | `wait_investigation` | `InvestigationService/WatchInvestigation` | read-only | blocks until the mitigation is published or the investigation finishes, at most `timeout_s` (default 60, max 300), sending MCP progress notifications per step; then returns what `get_investigation` returns |
 | `list_actions` | `ActionService/ListActions` | read-only | proposed actions show the CLI and Slack approval paths, not an MCP one |
 | `get_action` | `ActionService/GetAction` | read-only | |
-| `start_investigation` | `InvestigationService/StartInvestigation` | `readOnlyHint: false`, `destructiveHint: false`, `idempotentHint: false`, `openWorldHint: true` | `service`, `description`. Spends LLM tokens and posts to Slack. Returns the ID right away; pair it with `wait_investigation` |
+| `start_investigation` | `InvestigationService/StartInvestigation` | `readOnlyHint: false`, `destructiveHint: false`, `idempotentHint: false`, `openWorldHint: true` | `service`, `description`, `title`. Spends LLM tokens and posts to Slack. Returns the ID right away; pair it with `wait_investigation` |
 
 Not exposed, on purpose:
 
@@ -56,14 +56,14 @@ Not exposed, on purpose:
 
 ### Results
 
-- Each tool returns **markdown text** for the model and the same data as **`structuredContent`** (protojson of the response), with an output schema, so clients that render structured results can.
+- Each tool returns **markdown text** for the model and the same data as **`structuredContent`** (protojson of the response), so clients that render structured results can. There is no output schema yet: protojson's shape is the API's, documented in `proto/opensre/v1`.
 - Results are capped (64 KB of text; steps truncated with a "use `include_steps` with `after_seq`" hint), like the agent's own tool output.
 - Everything returned already went through opensre's redaction ([0006](0006-suggest-dont-execute.md)): briefs and reports are built from redacted evidence.
 
 ### Audit
 
-- Investigations started through MCP get `source: "mcp"` and the MCP client's name and version from `initialize` in their alert payload, so they show up as such in Slack and the API.
-- Every tool call is logged with `slog` (tool, client, duration, error), never with its arguments' free text.
+- Investigations started through MCP get `source: "mcp"` and the MCP client's name and version from `initialize` as `mcp_client` in their alert payload, so they show up as such in Slack and the API. The MCP server sends both as `Opensre-Source` and `Opensre-Client` headers on `StartInvestigation`, so this works the same over stdio, through the public API.
+- Every tool call is logged with `slog` (tool, client, duration, error), never with its arguments.
 
 ### Later, not in this decision
 
@@ -75,5 +75,5 @@ Not exposed, on purpose:
 - An engineer can pull opensre's brief and report into the tool they already use, and start an investigation from it, with the same guarantees as the API.
 - The MCP surface is a strict subset of the API, enforced by building it on the Connect interfaces; new RPCs are not exposed until a tool is added for them.
 - No new way to change production: the only side-effecting tool starts an investigation, which webhooks and the CLI can already do.
-- `buf breaking` does not cover tool names and schemas. Changing a tool breaks MCP clients, so tool schemas get a golden-file test in `internal/mcpserver`.
+- `buf breaking` does not cover tool names and schemas. Changing a tool breaks MCP clients, so tool names, annotations and input schemas are pinned by a golden file (`internal/mcpserver/testdata/tools.golden.json`, refreshed with `go test ./internal/mcpserver -update`).
 - Hosted MCP clients that require OAuth cannot connect until opensre has user authentication (see the open question on UI authentication in the [ADR index](README.md)). Clients that send a bearer header (Claude Code, Cursor, `opensre mcp` over stdio) work from day one.

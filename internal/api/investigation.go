@@ -15,6 +15,7 @@ import (
 
 	opensrev1 "github.com/openstatushq/opensre/gen/opensre/v1"
 	"github.com/openstatushq/opensre/internal/agent"
+	"github.com/openstatushq/opensre/internal/mcpserver"
 	"github.com/openstatushq/opensre/internal/store"
 	"github.com/openstatushq/opensre/internal/store/db"
 )
@@ -37,9 +38,15 @@ func (i *InvestigationService) StartInvestigation(ctx context.Context, req *conn
 	if title == "" {
 		title = "Manual investigation of " + m.Service
 	}
-	inv, _, err := i.engine.Start(ctx, agent.StartRequest{
-		Title: title, Source: "manual", Services: []string{m.Service}, Description: m.Description,
-	})
+	start := agent.StartRequest{Title: title, Source: "manual", Services: []string{m.Service}, Description: m.Description}
+	// The MCP server marks the investigations it starts, and by which client.
+	if req.Header().Get(mcpserver.SourceHeader) == "mcp" {
+		start.Source = "mcp"
+		if c := req.Header().Get(mcpserver.ClientHeader); c != "" {
+			start.Alert = map[string]any{"mcp_client": truncate(c, 100)}
+		}
+	}
+	inv, _, err := i.engine.Start(ctx, start)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeFailedPrecondition, err)
 	}
@@ -212,4 +219,13 @@ func toStruct(raw json.RawMessage) *structpb.Struct {
 		return nil
 	}
 	return s
+}
+
+// truncate cuts s to at most n runes.
+func truncate(s string, n int) string {
+	r := []rune(s)
+	if len(r) <= n {
+		return s
+	}
+	return string(r[:n])
 }
