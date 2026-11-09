@@ -26,6 +26,7 @@ To record a new decision, copy [`template.md`](template.md) to the next number, 
 | [0018](0018-memory-notes.md) | Memory notes with a lifecycle | Proposed |
 | [0019](0019-evaluation-harness.md) | Evaluation by replaying recorded incidents | Proposed |
 | [0020](0020-mit-license.md) | MIT license | Accepted |
+| [0021](0021-mcp-server.md) | opensre as an MCP server | Proposed |
 
 ## Open questions
 
