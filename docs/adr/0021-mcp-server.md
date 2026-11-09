@@ -24,7 +24,7 @@ Constraints:
 ### One implementation, on top of the API
 
 - A new package `internal/mcpserver` registers the tools. It depends only on the Connect service interfaces (`opensrev1connect.*ServiceHandler` unary methods), never on the store or the engine.
-- In `opensre serve` it is given the in-process `api.*Service` values; in `opensre mcp` it is given Connect clients. Connect's generated unary client and handler methods have the same signatures, so both modes share every line of tool code, and the MCP surface can never do something the API cannot.
+- In `opensre serve` it is given the in-process `api.*Service` values; in `opensre mcp` it is given Connect clients. Connect's generated unary client and handler methods have the same signatures, so both modes share the tool code, and the MCP surface can never do something the API cannot. The one streaming RPC, `WatchInvestigation`, has different client and handler shapes, so `wait_investigation` takes a small `watch(ctx, id, afterSeq) iter.Seq2[*Step, error]` function with one adapter per mode.
 
 ### Auth
 
