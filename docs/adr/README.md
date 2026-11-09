@@ -25,12 +25,12 @@ To record a new decision, copy [`template.md`](template.md) to the next number, 
 | [0017](0017-multi-role-investigation.md) | Multi-role investigation | Proposed |
 | [0018](0018-memory-notes.md) | Memory notes with a lifecycle | Proposed |
 | [0019](0019-evaluation-harness.md) | Evaluation by replaying recorded incidents | Proposed |
+| [0020](0020-mit-license.md) | MIT license | Accepted |
 
 ## Open questions
 
 Not decided yet; each becomes an ADR once it is.
 
 - Outputs beyond Slack: Discord, Teams, the openstatus dashboard, openstatus incident notes and status report drafts?
-- License: AGPL (like Metabase) or Apache-2.0/MIT?
 - UI authentication in v1: local users only, or OIDC from the start?
 - Telemetry: anonymous, opt-out usage stats to learn which connectors to build next?

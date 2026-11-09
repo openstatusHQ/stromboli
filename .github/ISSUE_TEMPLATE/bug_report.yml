@@ -1,0 +1,49 @@
+name: Bug report
+description: Something doesn't work as documented
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report! For security issues, please use a [private advisory](https://github.com/openstatushq/opensre/security/advisories/new) instead.
+        **Remove secrets** (API keys, tokens, connector credentials) from logs before pasting them.
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Output of `opensre --version`, or the image tag.
+      placeholder: v0.1.0
+    validations:
+      required: true
+  - type: dropdown
+    id: deployment
+    attributes:
+      label: How do you run opensre?
+      options:
+        - docker compose
+        - Docker image alone
+        - Railway
+        - Kubernetes
+        - Binary / go run
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: setup
+    attributes:
+      label: Connectors and LLM provider
+      description: Which connectors (Loki, Axiom, Prometheus, Fly.io...) and model are involved?
+      placeholder: loki, github, anthropic:claude-opus-5-5
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Relevant server logs or CLI output, with secrets removed.
+      render: shell

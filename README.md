@@ -1,5 +1,7 @@
 # opensre
 
+[![ci](https://github.com/openstatushq/opensre/actions/workflows/ci.yml/badge.svg)](https://github.com/openstatushq/opensre/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 **An open-source AI SRE agent you host yourself.** When an alert fires, opensre gathers the context, tells you how to stop the bleeding, then finds the root cause, and posts all of it to Slack.
 
 - 🩹 **Mitigation first.** It proposes a concrete fix (rollback, restart, scale up…) within a few tool calls, before it starts digging for the root cause.
@@ -22,6 +24,8 @@ See [docs/adr](docs/adr) for the design decisions behind opensre and what is pla
 - [CLI tips](#cli-tips)
 - [API](#api)
 - [Development](#development)
+- [Contributing](#contributing)
+- [License](#license)
 
 ## Quickstart
 
@@ -34,7 +38,9 @@ docker compose up -d   # opensre + Postgres on http://localhost:8080
 
 Generate the secret key with `openssl rand -base64 32`. Slack is optional: set `SLACK_BOT_TOKEN` and `SLACK_CHANNEL` to get reports there.
 
-Already have Postgres? Run the image alone with `OPENSRE_DB_URL=postgres://...`. Migrations run on startup.
+Already have Postgres? Run the image alone with `OPENSRE_DB_URL=postgres://...`. Migrations run on startup. Binaries for Linux, macOS and Windows are on the [releases page](https://github.com/openstatushq/opensre/releases).
+
+Running it for real? Read [Self-hosting](docs/self-hosting.md) for the production checklist (TLS, tokens, backups) and how to upgrade.
 
 Or deploy opensre and Postgres to Railway in one command, with the secrets generated for you. The setup is code, in [`.railway/railway.go`](.railway/railway.go) ([details](docs/deploy/railway.md)):
 
@@ -444,3 +450,11 @@ go test ./...                # add OPENSRE_TEST_DB_URL=... to run the end-to-end
 buf lint && buf generate     # after editing proto/
 sqlc generate                # after editing internal/store/queries or migrations
 ```
+
+## Contributing
+
+Contributions are welcome: read [CONTRIBUTING.md](CONTRIBUTING.md) to get started, and [SECURITY.md](SECURITY.md) to report a vulnerability privately. Everyone taking part follows the [code of conduct](CODE_OF_CONDUCT.md).
+
+## License
+
+opensre is released under the [MIT license](LICENSE).
