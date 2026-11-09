@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"net/url"
 	"sort"
@@ -130,7 +131,9 @@ func (r matrixResponse) series() []Series {
 			ts, ok := v[0].(float64)
 			str, _ := v[1].(string)
 			f, err := strconv.ParseFloat(str, 64)
-			if !ok || err != nil {
+			// Prometheus returns "NaN" for 0/0 and "+Inf"/"-Inf": skip them, they
+			// break the stats and cannot be encoded as JSON for the agent.
+			if !ok || err != nil || math.IsNaN(f) || math.IsInf(f, 0) {
 				continue
 			}
 			s.Samples = append(s.Samples, Sample{Time: time.Unix(0, int64(ts*1e9)).UTC(), Value: f})

@@ -267,7 +267,20 @@ func (r *Registry) GitHub(ctx context.Context, name string) (*deploys.GitHub, er
 	if c.Kind != "github" {
 		return nil, fmt.Errorf("connector %q (%s) is not a github connector", name, c.Kind)
 	}
-	return deploys.NewGitHub(deploys.GitHubConfig{Token: cfg["token"]}), nil
+	gc := deploys.GitHubConfig{Token: cfg["token"], BaseURL: cfg["base_url"]}
+	// With a token, everything but deployments goes through GitHub's remote
+	// MCP server, or mcp_url. A GitHub Enterprise base_url without mcp_url
+	// stays on its REST API: the public MCP server cannot reach it.
+	if token := cfg["token"]; token != "" && (cfg["base_url"] == "" || cfg["mcp_url"] != "") {
+		m, err := r.mcp.Get(name, cfg, func() (mcpconn.Config, error) {
+			return deploys.GitHubMCP(token, cfg["mcp_url"]), nil
+		})
+		if err != nil {
+			return nil, err
+		}
+		gc.MCP = m
+	}
+	return deploys.NewGitHub(gc), nil
 }
 
 // FlyMachines returns a Machines API client from a fly_machines connector,
