@@ -135,11 +135,20 @@ func (s *Slack) Mitigated(ctx context.Context, inv db.Investigation, m *opensrev
 	// Edits do not notify anyone; a thread reply does. It also carries the
 	// mitigation's details, to keep the main message short.
 	opts := []slack.MsgOption{slack.MsgOptionTS(inv.SlackTs.String), slack.MsgOptionText(text, false)}
-	if d := mitigationDetails(m); d != "" {
-		opts = append(opts, slack.MsgOptionBlocks(slack.NewSectionBlock(md(clip(text+"\n\n"+d)), nil, nil)))
+	if d := mitigationDetailBlocks(m); len(d) > 0 {
+		opts = append(opts, slack.MsgOptionBlocks(d...))
 	}
 	_, _, err := s.client.PostMessageContext(ctx, inv.SlackChannel.String, opts...)
 	return err
+}
+
+// ActionStarted shows the approved action as running in place of its
+// buttons, so the click gets feedback without an extra message.
+func (s *Slack) ActionStarted(ctx context.Context, inv db.Investigation, _ db.Action, _ *opensrev1.MachineAction) error {
+	if s.buttons == nil {
+		return nil
+	}
+	return s.refresh(ctx, inv)
 }
 
 // Finished edits the message into the report and replies in the thread with
@@ -202,26 +211,12 @@ func (s *Slack) ActionFinished(ctx context.Context, inv db.Investigation, a db.A
 	if !inv.SlackChannel.Valid {
 		return nil
 	}
-	what := MachineActionText(m)
-	var text string
-	switch a.Status {
-	case "succeeded":
-		text = fmt.Sprintf("✅ %s, approved by %s.\n%s", what, a.DecidedBy.String, a.Result.String)
-	case "failed":
-		text = fmt.Sprintf("❌ %s, approved by %s, failed: %s", what, a.DecidedBy.String, a.Error.String)
-		if a.Result.String != "" {
-			text += "\nDone before the failure:\n" + a.Result.String
-		}
-	case "rejected":
-		text = fmt.Sprintf("🚫 %s was rejected by %s.", what, a.DecidedBy.String)
-	default:
+	text, blocks := actionFinishedMessage(a, m)
+	if text == "" {
 		return nil
 	}
-	if a.Note.String != "" {
-		text += "\n> " + a.Note.String
-	}
 	_, _, err := s.client.PostMessageContext(ctx, inv.SlackChannel.String,
-		slack.MsgOptionTS(inv.SlackTs.String), slack.MsgOptionText(clip(text), false))
+		slack.MsgOptionTS(inv.SlackTs.String), slack.MsgOptionText(text, false), slack.MsgOptionBlocks(blocks...))
 	if s.buttons != nil {
 		// Replace the buttons with the outcome.
 		if err := s.refresh(ctx, inv); err != nil {
@@ -231,12 +226,55 @@ func (s *Slack) ActionFinished(ctx context.Context, inv db.Investigation, a db.A
 	return err
 }
 
+// actionFinishedMessage is the thread reply for a decided action: one line
+// with the outcome and who decided, then what was done and its undo as code.
+func actionFinishedMessage(a db.Action, m *opensrev1.MachineAction) (string, []slack.Block) {
+	verb, machines := m.GetAction(), strings.Join(m.GetMachineIds(), ", ")
+	who := slackMention(a.DecidedBy.String)
+	var head, body string
+	switch a.Status {
+	case "succeeded":
+		head = fmt.Sprintf("✅ *%s* done · %s · approved by %s", verb, machines, who)
+		body = a.Result.String
+	case "failed":
+		head = fmt.Sprintf("❌ *%s* failed · %s · approved by %s", verb, machines, who)
+		body = "error: " + a.Error.String
+		if a.Result.String != "" {
+			body += "\ndone before the failure:\n" + a.Result.String
+		}
+	case "rejected":
+		head = fmt.Sprintf("🚫 *%s* rejected · %s · by %s", verb, machines, who)
+	default:
+		return "", nil
+	}
+	blocks := []slack.Block{slack.NewSectionBlock(md(shorten(head, 600)), nil, nil)}
+	if body = strings.TrimSpace(body); body != "" {
+		blocks = append(blocks, slack.NewSectionBlock(md(clip("```"+body+"```")), nil, nil))
+	}
+	// The default notes of a button click say nothing a human wrote.
+	if n := a.Note.String; n != "" && n != "approved from Slack" && n != "rejected from Slack" {
+		blocks = append(blocks, slack.NewContextBlock("", md(shorten("> "+n, 2000))))
+	}
+	return shorten(strings.ReplaceAll(head, "*", ""), 300), blocks
+}
+
+// slackMention turns a decider recorded as "@name (Slack U123)" into a
+// mention, which Slack renders as the person's display name.
+func slackMention(decidedBy string) string {
+	if _, rest, ok := strings.Cut(decidedBy, "(Slack "); ok {
+		if id, _, ok := strings.Cut(rest, ")"); ok && id != "" {
+			return "<@" + id + ">"
+		}
+	}
+	return decidedBy
+}
+
 // mitigationText is the one-line form of a mitigation, for notifications.
 func mitigationText(inv db.Investigation, m *opensrev1.Mitigation) string {
 	if isNone(m.Kind) {
 		return fmt.Sprintf("🟢 *%s*: no mitigation needed; looking for the root cause.", serviceLabel(inv))
 	}
-	return fmt.Sprintf("🩹 *%s*: mitigate first, %s %s", serviceLabel(inv), m.Kind, m.Target)
+	return fmt.Sprintf("🩹 *%s*: mitigate first, %s %s", serviceLabel(inv), mitigationVerb(m), m.Target)
 }
 
 func fallbackText(inv db.Investigation, r *opensrev1.Report) string {
@@ -292,16 +330,15 @@ func (s *Slack) mitigationBlocks(ctx context.Context, inv db.Investigation, m *o
 	if m.Impact != "" {
 		lines = append(lines, "*Impact:* "+shorten(m.Impact, 400))
 	}
+	// Short blocks: Slack folds a long section behind "Show more".
+	out := []slack.Block{slack.NewSectionBlock(md(clip(strings.Join(lines, "\n"))), nil, nil)}
 	if m.Action != "" {
-		lines = append(lines, fmt.Sprintf("```%s```", strings.Trim(m.Action, "`\n ")))
+		out = append(out, slack.NewSectionBlock(md(clip(fmt.Sprintf("```%s```", strings.Trim(m.Action, "`\n ")))), nil, nil))
 	}
 	if m.ActionId != "" && s.buttons == nil {
-		lines = append(lines, fmt.Sprintf("*opensre can do it once approved:* %s · `%s`", MachineActionText(m.MachineAction), ApproveCommand(m.ActionId)))
+		out = append(out, slack.NewSectionBlock(md(clip(fmt.Sprintf("*opensre can do it once approved:* %s · `%s`", MachineActionText(m.MachineAction), ApproveCommand(m.ActionId)))), nil, nil))
 	}
-	out := []slack.Block{
-		slack.NewSectionBlock(md(clip(strings.Join(lines, "\n"))), nil, nil),
-		slack.NewContextBlock("", md(fmt.Sprintf("risk: %s · confidence: %s%s · why, verify and undo in the thread", dash(m.Risk), dash(m.Confidence), when))),
-	}
+	out = append(out, slack.NewContextBlock("", md(fmt.Sprintf("risk: %s · confidence: %s%s · why, verify and undo in the thread", dash(m.Risk), dash(m.Confidence), when))))
 	if m.ActionId != "" && s.buttons != nil {
 		out = append(out, s.buttons.actionBlocks(ctx, m)...)
 	}
@@ -326,13 +363,11 @@ func (s *Slack) blocks(ctx context.Context, inv db.Investigation, r *opensrev1.R
 		cause += fmt.Sprintf(" · _%s confidence_", r.Confidence)
 	}
 	cause += "\n" + shorten(r.LikelyCause, 600)
-	if !isNone(r.Fix) && r.Fix != "unknown" {
-		cause += "\n*Fix:* " + shorten(r.Fix, 400)
-	}
-	if steps := firstN(r.NextSteps, 3); len(steps) > 0 {
-		cause += "\n" + bullets("Next steps", steps)
-	}
 	out = append(out, slack.NewSectionBlock(md(clip(cause)), nil, nil))
+	if !isNone(r.Fix) && r.Fix != "unknown" {
+		out = append(out, slack.NewSectionBlock(md(clip("*Fix:* "+shorten(r.Fix, 400))), nil, nil))
+	}
+	out = append(out, listBlocks("Next steps", firstN(r.NextSteps, 3))...)
 	foot := fmt.Sprintf("investigation `%s` · nothing runs without a human's approval", inv.ID)
 	if len(detailBlocks(r)) > 0 {
 		foot = "🧵 details in the thread · " + foot
@@ -340,21 +375,28 @@ func (s *Slack) blocks(ctx context.Context, inv db.Investigation, r *opensrev1.R
 	return append(out, slack.NewContextBlock("", md(foot)))
 }
 
-// mitigationDetails is the reasoning behind a mitigation, posted in the thread.
-func mitigationDetails(m *opensrev1.Mitigation) string {
+// mitigationDetailBlocks is the reasoning behind a mitigation, posted in the
+// thread: one short block per field, which Slack does not fold behind
+// "Show more" the way it folds one long section.
+func mitigationDetailBlocks(m *opensrev1.Mitigation) []slack.Block {
 	if isNone(m.Kind) {
-		return m.Rationale
+		if m.Rationale == "" {
+			return nil
+		}
+		return []slack.Block{slack.NewSectionBlock(md(clip("🟢 *No mitigation needed* · "+m.Rationale)), nil, nil)}
 	}
-	var lines []string
+	out := []slack.Block{slack.NewSectionBlock(md(shorten(fmt.Sprintf("🩹 *Mitigate first: %s* %s", mitigationVerb(m), m.Target), 600)), nil, nil)}
 	for _, f := range [][2]string{{"Why", m.Rationale}, {"Verify", m.Verify}, {"Undo", m.Undo}} {
 		if f[1] != "" {
-			lines = append(lines, fmt.Sprintf("*%s:* %s", f[0], f[1]))
+			out = append(out, slack.NewSectionBlock(md(clip(fmt.Sprintf("*%s* · %s", f[0], f[1]))), nil, nil))
 		}
 	}
-	return strings.Join(lines, "\n")
+	return out
 }
 
 // detailBlocks are the report's supporting details, posted in the thread.
+// Evidence is the substance; what was ruled out is secondary and set in small
+// print. Lists are split into short blocks so Slack shows them unfolded.
 func detailBlocks(r *opensrev1.Report) []slack.Block {
 	if r == nil {
 		return nil
@@ -363,25 +405,46 @@ func detailBlocks(r *opensrev1.Report) []slack.Block {
 	if r.Summary != "" {
 		out = append(out, slack.NewSectionBlock(md(clip(r.Summary)), nil, nil))
 	}
-	for _, sec := range []struct {
-		title string
-		items []string
-	}{{"Evidence", r.Evidence}, {"Ruled out", r.RuledOut}, {"More next steps", r.NextSteps[min(3, len(r.NextSteps)):]}} {
-		if len(sec.items) > 0 {
-			out = append(out, slack.NewSectionBlock(md(clip(bullets(sec.title, sec.items))), nil, nil))
+	out = append(out, listBlocks("🔍 Evidence", r.Evidence)...)
+	if len(r.RuledOut) > 0 {
+		out = append(out, slack.NewSectionBlock(md("*🚫 Ruled out*"), nil, nil))
+		ctx := make([]slack.MixedElement, 0, min(len(r.RuledOut), 10))
+		for _, item := range firstN(r.RuledOut, 10) {
+			ctx = append(ctx, md(shorten("• "+item, 2000)))
 		}
+		out = append(out, slack.NewContextBlock("", ctx...))
 	}
 	if !isNone(r.SuggestedMitigation) {
-		out = append(out, slack.NewSectionBlock(md(clip("*Mitigation, given the root cause:* "+r.SuggestedMitigation)), nil, nil))
+		out = append(out, slack.NewSectionBlock(md(clip("*🩹 Mitigation, given the root cause* · "+r.SuggestedMitigation)), nil, nil))
 	}
+	out = append(out, listBlocks("➡️ More next steps", r.NextSteps[min(3, len(r.NextSteps)):])...)
 	return out
 }
 
-func firstN(items []string, n int) []string { return items[:min(n, len(items))] }
-
-func bullets(title string, items []string) string {
-	return fmt.Sprintf("*%s*\n• %s", title, strings.Join(items, "\n• "))
+// listBlocks renders a titled bullet list as sections of at most
+// listBlockSize characters each.
+func listBlocks(title string, items []string) []slack.Block {
+	if len(items) == 0 {
+		return nil
+	}
+	var out []slack.Block
+	cur, n := "*"+title+"*", 0 // n: items in cur, which always keeps at least one
+	for _, item := range items {
+		line := "• " + shorten(item, listBlockSize)
+		if n > 0 && len(cur)+1+len(line) > listBlockSize {
+			out = append(out, slack.NewSectionBlock(md(cur), nil, nil))
+			cur, n = line, 1
+			continue
+		}
+		cur, n = cur+"\n"+line, n+1
+	}
+	return append(out, slack.NewSectionBlock(md(cur), nil, nil))
 }
+
+// listBlockSize keeps a section short enough for Slack to show it whole.
+const listBlockSize = 400
+
+func firstN(items []string, n int) []string { return items[:min(n, len(items))] }
 
 // isNone reports whether a field says there is nothing to do, e.g. "none",
 // "None needed." or "none. This is a test alert".

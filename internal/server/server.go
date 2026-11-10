@@ -64,6 +64,8 @@ func Run(ctx context.Context, cfg config.Config) error {
 		slog.Warn("LLM is not configured: briefs work, investigations are disabled", "err", err)
 	}
 	var notifier agent.Notifier
+	// Slack also shows an approved action as running in place of its buttons.
+	var _ action.StartNotifier = (*report.Slack)(nil)
 	var actionNotifier action.Notifier
 	var slack *report.Slack
 	if cfg.SlackBotToken != "" && cfg.SlackChannel != "" {

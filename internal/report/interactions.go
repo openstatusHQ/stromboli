@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -73,9 +74,10 @@ func (b *buttons) actionBlocks(ctx context.Context, m *opensrev1.Mitigation) []s
 	}
 	approve := slack.NewButtonBlockElement(approveActionID, m.ActionId, plain("Apply: "+m.MachineAction.GetAction())).
 		WithStyle(slack.StylePrimary).
+		// Slack shows the confirmation dialog as plain text: no markdown.
 		WithConfirm(slack.NewConfirmationBlockObject(
 			plain("Apply this mitigation?"),
-			md(clip(fmt.Sprintf("opensre will %s now.\n*Risk:* %s\n*Undo:* %s", what, m.Risk, dash(m.Undo)))),
+			plain(shorten(fmt.Sprintf("opensre will %s now.\n\nRisk: %s\nUndo: %s", what, dash(m.Risk), machineUndo(m.MachineAction, m.Undo)), 300)),
 			plain("Apply"), plain("Cancel")))
 	reject := slack.NewButtonBlockElement(rejectActionID, m.ActionId, plain("Reject")).WithStyle(slack.StyleDanger)
 	expires := ""
@@ -88,16 +90,36 @@ func (b *buttons) actionBlocks(ctx context.Context, m *opensrev1.Mitigation) []s
 	}
 }
 
+// machineUndo is how to revert m, with its real machine IDs: the model's
+// undo is often a template like `fly machine stop <id>`. fallback is used
+// when the undo depends on what the action creates.
+func machineUndo(m *opensrev1.MachineAction, fallback string) string {
+	inverse := map[string]string{"start": "stop", "stop": "start", "cordon": "uncordon", "uncordon": "cordon"}
+	switch verb := m.GetAction(); {
+	case verb == "restart":
+		return "none needed (same machines, image and config)"
+	case inverse[verb] != "" && len(m.GetMachineIds()) > 0:
+		cmds := make([]string, 0, len(m.MachineIds))
+		for _, id := range m.MachineIds {
+			cmds = append(cmds, fmt.Sprintf("fly machine %s %s -a %s", inverse[verb], id, m.App))
+		}
+		return strings.Join(cmds, "\n")
+	case verb == "clone":
+		return fmt.Sprintf("destroy the new machine: fly machine destroy <new-id> -a %s --force (its ID is posted in the thread)", m.App)
+	}
+	return dash(fallback)
+}
+
 func actionOutcome(a db.Action, what string) string {
 	switch a.Status {
 	case "running":
-		return fmt.Sprintf("⏳ %s: approved by %s, running…", what, a.DecidedBy.String)
+		return fmt.Sprintf("⏳ %s: approved by %s, running…", what, slackMention(a.DecidedBy.String))
 	case "succeeded":
-		return fmt.Sprintf("✅ %s: done, approved by %s", what, a.DecidedBy.String)
+		return fmt.Sprintf("✅ %s: done, approved by %s", what, slackMention(a.DecidedBy.String))
 	case "failed":
-		return fmt.Sprintf("❌ %s: approved by %s, failed (see thread)", what, a.DecidedBy.String)
+		return fmt.Sprintf("❌ %s: approved by %s, failed (see thread)", what, slackMention(a.DecidedBy.String))
 	case "rejected":
-		return fmt.Sprintf("🚫 %s: rejected by %s", what, a.DecidedBy.String)
+		return fmt.Sprintf("🚫 %s: rejected by %s", what, slackMention(a.DecidedBy.String))
 	case "expired":
 		return fmt.Sprintf("⌛ %s: expired without a decision", what)
 	case "superseded":
@@ -192,8 +214,8 @@ func (b *buttons) decide(ctx context.Context, s *Slack, cb slack.InteractionCall
 		return
 	}
 	log.Info("slack: action approved")
-	tell(fmt.Sprintf("⏳ Running action `%s`; the outcome will be posted in the thread.", id))
-	// Approve posts the outcome in the thread and redraws the message.
+	// No ephemeral note: Approve redraws the message with the action running
+	// in place of its buttons, then posts the outcome in the thread.
 	if _, err := b.decider.Approve(ctx, id, who, "approved from Slack"); err != nil {
 		// Not run (no longer pending, or no longer valid): Approve did not notify.
 		log.Warn("slack: approve", "err", err)
