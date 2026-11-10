@@ -413,6 +413,15 @@ func (e *Engine) proposeAction(ctx context.Context, tc *toolContext, inv *db.Inv
 		}
 	}
 	ma := m.MachineAction
+	derived := false
+	if (ma == nil || ma.Action == "") && m.Kind != "none" && e.actions != nil {
+		// The model sometimes writes the fly machine command but forgets
+		// machine_action: offer it anyway when the command is one opensre can run.
+		if ma = machineActionFromCommands(m.Action); ma != nil {
+			derived = true
+			m.MachineAction = ma
+		}
+	}
 	if ma == nil || ma.Action == "" {
 		m.MachineAction = nil
 		return ""
@@ -428,11 +437,20 @@ func (e *Engine) proposeAction(ctx context.Context, tc *toolContext, inv *db.Inv
 	a, err := e.actions.Propose(ctx, *inv, tc.graph, ma)
 	if err != nil {
 		m.MachineAction = nil
+		if derived {
+			// Not the model's choice: nothing to correct, the command stays a suggestion.
+			slog.Info("machine action from the mitigation's command not offered", "investigation", inv.ID, "err", err)
+			return ""
+		}
 		return fmt.Sprintf(" machine_action was not accepted (%v): the mitigation is published as a suggestion only.", err)
 	}
 	m.ActionId = a.ID.String()
-	return fmt.Sprintf(" opensre will %s %s of app %s once a human approves action %s; you cannot run it yourself.",
-		ma.Action, strings.Join(ma.MachineIds, ", "), ma.App, a.ID)
+	from := ""
+	if derived {
+		from = " (machine_action was filled in from your command)"
+	}
+	return fmt.Sprintf(" opensre will %s %s of app %s once a human approves action %s%s; you cannot run it yourself.",
+		ma.Action, strings.Join(ma.MachineIds, ", "), ma.App, a.ID, from)
 }
 
 // maxToolResult bounds what a single tool call adds to the context.
