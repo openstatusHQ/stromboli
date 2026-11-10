@@ -1,4 +1,4 @@
-# 0003. The service catalog is owned by opensre
+# 0003. The service catalog is owned by stromboli
 
 - **Status:** Accepted
 - **Date:** 2026-11-02
@@ -9,12 +9,12 @@ The agent's value comes from knowing every service: owners, dependencies, where 
 
 ## Decision
 
-- The catalog is stored in opensre's database and edited through the API (later the UI). It does not depend on any other repository.
-- **YAML is the import/export format.** Teams who want GitOps keep `services.yaml` in git and sync it from CI with `opensre catalog import services.yaml --runbooks runbooks/ --prune --yes`.
+- The catalog is stored in stromboli's database and edited through the API (later the UI). It does not depend on any other repository.
+- **YAML is the import/export format.** Teams who want GitOps keep `services.yaml` in git and sync it from CI with `stromboli catalog import services.yaml --runbooks runbooks/ --prune --yes`.
 - Validation runs on every write and import: schema, unknown dependencies, cycles, missing runbooks.
 - The catalog is loaded as a graph with upstream, downstream and blast radius queries.
 - Alerts map to services through `monitors:` (openstatus monitor IDs) and alert labels (`service`, `app`).
-- The catalog is declared, not auto-discovered. `opensre catalog discover <connector>` proposes entries from what a log or metric connector sees, so users only fill in owners and dependencies.
+- The catalog is declared, not auto-discovered. `stromboli catalog discover <connector>` proposes entries from what a log or metric connector sees, so users only fill in owners and dependencies.
 
 ## Consequences
 

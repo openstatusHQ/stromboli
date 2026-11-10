@@ -14,15 +14,15 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"google.golang.org/protobuf/encoding/protojson"
 
-	opensrev1 "github.com/openstatushq/opensre/gen/opensre/v1"
-	"github.com/openstatushq/opensre/internal/action"
-	"github.com/openstatushq/opensre/internal/catalog"
-	"github.com/openstatushq/opensre/internal/config"
-	"github.com/openstatushq/opensre/internal/connector"
-	"github.com/openstatushq/opensre/internal/connector/fly/flytest"
-	"github.com/openstatushq/opensre/internal/secrets"
-	"github.com/openstatushq/opensre/internal/store"
-	"github.com/openstatushq/opensre/internal/store/db"
+	stromboliv1 "github.com/openstatushq/stromboli/gen/stromboli/v1"
+	"github.com/openstatushq/stromboli/internal/action"
+	"github.com/openstatushq/stromboli/internal/catalog"
+	"github.com/openstatushq/stromboli/internal/config"
+	"github.com/openstatushq/stromboli/internal/connector"
+	"github.com/openstatushq/stromboli/internal/connector/fly/flytest"
+	"github.com/openstatushq/stromboli/internal/secrets"
+	"github.com/openstatushq/stromboli/internal/store"
+	"github.com/openstatushq/stromboli/internal/store/db"
 )
 
 // actionEnv is a Fly service with a fly_machines connector backed by a fake
@@ -37,9 +37,9 @@ type actionEnv struct {
 }
 
 func newActionEnv(t *testing.T, enabled bool, allow ...string) *actionEnv {
-	dbURL := os.Getenv("OPENSRE_TEST_DB_URL")
+	dbURL := os.Getenv("STROMBOLI_TEST_DB_URL")
 	if dbURL == "" {
-		t.Skip("set OPENSRE_TEST_DB_URL to run")
+		t.Skip("set STROMBOLI_TEST_DB_URL to run")
 	}
 	ctx := context.Background()
 	st, err := store.Open(ctx, dbURL)
@@ -70,10 +70,10 @@ func newActionEnv(t *testing.T, enabled bool, allow ...string) *actionEnv {
 			t.Fatal(err)
 		}
 	}
-	spec, _ := catalog.MarshalSpec(&opensrev1.Service{
+	spec, _ := catalog.MarshalSpec(&stromboliv1.Service{
 		Name: svcName, Runtime: "fly.io",
-		Logs: &opensrev1.LogsConfig{Source: logsConn, Selector: `{service_name="api"}`},
-		Fly:  &opensrev1.FlyConfig{App: "acme-api", Actions: flyConn, Allow: allow},
+		Logs: &stromboliv1.LogsConfig{Source: logsConn, Selector: `{service_name="api"}`},
+		Fly:  &stromboliv1.FlyConfig{App: "acme-api", Actions: flyConn, Allow: allow},
 	})
 	if err := st.UpsertService(ctx, db.UpsertServiceParams{Name: svcName, Spec: spec}); err != nil {
 		t.Fatal(err)
@@ -126,8 +126,8 @@ func restartMitigation(machineAction string) string {
 		`"risk":"safe","confidence":"medium","impact":"5xx on api",` + `"machine_action":` + machineAction + `}`
 }
 
-func storedMitigation(t *testing.T, inv db.Investigation) *opensrev1.Mitigation {
-	m := &opensrev1.Mitigation{}
+func storedMitigation(t *testing.T, inv db.Investigation) *stromboliv1.Mitigation {
+	m := &stromboliv1.Mitigation{}
 	if err := protojson.Unmarshal(inv.Mitigation, m); err != nil {
 		t.Fatal(err)
 	}
@@ -149,7 +149,7 @@ func TestMachineActionApproved(t *testing.T) {
 	inv, model := env.investigate(t, restartMitigation(`{"action":"restart","machine_ids":["148e"]}`))
 
 	// Option 2: the brief lists the machines and the Fly commands, and says
-	// what opensre may run.
+	// what stromboli may run.
 	first := model.requests[0].Messages[0].OfUser.Content[0].OfText.Text
 	for _, want := range []string{"## Fly.io", "App `acme-api`. 3 machine(s)", "| 148e | ams | started |",
 		"fly machine restart <id> -a acme-api", "after a human approves them: restart, clone, cordon, uncordon"} {
@@ -311,10 +311,10 @@ func TestMachineActionDisabled(t *testing.T) {
 		t.Errorf("actions are disabled, no action should be proposed: %v", m)
 	}
 	first := model.requests[0].Messages[0].OfUser.Content[0].OfText.Text
-	if !strings.Contains(first, "opensre cannot run machine actions for this service (machine actions are disabled") {
+	if !strings.Contains(first, "stromboli cannot run machine actions for this service (machine actions are disabled") {
 		t.Errorf("the brief should say actions are disabled")
 	}
-	if out := toolResult(t, model, 1); !strings.Contains(out, "OPENSRE_ACTIONS_ENABLED") {
+	if out := toolResult(t, model, 1); !strings.Contains(out, "STROMBOLI_ACTIONS_ENABLED") {
 		t.Errorf("the model should learn actions are disabled: %s", out)
 	}
 }

@@ -1,4 +1,4 @@
-module github.com/openstatushq/opensre
+module github.com/openstatushq/stromboli
 
 go 1.27.3
 

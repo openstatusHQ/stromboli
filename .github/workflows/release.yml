@@ -1,6 +1,6 @@
 name: release
 
-# Pushes to main publish ghcr.io/openstatushq/opensre:edge.
+# Pushes to main publish ghcr.io/openstatushq/stromboli:edge.
 # A v* tag (e.g. v0.1.0) publishes :0.1.0, :0.1, :latest and a GitHub release with binaries.
 on:
   push:
@@ -29,7 +29,7 @@ jobs:
       - id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ghcr.io/${{ github.repository_owner }}/opensre
+          images: ghcr.io/${{ github.repository_owner }}/stromboli
           tags: |
             type=edge,branch=main
             type=semver,pattern={{version}}
@@ -66,11 +66,11 @@ jobs:
           mkdir dist
           for target in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64; do
             os=${target%/*} arch=${target#*/}
-            name=opensre_${VERSION#v}_${os}_${arch}
+            name=stromboli_${VERSION#v}_${os}_${arch}
             ext=""; [ "$os" = windows ] && ext=.exe
             mkdir -p "build/$name"
             CGO_ENABLED=0 GOOS=$os GOARCH=$arch go build -trimpath \
-              -ldflags="-s -w -X main.version=${VERSION}" -o "build/$name/opensre$ext" ./cmd/opensre
+              -ldflags="-s -w -X main.version=${VERSION}" -o "build/$name/stromboli$ext" ./cmd/stromboli
             cp LICENSE README.md "build/$name/"
             if [ "$os" = windows ]; then
               (cd build && zip -qr "../dist/$name.zip" "$name")

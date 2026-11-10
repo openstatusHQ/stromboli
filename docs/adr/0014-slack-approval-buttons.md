@@ -13,7 +13,7 @@ On-call reads the investigation in Slack. Switching to a terminal to approve a p
 - Clicks go through the same approve and reject path as the CLI, with the Slack user recorded as the approver.
 - Requests without a valid Slack signature, or older than 5 minutes, are refused. `SLACK_APPROVERS` limits the buttons to listed Slack user IDs.
 - Expired or superseded actions lose their buttons; a click on one is answered with why it cannot run.
-- Only machine actions have buttons. Text mitigations are still applied by a human outside opensre.
+- Only machine actions have buttons. Text mitigations are still applied by a human outside stromboli.
 
 ## Consequences
 

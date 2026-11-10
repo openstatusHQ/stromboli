@@ -1,18 +1,18 @@
-# opensre + Postgres. Copy .env.example to .env and fill it in, then:
+# stromboli + Postgres. Copy .env.example to .env and fill it in, then:
 #   docker compose up -d
 # This pulls the published image. To build from source instead: docker compose up -d --build
 services:
-  opensre:
-    image: ghcr.io/openstatushq/opensre:${OPENSRE_VERSION:-latest}
+  stromboli:
+    image: ghcr.io/openstatushq/stromboli:${STROMBOLI_VERSION:-latest}
     build:
       context: .
       dockerfile: deploy/Dockerfile
     restart: unless-stopped
     ports:
-      - "${OPENSRE_PORT:-8080}:8080"
+      - "${STROMBOLI_PORT:-8080}:8080"
     env_file: .env
     environment:
-      OPENSRE_DB_URL: postgres://opensre:${POSTGRES_PASSWORD:-opensre}@postgres:5432/opensre?sslmode=disable
+      STROMBOLI_DB_URL: postgres://stromboli:${POSTGRES_PASSWORD:-stromboli}@postgres:5432/stromboli?sslmode=disable
     depends_on:
       postgres:
         condition: service_healthy
@@ -21,13 +21,13 @@ services:
     image: pgvector/pgvector:pg17
     restart: unless-stopped
     environment:
-      POSTGRES_USER: opensre
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-opensre}
-      POSTGRES_DB: opensre
+      POSTGRES_USER: stromboli
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-stromboli}
+      POSTGRES_DB: stromboli
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U opensre"]
+      test: ["CMD-SHELL", "pg_isready -U stromboli"]
       interval: 2s
       timeout: 5s
       retries: 30

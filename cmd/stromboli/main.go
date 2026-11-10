@@ -1,4 +1,4 @@
-// Command opensre is the opensre server and its CLI.
+// Command stromboli is the stromboli server and its CLI.
 //
 // The CLI follows the guidelines at https://clig.dev: help and examples on
 // every command, data on stdout and messages on stderr, --json for scripts,
@@ -24,7 +24,7 @@ import (
 // version is set at build time with -ldflags "-X main.version=...".
 var version = "dev"
 
-const docsURL = "https://github.com/openstatusHQ/opensre"
+const docsURL = "https://github.com/openstatusHQ/stromboli"
 
 // Exit codes.
 const (
@@ -72,25 +72,25 @@ func (a *app) run(ctx context.Context, args []string) int {
 
 func (a *app) rootCmd() *cobra.Command {
 	root := &cobra.Command{
-		Use:   "opensre",
+		Use:   "stromboli",
 		Short: "An AI SRE agent that investigates incidents and proposes mitigations",
-		Long: `opensre is an AI SRE agent. When an alert fires it builds a brief from your
+		Long: `stromboli is an AI SRE agent. When an alert fires it builds a brief from your
 logs, deploys and service catalog, proposes a mitigation, then investigates
 the root cause.
 
-The same binary runs the server (opensre serve) and the client commands below,
+The same binary runs the server (stromboli serve) and the client commands below,
 which talk to a running server.`,
 		Example: `  # Point the CLI at your server
-  export OPENSRE_URL=http://localhost:8080 OPENSRE_API_TOKEN=...
+  export STROMBOLI_URL=http://localhost:8080 STROMBOLI_API_TOKEN=...
 
   # Set up a log source and the service catalog
-  opensre connector add loki loki url=http://loki:3100
-  opensre catalog discover loki > services.yaml
-  opensre catalog import services.yaml --runbooks runbooks/
+  stromboli connector add loki loki url=http://loki:3100
+  stromboli catalog discover loki > services.yaml
+  stromboli catalog import services.yaml --runbooks runbooks/
 
   # Investigate
-  opensre brief api --since 1h
-  opensre investigate api --description "5xx on /v1/monitors"`,
+  stromboli brief api --since 1h
+  stromboli investigate api --description "5xx on /v1/monitors"`,
 		Version:       buildVersion(),
 		SilenceUsage:  true,
 		SilenceErrors: true,
@@ -111,15 +111,15 @@ which talk to a running server.`,
 	root.SetFlagErrorFunc(func(cmd *cobra.Command, err error) error {
 		return usageError{cmd: cmd.CommandPath(), err: err}
 	})
-	root.SetVersionTemplate("opensre {{.Version}}\n")
+	root.SetVersionTemplate("stromboli {{.Version}}\n")
 
 	pf := root.PersistentFlags()
-	pf.StringVar(&a.url, "url", envOr("OPENSRE_URL", "http://localhost:8080"), "opensre server URL (env OPENSRE_URL)")
-	pf.StringVar(&a.tokenFile, "token-file", "", "read the API token from this file instead of OPENSRE_API_TOKEN")
+	pf.StringVar(&a.url, "url", envOr("STROMBOLI_URL", "http://localhost:8080"), "stromboli server URL (env STROMBOLI_URL)")
+	pf.StringVar(&a.tokenFile, "token-file", "", "read the API token from this file instead of STROMBOLI_API_TOKEN")
 	pf.BoolVar(&a.json, "json", false, "print machine-readable JSON on stdout")
 	pf.BoolVarP(&a.quiet, "quiet", "q", false, "only print errors, warnings and requested data")
 	pf.BoolVar(&a.noInput, "no-input", false, "never prompt; fail instead of asking for confirmation or secrets")
-	pf.BoolVar(&a.debug, "debug", envBool("OPENSRE_DEBUG"), "print debug logs on stderr (env OPENSRE_DEBUG)")
+	pf.BoolVar(&a.debug, "debug", envBool("STROMBOLI_DEBUG"), "print debug logs on stderr (env STROMBOLI_DEBUG)")
 
 	root.AddGroup(
 		&cobra.Group{ID: "setup", Title: "Setup:"},
@@ -145,10 +145,10 @@ which talk to a running server.`,
 
 	root.SetHelpTemplate(root.HelpTemplate() + `
 Environment:
-  OPENSRE_URL         server URL (default http://localhost:8080)
-  OPENSRE_API_TOKEN   API token sent to the server
-  OPENSRE_USER        your name, recorded when you approve or reject an action
-  OPENSRE_DEBUG       set to 1 to enable debug logs
+  STROMBOLI_URL         server URL (default http://localhost:8080)
+  STROMBOLI_API_TOKEN   API token sent to the server
+  STROMBOLI_USER        your name, recorded when you approve or reject an action
+  STROMBOLI_DEBUG       set to 1 to enable debug logs
 
 Docs: ` + docsURL + "\n")
 	return root

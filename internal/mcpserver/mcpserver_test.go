@@ -18,23 +18,23 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
-	opensrev1 "github.com/openstatushq/opensre/gen/opensre/v1"
-	"github.com/openstatushq/opensre/gen/opensre/v1/opensrev1connect"
-	"github.com/openstatushq/opensre/internal/api"
-	"github.com/openstatushq/opensre/internal/mcpserver"
+	stromboliv1 "github.com/openstatushq/stromboli/gen/stromboli/v1"
+	"github.com/openstatushq/stromboli/gen/stromboli/v1/stromboliv1connect"
+	"github.com/openstatushq/stromboli/internal/api"
+	"github.com/openstatushq/stromboli/internal/mcpserver"
 )
 
 var update = flag.Bool("update", false, "rewrite testdata/tools.golden.json")
 
 // fakeAPI implements the API services in memory.
 type fakeAPI struct {
-	opensrev1connect.UnimplementedCatalogServiceHandler
-	opensrev1connect.UnimplementedInvestigationServiceHandler
-	opensrev1connect.UnimplementedActionServiceHandler
+	stromboliv1connect.UnimplementedCatalogServiceHandler
+	stromboliv1connect.UnimplementedInvestigationServiceHandler
+	stromboliv1connect.UnimplementedActionServiceHandler
 
 	mu     sync.Mutex
-	invs   []*opensrev1.Investigation
-	steps  map[string][]*opensrev1.Step
+	invs   []*stromboliv1.Investigation
+	steps  map[string][]*stromboliv1.Step
 	starts []http.Header
 	// onGet is called on every GetInvestigation, to move an investigation along.
 	onGet func(f *fakeAPI, calls int)
@@ -43,16 +43,16 @@ type fakeAPI struct {
 
 func newFake() *fakeAPI {
 	return &fakeAPI{
-		invs: []*opensrev1.Investigation{
+		invs: []*stromboliv1.Investigation{
 			{Id: "inv-2", Title: "5xx on api", Source: "alertmanager", Services: []string{"api"},
-				Status: opensrev1.InvestigationStatus_INVESTIGATION_STATUS_RUNNING, CreatedAt: timestamppb.New(time.Date(2026, 11, 9, 10, 0, 0, 0, time.UTC))},
+				Status: stromboliv1.InvestigationStatus_INVESTIGATION_STATUS_RUNNING, CreatedAt: timestamppb.New(time.Date(2026, 11, 9, 10, 0, 0, 0, time.UTC))},
 			{Id: "inv-1", Title: "checker memory", Source: "healthcheck", Services: []string{"checker"},
-				Status:     opensrev1.InvestigationStatus_INVESTIGATION_STATUS_COMPLETED,
+				Status:     stromboliv1.InvestigationStatus_INVESTIGATION_STATUS_COMPLETED,
 				CreatedAt:  timestamppb.New(time.Date(2026, 11, 8, 9, 0, 0, 0, time.UTC)),
-				Mitigation: &opensrev1.Mitigation{Kind: "restart", Target: "checker", Risk: "safe", Confidence: "high", Action: "fly apps restart checker", ActionId: "act-1"},
-				Report:     &opensrev1.Report{LikelyCause: "memory leak in the scheduler", Confidence: "high", Evidence: []string{"memory_used_percent at 97%"}}},
+				Mitigation: &stromboliv1.Mitigation{Kind: "restart", Target: "checker", Risk: "safe", Confidence: "high", Action: "fly apps restart checker", ActionId: "act-1"},
+				Report:     &stromboliv1.Report{LikelyCause: "memory leak in the scheduler", Confidence: "high", Evidence: []string{"memory_used_percent at 97%"}}},
 		},
-		steps: map[string][]*opensrev1.Step{
+		steps: map[string][]*stromboliv1.Step{
 			"inv-1": {
 				{Seq: 1, Kind: "brief", Output: "brief output"},
 				{Seq: 2, Kind: "tool_call", Name: "get_metrics", Output: "memory 97%", DurationMs: 120},
@@ -61,40 +61,40 @@ func newFake() *fakeAPI {
 	}
 }
 
-func (f *fakeAPI) ListServices(context.Context, *connect.Request[opensrev1.ListServicesRequest]) (*connect.Response[opensrev1.ListServicesResponse], error) {
-	return connect.NewResponse(&opensrev1.ListServicesResponse{Services: []*opensrev1.Service{
+func (f *fakeAPI) ListServices(context.Context, *connect.Request[stromboliv1.ListServicesRequest]) (*connect.Response[stromboliv1.ListServicesResponse], error) {
+	return connect.NewResponse(&stromboliv1.ListServicesResponse{Services: []*stromboliv1.Service{
 		{Name: "api", Description: "Public REST API", Tier: 1, Owners: []string{"@backend"}, DependsOn: []string{"db"}},
 		{Name: "db"},
 	}}), nil
 }
 
-func (f *fakeAPI) GetService(_ context.Context, req *connect.Request[opensrev1.GetServiceRequest]) (*connect.Response[opensrev1.GetServiceResponse], error) {
+func (f *fakeAPI) GetService(_ context.Context, req *connect.Request[stromboliv1.GetServiceRequest]) (*connect.Response[stromboliv1.GetServiceResponse], error) {
 	if req.Msg.Name != "api" {
 		return nil, connect.NewError(connect.CodeNotFound, errors.New(`service "`+req.Msg.Name+`" not found`))
 	}
-	return connect.NewResponse(&opensrev1.GetServiceResponse{
-		Service: &opensrev1.Service{Name: "api", Tier: 1, Logs: &opensrev1.LogsConfig{Source: "loki", Selector: `{service_name="api"}`},
-			Deploys: &opensrev1.DeploysConfig{Source: "github", Repo: "acme/api", Workflow: "deploy.yml"}},
+	return connect.NewResponse(&stromboliv1.GetServiceResponse{
+		Service: &stromboliv1.Service{Name: "api", Tier: 1, Logs: &stromboliv1.LogsConfig{Source: "loki", Selector: `{service_name="api"}`},
+			Deploys: &stromboliv1.DeploysConfig{Source: "github", Repo: "acme/api", Workflow: "deploy.yml"}},
 		Upstream:   []string{"db"},
 		Downstream: []string{"web"},
 	}), nil
 }
 
-func (f *fakeAPI) GetBrief(_ context.Context, req *connect.Request[opensrev1.GetBriefRequest]) (*connect.Response[opensrev1.GetBriefResponse], error) {
-	return connect.NewResponse(&opensrev1.GetBriefResponse{Brief: "# Brief for " + req.Msg.Service + " since " + req.Msg.Since}), nil
+func (f *fakeAPI) GetBrief(_ context.Context, req *connect.Request[stromboliv1.GetBriefRequest]) (*connect.Response[stromboliv1.GetBriefResponse], error) {
+	return connect.NewResponse(&stromboliv1.GetBriefResponse{Brief: "# Brief for " + req.Msg.Service + " since " + req.Msg.Since}), nil
 }
 
-func (f *fakeAPI) ListInvestigations(_ context.Context, req *connect.Request[opensrev1.ListInvestigationsRequest]) (*connect.Response[opensrev1.ListInvestigationsResponse], error) {
+func (f *fakeAPI) ListInvestigations(_ context.Context, req *connect.Request[stromboliv1.ListInvestigationsRequest]) (*connect.Response[stromboliv1.ListInvestigationsResponse], error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	invs := f.invs
 	if int(req.Msg.Limit) < len(invs) {
 		invs = invs[:req.Msg.Limit]
 	}
-	return connect.NewResponse(&opensrev1.ListInvestigationsResponse{Investigations: invs}), nil
+	return connect.NewResponse(&stromboliv1.ListInvestigationsResponse{Investigations: invs}), nil
 }
 
-func (f *fakeAPI) GetInvestigation(_ context.Context, req *connect.Request[opensrev1.GetInvestigationRequest]) (*connect.Response[opensrev1.GetInvestigationResponse], error) {
+func (f *fakeAPI) GetInvestigation(_ context.Context, req *connect.Request[stromboliv1.GetInvestigationRequest]) (*connect.Response[stromboliv1.GetInvestigationResponse], error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.gets++
@@ -103,37 +103,37 @@ func (f *fakeAPI) GetInvestigation(_ context.Context, req *connect.Request[opens
 	}
 	for _, inv := range f.invs {
 		if inv.Id == req.Msg.Id {
-			return connect.NewResponse(&opensrev1.GetInvestigationResponse{Investigation: inv, Steps: f.steps[inv.Id]}), nil
+			return connect.NewResponse(&stromboliv1.GetInvestigationResponse{Investigation: inv, Steps: f.steps[inv.Id]}), nil
 		}
 	}
 	return nil, connect.NewError(connect.CodeNotFound, errors.New("investigation "+req.Msg.Id+" not found"))
 }
 
-func (f *fakeAPI) StartInvestigation(_ context.Context, req *connect.Request[opensrev1.StartInvestigationRequest]) (*connect.Response[opensrev1.StartInvestigationResponse], error) {
+func (f *fakeAPI) StartInvestigation(_ context.Context, req *connect.Request[stromboliv1.StartInvestigationRequest]) (*connect.Response[stromboliv1.StartInvestigationResponse], error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.starts = append(f.starts, req.Header().Clone())
-	inv := &opensrev1.Investigation{Id: "inv-new", Title: req.Msg.Title, Services: []string{req.Msg.Service},
-		Status: opensrev1.InvestigationStatus_INVESTIGATION_STATUS_RUNNING}
-	f.invs = append([]*opensrev1.Investigation{inv}, f.invs...)
-	return connect.NewResponse(&opensrev1.StartInvestigationResponse{Investigation: inv}), nil
+	inv := &stromboliv1.Investigation{Id: "inv-new", Title: req.Msg.Title, Services: []string{req.Msg.Service},
+		Status: stromboliv1.InvestigationStatus_INVESTIGATION_STATUS_RUNNING}
+	f.invs = append([]*stromboliv1.Investigation{inv}, f.invs...)
+	return connect.NewResponse(&stromboliv1.StartInvestigationResponse{Investigation: inv}), nil
 }
 
-func (f *fakeAPI) ListActions(_ context.Context, req *connect.Request[opensrev1.ListActionsRequest]) (*connect.Response[opensrev1.ListActionsResponse], error) {
+func (f *fakeAPI) ListActions(_ context.Context, req *connect.Request[stromboliv1.ListActionsRequest]) (*connect.Response[stromboliv1.ListActionsResponse], error) {
 	a := proposedAction()
 	if req.Msg.Status != 0 && req.Msg.Status != a.Status {
-		return connect.NewResponse(&opensrev1.ListActionsResponse{}), nil
+		return connect.NewResponse(&stromboliv1.ListActionsResponse{}), nil
 	}
-	return connect.NewResponse(&opensrev1.ListActionsResponse{Actions: []*opensrev1.Action{a}}), nil
+	return connect.NewResponse(&stromboliv1.ListActionsResponse{Actions: []*stromboliv1.Action{a}}), nil
 }
 
-func (f *fakeAPI) GetAction(context.Context, *connect.Request[opensrev1.GetActionRequest]) (*connect.Response[opensrev1.GetActionResponse], error) {
-	return connect.NewResponse(&opensrev1.GetActionResponse{Action: proposedAction()}), nil
+func (f *fakeAPI) GetAction(context.Context, *connect.Request[stromboliv1.GetActionRequest]) (*connect.Response[stromboliv1.GetActionResponse], error) {
+	return connect.NewResponse(&stromboliv1.GetActionResponse{Action: proposedAction()}), nil
 }
 
-func proposedAction() *opensrev1.Action {
-	return &opensrev1.Action{Id: "act-1", InvestigationId: "inv-1", Service: "checker", Status: opensrev1.ActionStatus_ACTION_STATUS_PROPOSED,
-		MachineAction: &opensrev1.MachineAction{Action: "restart", MachineIds: []string{"148e"}, App: "checker"}}
+func proposedAction() *stromboliv1.Action {
+	return &stromboliv1.Action{Id: "act-1", InvestigationId: "inv-1", Service: "checker", Status: stromboliv1.ActionStatus_ACTION_STATUS_PROPOSED,
+		MachineAction: &stromboliv1.MachineAction{Action: "restart", MachineIds: []string{"148e"}, App: "checker"}}
 }
 
 func (f *fakeAPI) api() mcpserver.API {
@@ -328,10 +328,10 @@ func TestWaitInvestigation(t *testing.T) {
 	f.onGet = func(f *fakeAPI, calls int) {
 		switch calls {
 		case 2:
-			f.steps["inv-2"] = []*opensrev1.Step{{Seq: 1, Kind: "brief"}, {Seq: 2, Kind: "tool_call", Name: "log_patterns"}}
+			f.steps["inv-2"] = []*stromboliv1.Step{{Seq: 1, Kind: "brief"}, {Seq: 2, Kind: "tool_call", Name: "log_patterns"}}
 		case 3:
-			f.steps["inv-2"] = append(f.steps["inv-2"], &opensrev1.Step{Seq: 3, Kind: "mitigation"})
-			f.invs[0].Mitigation = &opensrev1.Mitigation{Kind: "rollback", Target: "api"}
+			f.steps["inv-2"] = append(f.steps["inv-2"], &stromboliv1.Step{Seq: 3, Kind: "mitigation"})
+			f.invs[0].Mitigation = &stromboliv1.Mitigation{Kind: "rollback", Target: "api"}
 		}
 	}
 	var mu sync.Mutex
@@ -397,26 +397,26 @@ func TestActions(t *testing.T) {
 	callErr(t, cs, "list_actions", map[string]any{"status": "unspecified"})
 
 	text, _ = call(t, cs, "get_action", map[string]any{"id": "act-1"})
-	mustContain(t, text, "# Action act-1", "opensre actions approve act-1 --as <your name>", "cannot approve it")
+	mustContain(t, text, "# Action act-1", "stromboli actions approve act-1 --as <your name>", "cannot approve it")
 }
 
 // TestHTTP serves the tools at /mcp with a token, and calls them through
-// Connect clients of a real API server, as `opensre mcp` does.
+// Connect clients of a real API server, as `stromboli mcp` does.
 func TestHTTP(t *testing.T) {
 	f := newFake()
 	apiMux := http.NewServeMux()
 	apiOpts := connect.WithInterceptors(api.NewAuthInterceptor("api-secret"))
-	apiMux.Handle(opensrev1connect.NewCatalogServiceHandler(f, apiOpts))
-	apiMux.Handle(opensrev1connect.NewInvestigationServiceHandler(f, apiOpts))
-	apiMux.Handle(opensrev1connect.NewActionServiceHandler(f, apiOpts))
+	apiMux.Handle(stromboliv1connect.NewCatalogServiceHandler(f, apiOpts))
+	apiMux.Handle(stromboliv1connect.NewInvestigationServiceHandler(f, apiOpts))
+	apiMux.Handle(stromboliv1connect.NewActionServiceHandler(f, apiOpts))
 	apiSrv := httptest.NewServer(apiMux)
 	t.Cleanup(apiSrv.Close)
 
 	clientOpts := connect.WithInterceptors(api.BearerToken("api-secret"))
 	clients := mcpserver.API{
-		Catalog:        opensrev1connect.NewCatalogServiceClient(apiSrv.Client(), apiSrv.URL, clientOpts),
-		Investigations: opensrev1connect.NewInvestigationServiceClient(apiSrv.Client(), apiSrv.URL, clientOpts),
-		Actions:        opensrev1connect.NewActionServiceClient(apiSrv.Client(), apiSrv.URL, clientOpts),
+		Catalog:        stromboliv1connect.NewCatalogServiceClient(apiSrv.Client(), apiSrv.URL, clientOpts),
+		Investigations: stromboliv1connect.NewInvestigationServiceClient(apiSrv.Client(), apiSrv.URL, clientOpts),
+		Actions:        stromboliv1connect.NewActionServiceClient(apiSrv.Client(), apiSrv.URL, clientOpts),
 	}
 	mcpSrv := httptest.NewServer(mcpserver.Handler(mcpserver.New(clients, mcpserver.Options{}), "mcp-secret"))
 	t.Cleanup(mcpSrv.Close)

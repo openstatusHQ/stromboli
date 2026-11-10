@@ -1,4 +1,4 @@
-// Railway infrastructure as code: opensre and its Postgres database.
+// Railway infrastructure as code: stromboli and its Postgres database.
 //
 // Preview and apply from the repository root (see docs/deploy/railway.md):
 //
@@ -11,8 +11,8 @@ import railway "github.com/railwayapp/railway-go-sdk"
 func Railway() railway.Project {
 	db := railway.Postgres("postgres")
 
-	opensre := railway.ServiceNamed("opensre", railway.ServiceConfig{
-		"source": railway.Github("openstatusHQ/opensre"),
+	stromboli := railway.ServiceNamed("stromboli", railway.ServiceConfig{
+		"source": railway.Github("openstatusHQ/stromboli"),
 		"build": map[string]any{
 			"builder":        "DOCKERFILE",
 			"dockerfilePath": "deploy/Dockerfile",
@@ -30,26 +30,26 @@ func Railway() railway.Project {
 		// Plain settings are literals: change them here, not in the dashboard.
 		// Secrets live in Railway, never in this file: railway.Preserve() keeps
 		// the stored value and leaves an unset one unset. Set them once with
-		// deploy/railway/setup.sh or `railway variable set KEY --stdin --service opensre`.
+		// deploy/railway/setup.sh or `railway variable set KEY --stdin --service stromboli`.
 		"env": map[string]any{
 			// --- Required ---
 			// Private network URL. Migrations run on startup.
-			"OPENSRE_DB_URL": db.Env("DATABASE_URL"),
+			"STROMBOLI_DB_URL": db.Env("DATABASE_URL"),
 			// The port the public domain routes to.
-			"PORT":         "8080",
-			"OPENSRE_ADDR": ":8080",
-			// Never change OPENSRE_SECRET_KEY: it decrypts the stored connector credentials.
-			"OPENSRE_SECRET_KEY": railway.Preserve(),
+			"PORT":           "8080",
+			"STROMBOLI_ADDR": ":8080",
+			// Never change STROMBOLI_SECRET_KEY: it decrypts the stored connector credentials.
+			"STROMBOLI_SECRET_KEY": railway.Preserve(),
 			// Bearer token for the API and the CLI. Empty would leave a public instance open.
-			"OPENSRE_API_TOKEN": railway.Preserve(),
-			// Separate token for /webhooks/*; unset falls back to OPENSRE_API_TOKEN.
-			"OPENSRE_WEBHOOK_TOKEN": railway.Preserve(),
+			"STROMBOLI_API_TOKEN": railway.Preserve(),
+			// Separate token for /webhooks/*; unset falls back to STROMBOLI_API_TOKEN.
+			"STROMBOLI_WEBHOOK_TOKEN": railway.Preserve(),
 
 			// --- Models ("provider:model") ---
-			"OPENSRE_MODEL": "anthropic:claude-opus-5-5",
+			"STROMBOLI_MODEL": "anthropic:claude-opus-5-5",
 			// Optional, add as needed (unset = the defaults above, the provider's effort):
-			// OPENSRE_EFFORT, OPENSRE_TRIAGE_MODEL, OPENSRE_TRIAGE_EFFORT,
-			// OPENSRE_INVESTIGATE_MODEL, OPENSRE_INVESTIGATE_EFFORT.
+			// STROMBOLI_EFFORT, STROMBOLI_TRIAGE_MODEL, STROMBOLI_TRIAGE_EFFORT,
+			// STROMBOLI_INVESTIGATE_MODEL, STROMBOLI_INVESTIGATE_EFFORT.
 			// Investigations need the key of the provider in the models above
 			// (briefs work without any). Only the ones you set are used.
 			"ANTHROPIC_API_KEY":  railway.Preserve(),
@@ -60,28 +60,28 @@ func Railway() railway.Project {
 			"AI_GATEWAY_API_KEY": railway.Preserve(),
 
 			// --- Investigation limits ---
-			"OPENSRE_MAX_TOOL_CALLS":        "30",
-			"OPENSRE_MITIGATION_TOOL_CALLS": "6",
-			"OPENSRE_INVESTIGATION_TIMEOUT": "8m",
-			"OPENSRE_DEDUPE_WINDOW":         "5m",
+			"STROMBOLI_MAX_TOOL_CALLS":        "30",
+			"STROMBOLI_MITIGATION_TOOL_CALLS": "6",
+			"STROMBOLI_INVESTIGATION_TIMEOUT": "8m",
+			"STROMBOLI_DEDUPE_WINDOW":         "5m",
 
 			// --- Machine actions (Fly.io): off in the server by default, on here ---
-			"OPENSRE_ACTIONS_ENABLED": "true",
-			"OPENSRE_ACTION_TTL":      "30m",
+			"STROMBOLI_ACTIONS_ENABLED": "true",
+			"STROMBOLI_ACTION_TTL":      "30m",
 
 			// --- Health checks (Fly.io): off in the server by default, hourly here ---
 			// Checks memory, CPU, disk and volumes of every service with a fly metrics
 			// source and investigates breaches. At least 5m; "0" turns it off.
-			"OPENSRE_HEALTHCHECK_INTERVAL": "1h",
+			"STROMBOLI_HEALTHCHECK_INTERVAL": "1h",
 			// Post "all services operational" to Slack after each healthy run
 			// (off in the server by default: only breaches are posted).
-			"OPENSRE_HEALTHCHECK_SUMMARY": "true",
+			"STROMBOLI_HEALTHCHECK_SUMMARY": "true",
 
 			// --- Slack (optional) ---
 			// Reports need both SLACK_BOT_TOKEN and SLACK_CHANNEL (a channel ID).
 			"SLACK_BOT_TOKEN": railway.Preserve(),
 			"SLACK_CHANNEL":   railway.Preserve(),
-			// Approve/Reject buttons: also needs OPENSRE_ACTIONS_ENABLED=true and the
+			// Approve/Reject buttons: also needs STROMBOLI_ACTIONS_ENABLED=true and the
 			// app's Interactivity Request URL set to https://<domain>/slack/interactions.
 			"SLACK_SIGNING_SECRET": railway.Preserve(),
 			// Comma-separated Slack user IDs allowed to click; unset = anyone in the channel.
@@ -89,5 +89,5 @@ func Railway() railway.Project {
 		},
 	})
 
-	return railway.ProjectNamed("opensre", []any{db, opensre})
+	return railway.ProjectNamed("stromboli", []any{db, stromboli})
 }

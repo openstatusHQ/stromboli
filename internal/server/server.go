@@ -13,21 +13,21 @@ import (
 	"connectrpc.com/grpchealth"
 	"connectrpc.com/grpcreflect"
 
-	opensrev1 "github.com/openstatushq/opensre/gen/opensre/v1"
-	"github.com/openstatushq/opensre/gen/opensre/v1/opensrev1connect"
-	"github.com/openstatushq/opensre/internal/action"
-	"github.com/openstatushq/opensre/internal/agent"
-	"github.com/openstatushq/opensre/internal/api"
-	"github.com/openstatushq/opensre/internal/catalog"
-	"github.com/openstatushq/opensre/internal/config"
-	"github.com/openstatushq/opensre/internal/connector"
-	"github.com/openstatushq/opensre/internal/healthcheck"
-	"github.com/openstatushq/opensre/internal/llm"
-	"github.com/openstatushq/opensre/internal/mcpserver"
-	"github.com/openstatushq/opensre/internal/report"
-	"github.com/openstatushq/opensre/internal/secrets"
-	"github.com/openstatushq/opensre/internal/store"
-	"github.com/openstatushq/opensre/internal/trigger"
+	stromboliv1 "github.com/openstatushq/stromboli/gen/stromboli/v1"
+	"github.com/openstatushq/stromboli/gen/stromboli/v1/stromboliv1connect"
+	"github.com/openstatushq/stromboli/internal/action"
+	"github.com/openstatushq/stromboli/internal/agent"
+	"github.com/openstatushq/stromboli/internal/api"
+	"github.com/openstatushq/stromboli/internal/catalog"
+	"github.com/openstatushq/stromboli/internal/config"
+	"github.com/openstatushq/stromboli/internal/connector"
+	"github.com/openstatushq/stromboli/internal/healthcheck"
+	"github.com/openstatushq/stromboli/internal/llm"
+	"github.com/openstatushq/stromboli/internal/mcpserver"
+	"github.com/openstatushq/stromboli/internal/report"
+	"github.com/openstatushq/stromboli/internal/secrets"
+	"github.com/openstatushq/stromboli/internal/store"
+	"github.com/openstatushq/stromboli/internal/trigger"
 )
 
 // Run starts the server and blocks until ctx is cancelled.
@@ -92,7 +92,7 @@ func Run(ctx context.Context, cfg config.Config) error {
 			slog.Info("Slack approval buttons are enabled", "approvers", cfg.SlackApprovers)
 		}
 	case cfg.SlackSigningSecret != "":
-		slog.Warn("SLACK_SIGNING_SECRET is set but Slack buttons need SLACK_BOT_TOKEN, SLACK_CHANNEL and OPENSRE_ACTIONS_ENABLED=true")
+		slog.Warn("SLACK_SIGNING_SECRET is set but Slack buttons need SLACK_BOT_TOKEN, SLACK_CHANNEL and STROMBOLI_ACTIONS_ENABLED=true")
 	}
 	engine := agent.New(engineCtx, cfg, st, reg, models, notifier, actions)
 	if cfg.HealthcheckInterval > 0 {
@@ -101,7 +101,7 @@ func Run(ctx context.Context, cfg config.Config) error {
 			slog.Warn("health checks are enabled but no LLM is configured: findings are logged, not investigated")
 			starter = nil
 		}
-		services := func(ctx context.Context) ([]*opensrev1.Service, error) {
+		services := func(ctx context.Context) ([]*stromboliv1.Service, error) {
 			s, _, err := catalog.Load(ctx, st.Queries)
 			return s, err
 		}
@@ -110,15 +110,15 @@ func Run(ctx context.Context, cfg config.Config) error {
 		case cfg.HealthcheckSummary && slack != nil:
 			checker.WithSummary(slack)
 		case cfg.HealthcheckSummary:
-			slog.Warn("OPENSRE_HEALTHCHECK_SUMMARY is set but Slack is not configured (SLACK_BOT_TOKEN, SLACK_CHANNEL): healthy runs are only logged")
+			slog.Warn("STROMBOLI_HEALTHCHECK_SUMMARY is set but Slack is not configured (SLACK_BOT_TOKEN, SLACK_CHANNEL): healthy runs are only logged")
 		}
 		go checker.Run(engineCtx)
 	} else if cfg.HealthcheckSummary {
-		slog.Warn("OPENSRE_HEALTHCHECK_SUMMARY is set but health checks are off: set OPENSRE_HEALTHCHECK_INTERVAL")
+		slog.Warn("STROMBOLI_HEALTHCHECK_SUMMARY is set but health checks are off: set STROMBOLI_HEALTHCHECK_INTERVAL")
 	}
 
 	if cfg.APIToken == "" {
-		slog.Warn("OPENSRE_API_TOKEN is not set: the API is unauthenticated, do not expose this instance")
+		slog.Warn("STROMBOLI_API_TOKEN is not set: the API is unauthenticated, do not expose this instance")
 	}
 	opts := connect.WithInterceptors(api.NewAuthInterceptor(cfg.APIToken))
 
@@ -127,10 +127,10 @@ func Run(ctx context.Context, cfg config.Config) error {
 	actionAPI := api.NewActionService(actions)
 
 	mux := http.NewServeMux()
-	mux.Handle(opensrev1connect.NewCatalogServiceHandler(catalogAPI, opts))
-	mux.Handle(opensrev1connect.NewConnectorServiceHandler(api.NewConnectorService(st, box, reg), opts))
-	mux.Handle(opensrev1connect.NewInvestigationServiceHandler(investigationAPI, opts))
-	mux.Handle(opensrev1connect.NewActionServiceHandler(actionAPI, opts))
+	mux.Handle(stromboliv1connect.NewCatalogServiceHandler(catalogAPI, opts))
+	mux.Handle(stromboliv1connect.NewConnectorServiceHandler(api.NewConnectorService(st, box, reg), opts))
+	mux.Handle(stromboliv1connect.NewInvestigationServiceHandler(investigationAPI, opts))
+	mux.Handle(stromboliv1connect.NewActionServiceHandler(actionAPI, opts))
 	if cfg.MCPEnabled {
 		token := cfg.APIToken
 		if cfg.MCPToken != "" {
@@ -141,16 +141,16 @@ func Run(ctx context.Context, cfg config.Config) error {
 		slog.Info("MCP server is enabled at /mcp", "own_token", cfg.MCPToken != "")
 	}
 	mux.Handle(grpchealth.NewHandler(grpchealth.NewStaticChecker(
-		opensrev1connect.CatalogServiceName,
-		opensrev1connect.ConnectorServiceName,
-		opensrev1connect.InvestigationServiceName,
-		opensrev1connect.ActionServiceName,
+		stromboliv1connect.CatalogServiceName,
+		stromboliv1connect.ConnectorServiceName,
+		stromboliv1connect.InvestigationServiceName,
+		stromboliv1connect.ActionServiceName,
 	)))
 	reflector := grpcreflect.NewStaticReflector(
-		opensrev1connect.CatalogServiceName,
-		opensrev1connect.ConnectorServiceName,
-		opensrev1connect.InvestigationServiceName,
-		opensrev1connect.ActionServiceName,
+		stromboliv1connect.CatalogServiceName,
+		stromboliv1connect.ConnectorServiceName,
+		stromboliv1connect.InvestigationServiceName,
+		stromboliv1connect.ActionServiceName,
 	)
 	mux.Handle(grpcreflect.NewHandlerV1(reflector))
 	mux.Handle(grpcreflect.NewHandlerV1Alpha(reflector))
@@ -179,7 +179,7 @@ func Run(ctx context.Context, cfg config.Config) error {
 
 	errc := make(chan error, 1)
 	go func() {
-		slog.Info("opensre listening", "addr", cfg.Addr, "triage_model", cfg.Triage.Model, "investigate_model", cfg.Investigate.Model)
+		slog.Info("stromboli listening", "addr", cfg.Addr, "triage_model", cfg.Triage.Model, "investigate_model", cfg.Investigate.Model)
 		errc <- srv.ListenAndServe()
 	}()
 

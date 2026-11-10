@@ -1,17 +1,17 @@
 # Local development stack: Postgres, Loki and a demo app that writes logs
-# (and starts a fake incident after a few minutes). Run opensre itself with
-# `go run ./cmd/opensre serve` against it; see README.
+# (and starts a fake incident after a few minutes). Run stromboli itself with
+# `go run ./cmd/stromboli serve` against it; see README.
 services:
   postgres:
     image: pgvector/pgvector:pg17
     environment:
-      POSTGRES_USER: opensre
-      POSTGRES_PASSWORD: opensre
-      POSTGRES_DB: opensre
+      POSTGRES_USER: stromboli
+      POSTGRES_PASSWORD: stromboli
+      POSTGRES_DB: stromboli
     ports:
       - "55432:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U opensre"]
+      test: ["CMD-SHELL", "pg_isready -U stromboli"]
       interval: 2s
       timeout: 5s
       retries: 30

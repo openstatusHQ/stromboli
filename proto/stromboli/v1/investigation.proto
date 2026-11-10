@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-package opensre.v1;
+package stromboli.v1;
 
 import "google/protobuf/struct.proto";
 import "google/protobuf/timestamp.proto";
@@ -33,7 +33,7 @@ message Investigation {
 }
 
 // Mitigation is the fastest safe way to stop user impact, proposed before the
-// root cause is known. opensre suggests it; a human runs it.
+// root cause is known. stromboli suggests it; a human runs it.
 message Mitigation {
   // Generic mitigation class: "rollback", "restart", "scale_up", "drain",
   // "disable_feature", "block_traffic", "failover", "degrade" or "none".
@@ -61,7 +61,7 @@ message Mitigation {
   string action_id = 11;
 }
 
-// MachineAction is a Fly.io Machines API call opensre can run once approved.
+// MachineAction is a Fly.io Machines API call stromboli can run once approved.
 message MachineAction {
   // Catalog service the machines belong to.
   string service = 1;

@@ -9,12 +9,12 @@ An AI SRE agent needs credentials to logs, metrics and deploys, and sees product
 
 ## Decision
 
-opensre is self-hosted, in the Metabase style:
+stromboli is self-hosted, in the Metabase style:
 
-- `docker compose up` (opensre + Postgres) gives a working instance. Teams with Postgres run the image alone with `OPENSRE_DB_URL`.
+- `docker compose up` (stromboli + Postgres) gives a working instance. Teams with Postgres run the image alone with `STROMBOLI_DB_URL`.
 - **One instance is one organisation.** There is no multi-tenancy in the schema; isolation comes from separate deployments.
 - Teams bring their own LLM API key and their own log, metric and deploy sources.
-- Connector credentials are set through the API and encrypted at rest with `OPENSRE_SECRET_KEY` (AES-256-GCM). Everything can also be set through env vars for infrastructure-as-code users.
+- Connector credentials are set through the API and encrypted at rest with `STROMBOLI_SECRET_KEY` (AES-256-GCM). Everything can also be set through env vars for infrastructure-as-code users.
 
 ## Consequences
 

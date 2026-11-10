@@ -19,4 +19,4 @@ The log interface stays backend-neutral (service, window, filter, limit), so eac
 ## Consequences
 
 - The demo and tests run fully offline.
-- Users of an unsupported store cannot use opensre for logs until its connector exists.
+- Users of an unsupported store cannot use stromboli for logs until its connector exists.

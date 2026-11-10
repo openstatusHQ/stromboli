@@ -1,5 +1,5 @@
 // Package mcpconn is how connectors call provider MCP servers (Google Cloud,
-// GitHub, Axiom, flyctl...). opensre is the MCP client: it calls tools itself,
+// GitHub, Axiom, flyctl...). stromboli is the MCP client: it calls tools itself,
 // from code, and the model never sees these servers directly.
 //
 // Guardrails:
@@ -31,7 +31,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-// Config describes one MCP server and what opensre may call on it.
+// Config describes one MCP server and what stromboli may call on it.
 type Config struct {
 	// Name identifies the server in errors, e.g. "gcp logging".
 	Name string
@@ -47,7 +47,7 @@ type Config struct {
 	Command []string
 	// Env is added to the stdio server's environment.
 	Env []string
-	// Allow lists the tools opensre may call. It is required.
+	// Allow lists the tools stromboli may call. It is required.
 	Allow []string
 	// RequireReadOnly makes connecting fail unless every allowed tool is
 	// annotated readOnlyHint. Leave it false only for servers that do not
@@ -220,7 +220,7 @@ func (c *Client) connect(ctx context.Context) (*mcp.ClientSession, error) {
 	if err != nil {
 		return nil, err
 	}
-	client := mcp.NewClient(&mcp.Implementation{Name: "opensre", Version: "1"}, nil)
+	client := mcp.NewClient(&mcp.Implementation{Name: "stromboli", Version: "1"}, nil)
 	session, err := client.Connect(ctx, transport, nil)
 	if err != nil {
 		return nil, fmt.Errorf("%s: connect: %w", c.cfg.Name, err)
@@ -278,7 +278,7 @@ func (c *Client) transport() (mcp.Transport, error) {
 			Timeout:   c.cfg.Timeout + 10*time.Second,
 			Transport: &authTransport{header: c.cfg.Header, token: c.cfg.Token, base: http.DefaultTransport},
 		},
-		// opensre only makes request/response calls; no server-initiated
+		// stromboli only makes request/response calls; no server-initiated
 		// stream is needed, and some servers do not support it.
 		DisableStandaloneSSE: true,
 		MaxRetries:           2,

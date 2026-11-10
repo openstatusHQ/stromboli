@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-package opensre.v1;
+package stromboli.v1;
 
 // Connector is a configured data source. Secret config values are never
 // returned by the API.

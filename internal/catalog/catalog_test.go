@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	opensrev1 "github.com/openstatushq/opensre/gen/opensre/v1"
+	stromboliv1 "github.com/openstatushq/stromboli/gen/stromboli/v1"
 )
 
 const sample = `
@@ -123,10 +123,10 @@ func TestYAMLExportKeepsFieldOrderAndTypes(t *testing.T) {
 }
 
 func TestValidateMetrics(t *testing.T) {
-	services := []*opensrev1.Service{
-		{Name: "ok", Owners: []string{"@a"}, Metrics: &opensrev1.MetricsConfig{Source: "fly", Selectors: []string{`app="ok"`}}},
-		{Name: "no-selector", Owners: []string{"@a"}, Metrics: &opensrev1.MetricsConfig{Source: "fly"}},
-		{Name: "wrong-kind", Owners: []string{"@a"}, Metrics: &opensrev1.MetricsConfig{Source: "loki", Selectors: []string{`app="x"`}}},
+	services := []*stromboliv1.Service{
+		{Name: "ok", Owners: []string{"@a"}, Metrics: &stromboliv1.MetricsConfig{Source: "fly", Selectors: []string{`app="ok"`}}},
+		{Name: "no-selector", Owners: []string{"@a"}, Metrics: &stromboliv1.MetricsConfig{Source: "fly"}},
+		{Name: "wrong-kind", Owners: []string{"@a"}, Metrics: &stromboliv1.MetricsConfig{Source: "loki", Selectors: []string{`app="x"`}}},
 	}
 	issues := Validate(services, ValidateOptions{Connectors: map[string]string{"fly": "fly", "loki": "loki"}})
 	errs := map[string]string{}

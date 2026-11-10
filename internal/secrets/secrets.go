@@ -47,7 +47,7 @@ func (b *Box) Open(sealed []byte) ([]byte, error) {
 	}
 	out, err := b.aead.Open(nil, sealed[:n], sealed[n:], nil)
 	if err != nil {
-		return nil, errors.New("decrypt failed: was OPENSRE_SECRET_KEY changed?")
+		return nil, errors.New("decrypt failed: was STROMBOLI_SECRET_KEY changed?")
 	}
 	return out, nil
 }

@@ -1,14 +1,14 @@
 // Package action runs approved mitigations. Investigations propose them; a
-// human approves or rejects each one; only then does opensre call the
+// human approves or rejects each one; only then does stromboli call the
 // provider. Every action is recorded with who decided, when, and what it did.
 //
 // Guardrails, all required for an action to run:
-//   - OPENSRE_ACTIONS_ENABLED=true (which itself requires OPENSRE_API_TOKEN),
+//   - STROMBOLI_ACTIONS_ENABLED=true (which itself requires STROMBOLI_API_TOKEN),
 //   - the service's catalog entry names a fly_machines connector (fly.actions),
 //   - the action is in the service's allow-list (fly.allow),
 //   - every machine belongs to the service's Fly app, checked when proposed
 //     and again when approved,
-//   - a named human approves it before it expires (OPENSRE_ACTION_TTL).
+//   - a named human approves it before it expires (STROMBOLI_ACTION_TTL).
 package action
 
 import (
@@ -24,13 +24,13 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"google.golang.org/protobuf/encoding/protojson"
 
-	opensrev1 "github.com/openstatushq/opensre/gen/opensre/v1"
-	"github.com/openstatushq/opensre/internal/catalog"
-	"github.com/openstatushq/opensre/internal/config"
-	"github.com/openstatushq/opensre/internal/connector"
-	"github.com/openstatushq/opensre/internal/connector/fly"
-	"github.com/openstatushq/opensre/internal/store"
-	"github.com/openstatushq/opensre/internal/store/db"
+	stromboliv1 "github.com/openstatushq/stromboli/gen/stromboli/v1"
+	"github.com/openstatushq/stromboli/internal/catalog"
+	"github.com/openstatushq/stromboli/internal/config"
+	"github.com/openstatushq/stromboli/internal/connector"
+	"github.com/openstatushq/stromboli/internal/connector/fly"
+	"github.com/openstatushq/stromboli/internal/store"
+	"github.com/openstatushq/stromboli/internal/store/db"
 )
 
 const (
@@ -65,7 +65,7 @@ var (
 
 // Notifier publishes action outcomes, e.g. in the investigation's Slack thread.
 type Notifier interface {
-	ActionFinished(ctx context.Context, inv db.Investigation, a db.Action, m *opensrev1.MachineAction) error
+	ActionFinished(ctx context.Context, inv db.Investigation, a db.Action, m *stromboliv1.MachineAction) error
 }
 
 // Service proposes, approves and runs actions.
@@ -81,12 +81,12 @@ func New(cfg config.Config, s *store.Store, reg *connector.Registry, n Notifier)
 	return &Service{cfg: cfg, store: s, reg: reg, notifier: n}
 }
 
-// Executable reports which machine actions opensre may run for svc, and the
+// Executable reports which machine actions stromboli may run for svc, and the
 // connector that runs them. The error says why none can run.
-func (s *Service) Executable(svc *opensrev1.Service) (conn string, allowed []string, err error) {
+func (s *Service) Executable(svc *stromboliv1.Service) (conn string, allowed []string, err error) {
 	switch {
 	case !s.cfg.ActionsEnabled:
-		return "", nil, errors.New("machine actions are disabled on this opensre instance (OPENSRE_ACTIONS_ENABLED)")
+		return "", nil, errors.New("machine actions are disabled on this stromboli instance (STROMBOLI_ACTIONS_ENABLED)")
 	case !catalog.IsFly(svc):
 		return "", nil, fmt.Errorf("service %q does not run on Fly.io", svc.Name)
 	case svc.Fly == nil || svc.Fly.Actions == "":
@@ -97,7 +97,7 @@ func (s *Service) Executable(svc *opensrev1.Service) (conn string, allowed []str
 
 // Propose validates a machine action against the catalog and the app's
 // machines, and stores it for approval. It fills in m.Service and m.App.
-func (s *Service) Propose(ctx context.Context, inv db.Investigation, graph *catalog.Graph, m *opensrev1.MachineAction) (db.Action, error) {
+func (s *Service) Propose(ctx context.Context, inv db.Investigation, graph *catalog.Graph, m *stromboliv1.MachineAction) (db.Action, error) {
 	if m.Service == "" {
 		if len(inv.Services) != 1 {
 			return db.Action{}, errors.New("service is required when the investigation covers several services")
@@ -142,7 +142,7 @@ func (s *Service) Supersede(ctx context.Context, investigation uuid.UUID) error 
 
 // validate checks m against the current catalog entry and the app's
 // machines, normalises it, and returns the connector and a client.
-func (s *Service) validate(ctx context.Context, svc *opensrev1.Service, m *opensrev1.MachineAction) (string, *fly.Machines, error) {
+func (s *Service) validate(ctx context.Context, svc *stromboliv1.Service, m *stromboliv1.MachineAction) (string, *fly.Machines, error) {
 	conn, allowed, err := s.Executable(svc)
 	if err != nil {
 		return "", nil, err
@@ -219,8 +219,8 @@ func (s *Service) List(ctx context.Context, p db.ListActionsParams) ([]db.Action
 }
 
 // Spec decodes an action's machine action.
-func Spec(a db.Action) (*opensrev1.MachineAction, error) {
-	m := &opensrev1.MachineAction{}
+func Spec(a db.Action) (*stromboliv1.MachineAction, error) {
+	m := &stromboliv1.MachineAction{}
 	if err := (protojson.UnmarshalOptions{DiscardUnknown: true}).Unmarshal(a.Spec, m); err != nil {
 		return nil, fmt.Errorf("action %s: invalid spec: %w", a.ID, err)
 	}
@@ -327,10 +327,10 @@ func (s *Service) Reject(ctx context.Context, id uuid.UUID, approver, reason str
 // StartNotifier is an optional Notifier that also hears when an approved
 // action starts running, e.g. to show it as running in place of its buttons.
 type StartNotifier interface {
-	ActionStarted(ctx context.Context, inv db.Investigation, a db.Action, m *opensrev1.MachineAction) error
+	ActionStarted(ctx context.Context, inv db.Investigation, a db.Action, m *stromboliv1.MachineAction) error
 }
 
-func (s *Service) notifyStarted(ctx context.Context, a db.Action, m *opensrev1.MachineAction) {
+func (s *Service) notifyStarted(ctx context.Context, a db.Action, m *stromboliv1.MachineAction) {
 	sn, ok := s.notifier.(StartNotifier)
 	if !ok {
 		return
@@ -344,7 +344,7 @@ func (s *Service) notifyStarted(ctx context.Context, a db.Action, m *opensrev1.M
 	}
 }
 
-func (s *Service) notify(ctx context.Context, a db.Action, m *opensrev1.MachineAction) {
+func (s *Service) notify(ctx context.Context, a db.Action, m *stromboliv1.MachineAction) {
 	if s.notifier == nil {
 		return
 	}
@@ -361,7 +361,7 @@ func (s *Service) notify(ctx context.Context, a db.Action, m *opensrev1.MachineA
 // execute runs m machine by machine and stops at the first failure, so a
 // rolling restart never takes down more than one machine that did not come
 // back. The result lists what was done and how to undo it.
-func execute(ctx context.Context, c *fly.Machines, m *opensrev1.MachineAction) (string, error) {
+func execute(ctx context.Context, c *fly.Machines, m *stromboliv1.MachineAction) (string, error) {
 	var lines []string
 	app := m.App
 	waitFor := func(id string) error {

@@ -18,9 +18,9 @@ func envOf(kv map[string]string) func(string) string { return func(k string) str
 
 func TestRegistryResolvesIDs(t *testing.T) {
 	r := FromEnv(envOf(map[string]string{
-		"ANTHROPIC_API_KEY":              "sk-ant",
-		"OPENAI_API_KEY":                 "sk-oa",
-		"OPENSRE_PROVIDER_GROQ_BASE_URL": "https://api.groq.com/openai/v1",
+		"ANTHROPIC_API_KEY":                "sk-ant",
+		"OPENAI_API_KEY":                   "sk-oa",
+		"STROMBOLI_PROVIDER_GROQ_BASE_URL": "https://api.groq.com/openai/v1",
 	}))
 	for id, want := range map[string]string{
 		"claude-opus-5-5":            "anthropic:claude-opus-5-5", // no prefix: Anthropic

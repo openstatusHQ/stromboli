@@ -10,7 +10,7 @@ Measuring accuracy is the hard part of an AI SRE. Without numbers, prompt, model
 ## Decision
 
 - Snapshot connector responses for real past incidents into `eval/cases/<id>/`, with the known root cause. The stored evidence ([0007](0007-query-logs-on-demand.md)) is the starting point.
-- `opensre eval` replays each case with connectors stubbed by the fixtures, and scores:
+- `stromboli eval` replays each case with connectors stubbed by the fixtures, and scores:
   - whether the root cause is the top-1 or in the top-3 hypotheses, judged by an LLM against the known answer and spot-checked by humans
   - time to mitigation, time to report, tokens and cost
   - hallucinated evidence: claims not backed by any tool output

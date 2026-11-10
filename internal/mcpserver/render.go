@@ -7,13 +7,13 @@ import (
 
 	"google.golang.org/protobuf/types/known/timestamppb"
 
-	opensrev1 "github.com/openstatushq/opensre/gen/opensre/v1"
-	"github.com/openstatushq/opensre/internal/report"
+	stromboliv1 "github.com/openstatushq/stromboli/gen/stromboli/v1"
+	"github.com/openstatushq/stromboli/internal/report"
 )
 
-func servicesMarkdown(services []*opensrev1.Service) string {
+func servicesMarkdown(services []*stromboliv1.Service) string {
 	if len(services) == 0 {
-		return "The catalog is empty. Services are added with `opensre catalog import`."
+		return "The catalog is empty. Services are added with `stromboli catalog import`."
 	}
 	var b strings.Builder
 	fmt.Fprintf(&b, "%d services:\n", len(services))
@@ -40,7 +40,7 @@ func servicesMarkdown(services []*opensrev1.Service) string {
 	return strings.TrimRight(b.String(), "\n")
 }
 
-func serviceMarkdown(r *opensrev1.GetServiceResponse) string {
+func serviceMarkdown(r *stromboliv1.GetServiceResponse) string {
 	s := r.Service
 	var b strings.Builder
 	fmt.Fprintf(&b, "# %s\n", s.Name)
@@ -91,7 +91,7 @@ func serviceMarkdown(r *opensrev1.GetServiceResponse) string {
 	return strings.TrimRight(b.String(), "\n")
 }
 
-func investigationsMarkdown(invs []*opensrev1.Investigation) string {
+func investigationsMarkdown(invs []*stromboliv1.Investigation) string {
 	if len(invs) == 0 {
 		return "No investigations match."
 	}
@@ -109,7 +109,7 @@ func investigationsMarkdown(invs []*opensrev1.Investigation) string {
 	return strings.TrimRight(b.String(), "\n")
 }
 
-func investigationMarkdown(inv *opensrev1.Investigation) string {
+func investigationMarkdown(inv *stromboliv1.Investigation) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "# %s\n\n", inv.Title)
 	fmt.Fprintf(&b, "- ID: %s\n- Status: %s\n- Services: %s\n- Source: %s\n- Started: %s\n",
@@ -123,9 +123,9 @@ func investigationMarkdown(inv *opensrev1.Investigation) string {
 	if inv.Mitigation != nil {
 		b.WriteString("\n## Mitigation\n\n" + report.MitigationMarkdown(inv.Mitigation) + "\n")
 		if inv.Mitigation.ActionId != "" {
-			b.WriteString("\nThe machine action needs a named human to approve it, with the opensre CLI or in Slack. This MCP server cannot approve it.\n")
+			b.WriteString("\nThe machine action needs a named human to approve it, with the stromboli CLI or in Slack. This MCP server cannot approve it.\n")
 		}
-	} else if inv.Status == opensrev1.InvestigationStatus_INVESTIGATION_STATUS_RUNNING {
+	} else if inv.Status == stromboliv1.InvestigationStatus_INVESTIGATION_STATUS_RUNNING {
 		b.WriteString("\nNo mitigation yet: the triage phase is still gathering evidence.\n")
 	}
 	if inv.Report != nil {
@@ -137,7 +137,7 @@ func investigationMarkdown(inv *opensrev1.Investigation) string {
 	return strings.TrimRight(b.String(), "\n")
 }
 
-func stepsMarkdown(steps []*opensrev1.Step, more int64) string {
+func stepsMarkdown(steps []*stromboliv1.Step, more int64) string {
 	if len(steps) == 0 {
 		return "## Steps\n\nNo steps."
 	}
@@ -155,7 +155,7 @@ func stepsMarkdown(steps []*opensrev1.Step, more int64) string {
 	return strings.TrimRight(b.String(), "\n")
 }
 
-func stepLine(s *opensrev1.Step) string {
+func stepLine(s *stromboliv1.Step) string {
 	line := fmt.Sprintf("#%d %s", s.Seq, s.Kind)
 	if s.Name != "" {
 		line += " " + s.Name
@@ -169,7 +169,7 @@ func stepLine(s *opensrev1.Step) string {
 	return line
 }
 
-func actionsMarkdown(actions []*opensrev1.Action) string {
+func actionsMarkdown(actions []*stromboliv1.Action) string {
 	if len(actions) == 0 {
 		return "No actions match."
 	}
@@ -181,12 +181,12 @@ func actionsMarkdown(actions []*opensrev1.Action) string {
 	return strings.TrimRight(b.String(), "\n")
 }
 
-func actionMarkdown(a *opensrev1.Action) string {
+func actionMarkdown(a *stromboliv1.Action) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "# Action %s\n\n", a.Id)
 	fmt.Fprintf(&b, "- Status: %s\n- Service: %s\n- Does: %s\n- Investigation: %s\n- Proposed: %s\n",
 		actionStatus(a.Status), a.Service, report.MachineActionText(a.MachineAction), a.InvestigationId, when(a.CreatedAt))
-	if a.Status == opensrev1.ActionStatus_ACTION_STATUS_PROPOSED {
+	if a.Status == stromboliv1.ActionStatus_ACTION_STATUS_PROPOSED {
 		fmt.Fprintf(&b, "- Expires: %s\n\nA named human must approve it: `%s`, or the Apply button in Slack. This MCP server cannot approve it.\n",
 			when(a.ExpiresAt), report.ApproveCommand(a.Id))
 	}
@@ -205,11 +205,11 @@ func actionMarkdown(a *opensrev1.Action) string {
 	return strings.TrimRight(b.String(), "\n")
 }
 
-func statusName(s opensrev1.InvestigationStatus) string {
+func statusName(s stromboliv1.InvestigationStatus) string {
 	return strings.ToLower(strings.TrimPrefix(s.String(), "INVESTIGATION_STATUS_"))
 }
 
-func actionStatus(s opensrev1.ActionStatus) string {
+func actionStatus(s stromboliv1.ActionStatus) string {
 	return strings.ToLower(strings.TrimPrefix(s.String(), "ACTION_STATUS_"))
 }
 

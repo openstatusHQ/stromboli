@@ -1,5 +1,5 @@
 // Command demo pushes synthetic logs for a small fake system to Loki, so
-// opensre can be tried without a real stack. After DEMO_INCIDENT_AFTER it
+// stromboli can be tried without a real stack. After DEMO_INCIDENT_AFTER it
 // simulates a connection pool exhaustion in db-proxy that breaks api.
 package main
 

@@ -1,7 +1,7 @@
 -- +goose Up
 CREATE TABLE services (
     name       text PRIMARY KEY,
-    -- Full catalog entry as protojson (opensre.v1.Service).
+    -- Full catalog entry as protojson (stromboli.v1.Service).
     spec       jsonb NOT NULL,
     created_at timestamptz NOT NULL DEFAULT now(),
     updated_at timestamptz NOT NULL DEFAULT now()

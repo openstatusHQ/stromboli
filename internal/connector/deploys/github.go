@@ -17,7 +17,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/openstatushq/opensre/internal/connector/mcpconn"
+	"github.com/openstatushq/stromboli/internal/connector/mcpconn"
 )
 
 // Target is the catalog's deploy config for one service.

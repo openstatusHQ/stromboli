@@ -12,7 +12,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/openstatushq/opensre/internal/connector/mcpconn"
+	"github.com/openstatushq/stromboli/internal/connector/mcpconn"
 )
 
 // Handler answers a tool call with a JSON-able result, or an error the

@@ -5,7 +5,7 @@
 
 ## Context
 
-Until the web UI exists, the CLI is how users set up and operate opensre, by hand and from scripts and CI.
+Until the web UI exists, the CLI is how users set up and operate stromboli, by hand and from scripts and CI.
 
 ## Decision
 

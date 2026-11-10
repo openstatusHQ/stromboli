@@ -8,12 +8,12 @@ import (
 	"time"
 	"unicode/utf8"
 
-	opensrev1 "github.com/openstatushq/opensre/gen/opensre/v1"
-	"github.com/openstatushq/opensre/internal/catalog"
-	"github.com/openstatushq/opensre/internal/connector/logs"
-	"github.com/openstatushq/opensre/internal/llm"
-	"github.com/openstatushq/opensre/internal/policy"
-	"github.com/openstatushq/opensre/internal/store/db"
+	stromboliv1 "github.com/openstatushq/stromboli/gen/stromboli/v1"
+	"github.com/openstatushq/stromboli/internal/catalog"
+	"github.com/openstatushq/stromboli/internal/connector/logs"
+	"github.com/openstatushq/stromboli/internal/llm"
+	"github.com/openstatushq/stromboli/internal/policy"
+	"github.com/openstatushq/stromboli/internal/store/db"
 )
 
 // tool is one read-only capability exposed to the model.
@@ -364,8 +364,8 @@ var tools = []tool{
 			"impact":     str("Current user impact in one short sentence: who is affected, since when, ongoing or not."),
 			"machine_action": map[string]any{
 				"type": "object",
-				"description": "Required whenever the mitigation is one of the machine actions the brief's Fly.io section says opensre can run for the service: " +
-					"the same mitigation as a Fly machine action, which a human approves before opensre runs it (the approve button). Omit it otherwise.",
+				"description": "Required whenever the mitigation is one of the machine actions the brief's Fly.io section says stromboli can run for the service: " +
+					"the same mitigation as a Fly machine action, which a human approves before stromboli runs it (the approve button). Omit it otherwise.",
 				"properties": map[string]any{
 					"service":     str("Catalog service the machines belong to."),
 					"action":      map[string]any{"type": "string", "enum": catalog.MachineActions},
@@ -406,7 +406,7 @@ type logArgs struct {
 	Buckets      int    `json:"buckets"`
 }
 
-func (tc *toolContext) service(name string) (*opensrev1.Service, error) {
+func (tc *toolContext) service(name string) (*stromboliv1.Service, error) {
 	svc, ok := tc.graph.Service(name)
 	if !ok {
 		return nil, fmt.Errorf("service %q is not in the catalog; call list_services", name)

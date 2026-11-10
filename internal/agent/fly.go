@@ -7,15 +7,15 @@ import (
 	"strings"
 	"time"
 
-	opensrev1 "github.com/openstatushq/opensre/gen/opensre/v1"
-	"github.com/openstatushq/opensre/internal/catalog"
-	"github.com/openstatushq/opensre/internal/connector/fly"
+	stromboliv1 "github.com/openstatushq/stromboli/gen/stromboli/v1"
+	"github.com/openstatushq/stromboli/internal/catalog"
+	"github.com/openstatushq/stromboli/internal/connector/fly"
 )
 
 // maxMachinesInBrief keeps the machine table short on large apps.
 const maxMachinesInBrief = 20
 
-// flyExec says whether opensre can run machine actions for a service.
+// flyExec says whether stromboli can run machine actions for a service.
 type flyExec struct {
 	allowed []string
 	reason  string // why not, when allowed is empty
@@ -23,7 +23,7 @@ type flyExec struct {
 
 // briefFly is the brief section for a service on Fly.io: its machines (IDs
 // and regions to put in commands) and the Fly command for each mitigation.
-func (e *Engine) briefFly(ctx context.Context, svc *opensrev1.Service) string {
+func (e *Engine) briefFly(ctx context.Context, svc *stromboliv1.Service) string {
 	app := catalog.FlyApp(svc)
 	machines, listErr := e.flyMachines(ctx, svc, app)
 	ex := flyExec{reason: "machine actions are not configured"}
@@ -39,7 +39,7 @@ func (e *Engine) briefFly(ctx context.Context, svc *opensrev1.Service) string {
 
 // flyMachines lists the app's machines with the fly.actions connector, or
 // else the fly metrics connector's token.
-func (e *Engine) flyMachines(ctx context.Context, svc *opensrev1.Service, app string) ([]fly.Machine, error) {
+func (e *Engine) flyMachines(ctx context.Context, svc *stromboliv1.Service, app string) ([]fly.Machine, error) {
 	conn := ""
 	if svc.Fly != nil && svc.Fly.Actions != "" {
 		conn = svc.Fly.Actions
@@ -130,11 +130,11 @@ func renderFly(app string, machines []fly.Machine, listErr error, ex flyExec) st
 	b.WriteString("Verify with `fly status " + a + "` and the metrics of the machine.\n\n")
 
 	if len(ex.allowed) > 0 {
-		fmt.Fprintf(&b, "opensre can run these machine actions for this service after a human approves them: %s. "+
+		fmt.Fprintf(&b, "stromboli can run these machine actions for this service after a human approves them: %s. "+
 			"To offer one, set machine_action in submit_mitigation with the machine IDs from the table; the command above still goes in action for humans.\n",
 			strings.Join(ex.allowed, ", "))
 	} else {
-		fmt.Fprintf(&b, "opensre cannot run machine actions for this service (%s): leave machine_action unset, the commands are for humans.\n", ex.reason)
+		fmt.Fprintf(&b, "stromboli cannot run machine actions for this service (%s): leave machine_action unset, the commands are for humans.\n", ex.reason)
 	}
 	return b.String()
 }

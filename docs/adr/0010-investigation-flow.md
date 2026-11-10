@@ -9,9 +9,9 @@ Most of the value of an AI SRE is in the investigation phase: collecting context
 
 ## Decision
 
-1. **Trigger.** An openstatus, Alertmanager, Grafana or generic webhook, or `opensre investigate`, creates an investigation for a catalog service. Repeats within `OPENSRE_DEDUPE_WINDOW` are dropped.
-2. **Brief, with no LLM.** Code collects the service card, dependencies and blast radius, log patterns and metrics against baseline, recent deploys of the service and its dependencies, runbooks and similar past investigations. `opensre brief` prints it on its own, and it must be useful to a human without any model.
-3. **One agent with read-only tools** then mitigates and investigates ([0009](0009-mitigate-first-investigate-second.md)), within `OPENSRE_MAX_TOOL_CALLS` and `OPENSRE_INVESTIGATION_TIMEOUT`.
+1. **Trigger.** An openstatus, Alertmanager, Grafana or generic webhook, or `stromboli investigate`, creates an investigation for a catalog service. Repeats within `STROMBOLI_DEDUPE_WINDOW` are dropped.
+2. **Brief, with no LLM.** Code collects the service card, dependencies and blast radius, log patterns and metrics against baseline, recent deploys of the service and its dependencies, runbooks and similar past investigations. `stromboli brief` prints it on its own, and it must be useful to a human without any model.
+3. **One agent with read-only tools** then mitigates and investigates ([0009](0009-mitigate-first-investigate-second.md)), within `STROMBOLI_MAX_TOOL_CALLS` and `STROMBOLI_INVESTIGATION_TIMEOUT`.
 4. **Report.** A fixed shape: likely cause, confidence, evidence, ruled out, mitigation, long-term fix, next steps, sent to Slack and the API.
 
 Slack is the primary output: one thread per incident, updated in place rather than spammed, quiet unless there is something new.

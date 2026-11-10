@@ -14,10 +14,10 @@ import (
 	"strings"
 	"time"
 
-	opensrev1 "github.com/openstatushq/opensre/gen/opensre/v1"
-	"github.com/openstatushq/opensre/internal/agent"
-	"github.com/openstatushq/opensre/internal/connector/metrics"
-	"github.com/openstatushq/opensre/internal/store/db"
+	stromboliv1 "github.com/openstatushq/stromboli/gen/stromboli/v1"
+	"github.com/openstatushq/stromboli/internal/agent"
+	"github.com/openstatushq/stromboli/internal/connector/metrics"
+	"github.com/openstatushq/stromboli/internal/store/db"
 )
 
 // Source is the investigation source of health check findings.
@@ -82,7 +82,7 @@ type Starter interface {
 type MetricsFunc func(ctx context.Context, name string) (metrics.Source, string, error)
 
 // CatalogFunc returns the catalog's services.
-type CatalogFunc func(ctx context.Context) ([]*opensrev1.Service, error)
+type CatalogFunc func(ctx context.Context) ([]*stromboliv1.Service, error)
 
 // Summarizer is told when a run found every checked service healthy;
 // *report.Slack implements it.
@@ -177,7 +177,7 @@ func (c *Checker) RunOnce(ctx context.Context) []Result {
 	return results
 }
 
-func (c *Checker) checkService(ctx context.Context, svc *opensrev1.Service) Result {
+func (c *Checker) checkService(ctx context.Context, svc *stromboliv1.Service) Result {
 	r := Result{Service: svc.Name}
 	log := slog.With("service", svc.Name)
 	matchers := metrics.Matchers(svc.Metrics.Selectors)
@@ -247,7 +247,7 @@ func value(samples []metrics.Sample, avg bool) (float64, bool) {
 	return t / float64(len(vals)), true
 }
 
-func (c *Checker) investigate(ctx context.Context, svc *opensrev1.Service, r *Result) {
+func (c *Checker) investigate(ctx context.Context, svc *stromboliv1.Service, r *Result) {
 	checks := []string{}
 	lines := []string{}
 	findings := make([]any, 0, len(r.Findings))

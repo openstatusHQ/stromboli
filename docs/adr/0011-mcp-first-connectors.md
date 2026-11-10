@@ -9,9 +9,9 @@ Providers increasingly host MCP servers for their APIs. Using them means less cl
 
 ## Decision
 
-- opensre calls a provider through **the MCP server the provider hosts**, when there is one (Google Cloud Logging and Monitoring, GitHub).
+- stromboli calls a provider through **the MCP server the provider hosts**, when there is one (Google Cloud Logging and Monitoring, GitHub).
 - Otherwise it calls **the provider's API directly** (Fly.io Machines API, Loki and Prometheus HTTP APIs, the AWS SDK, Axiom REST). It never adds a CLI or local process just to get MCP; for example, `flyctl mcp server` serves destroy, exec and secrets commands without marking any read-only.
-- opensre is the MCP client and calls tools from code. The model never talks to these servers directly; it gets compact evidence ([0007](0007-query-logs-on-demand.md)).
+- stromboli is the MCP client and calls tools from code. The model never talks to these servers directly; it gets compact evidence ([0007](0007-query-logs-on-demand.md)).
 - Each connector names the few tools it may call. Any other tool is refused.
 - For servers that annotate their tools, connecting fails unless every allowed tool is marked `readOnlyHint`.
 - Sessions are reused per connector and closed on shutdown.

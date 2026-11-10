@@ -10,12 +10,12 @@ import (
 
 	"google.golang.org/protobuf/encoding/protojson"
 
-	opensrev1 "github.com/openstatushq/opensre/gen/opensre/v1"
-	"github.com/openstatushq/opensre/internal/catalog"
-	"github.com/openstatushq/opensre/internal/connector/deploys"
-	"github.com/openstatushq/opensre/internal/connector/logs"
-	"github.com/openstatushq/opensre/internal/policy"
-	"github.com/openstatushq/opensre/internal/store/db"
+	stromboliv1 "github.com/openstatushq/stromboli/gen/stromboli/v1"
+	"github.com/openstatushq/stromboli/internal/catalog"
+	"github.com/openstatushq/stromboli/internal/connector/deploys"
+	"github.com/openstatushq/stromboli/internal/connector/logs"
+	"github.com/openstatushq/stromboli/internal/policy"
+	"github.com/openstatushq/stromboli/internal/store/db"
 )
 
 // Window is the time range under investigation. The baseline is the window
@@ -66,7 +66,7 @@ func (e *Engine) Brief(ctx context.Context, service string, w Window) (string, e
 		w.Start.Format(time.RFC3339), w.End.Format(time.RFC3339), w.End.Sub(w.Start).Round(time.Minute), w.End.Sub(w.Start).Round(time.Minute))
 
 	b.WriteString("## Service\n\n")
-	card, _ := catalog.MarshalYAML([]*opensrev1.Service{svc})
+	card, _ := catalog.MarshalYAML([]*stromboliv1.Service{svc})
 	b.WriteString("```yaml\n" + string(card) + "```\n\n")
 
 	b.WriteString("## Dependencies\n\n")
@@ -85,7 +85,7 @@ func (e *Engine) Brief(ctx context.Context, service string, w Window) (string, e
 	return b.String(), nil
 }
 
-func (e *Engine) briefLogs(ctx context.Context, svc *opensrev1.Service, w Window) string {
+func (e *Engine) briefLogs(ctx context.Context, svc *stromboliv1.Service, w Window) string {
 	if svc.Logs == nil || svc.Logs.Source == "" {
 		return "_No log source configured for this service._\n"
 	}
@@ -161,7 +161,7 @@ func analyzeLogs(ctx context.Context, src logs.Source, selector, filter string, 
 	return &a, nil
 }
 
-func (e *Engine) briefDeploys(ctx context.Context, graph *catalog.Graph, svc *opensrev1.Service, w Window) string {
+func (e *Engine) briefDeploys(ctx context.Context, graph *catalog.Graph, svc *stromboliv1.Service, w Window) string {
 	// Changes to the service itself and to what it depends on, from a bit before the window.
 	since := w.Start.Add(-2 * time.Hour)
 	names := append([]string{svc.Name}, graph.Downstream(svc.Name)...)
@@ -210,7 +210,7 @@ func (e *Engine) briefDeploys(ctx context.Context, graph *catalog.Graph, svc *op
 	return b.String()
 }
 
-func (e *Engine) recentDeploys(ctx context.Context, s *opensrev1.Service, since time.Time) ([]deploys.Deploy, error) {
+func (e *Engine) recentDeploys(ctx context.Context, s *stromboliv1.Service, since time.Time) ([]deploys.Deploy, error) {
 	gh, err := e.connectors.GitHub(ctx, s.Deploys.Source)
 	if err != nil {
 		return nil, err
@@ -231,7 +231,7 @@ func (e *Engine) recentDeploys(ctx context.Context, s *opensrev1.Service, since 
 // maxRunbookInBrief keeps the brief compact; the agent can read the full runbook.
 const maxRunbookInBrief = 3000
 
-func (e *Engine) briefRunbooks(ctx context.Context, svc *opensrev1.Service) string {
+func (e *Engine) briefRunbooks(ctx context.Context, svc *stromboliv1.Service) string {
 	if len(svc.Runbooks) == 0 {
 		return "No runbooks linked.\n"
 	}
@@ -251,7 +251,7 @@ func (e *Engine) briefRunbooks(ctx context.Context, svc *opensrev1.Service) stri
 	return b.String()
 }
 
-func (e *Engine) briefPast(ctx context.Context, svc *opensrev1.Service) string {
+func (e *Engine) briefPast(ctx context.Context, svc *stromboliv1.Service) string {
 	rows, err := e.store.SearchInvestigations(ctx, db.SearchInvestigationsParams{Limit: 3, Service: svc.Name})
 	if err != nil {
 		return fmt.Sprintf("_Search failed: %v_\n", err)
@@ -261,7 +261,7 @@ func (e *Engine) briefPast(ctx context.Context, svc *opensrev1.Service) string {
 	}
 	var b strings.Builder
 	for _, r := range rows {
-		rep := &opensrev1.Report{}
+		rep := &stromboliv1.Report{}
 		_ = protojson.Unmarshal(r.Report, rep)
 		fmt.Fprintf(&b, "- %s %q: likely cause %q (confidence %s)\n",
 			r.CreatedAt.Time.Format("2006-01-02"), r.Title, rep.LikelyCause, rep.Confidence)

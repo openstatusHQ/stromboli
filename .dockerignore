@@ -3,7 +3,7 @@
 .env
 .env.*
 !.env.example
-/opensre
+/stromboli
 *.test
 docs
 examples

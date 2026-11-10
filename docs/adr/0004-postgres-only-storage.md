@@ -5,7 +5,7 @@
 
 ## Context
 
-opensre stores the catalog, connectors, investigations, their steps and the audit trail. It will need vector search for similar incidents and runbooks, flexible storage for evidence, and safe concurrent writes from parallel sub-investigations. Self-hosters must be able to back it up and run it managed.
+stromboli stores the catalog, connectors, investigations, their steps and the audit trail. It will need vector search for similar incidents and runbooks, flexible storage for evidence, and safe concurrent writes from parallel sub-investigations. Self-hosters must be able to back it up and run it managed.
 
 ## Decision
 

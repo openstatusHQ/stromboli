@@ -16,15 +16,15 @@ import (
 	"github.com/google/uuid"
 	"github.com/slack-go/slack"
 
-	opensrev1 "github.com/openstatushq/opensre/gen/opensre/v1"
-	"github.com/openstatushq/opensre/internal/store/db"
+	stromboliv1 "github.com/openstatushq/stromboli/gen/stromboli/v1"
+	"github.com/openstatushq/stromboli/internal/store/db"
 )
 
-// Button action IDs. The button's value is the opensre action ID.
+// Button action IDs. The button's value is the stromboli action ID.
 const (
-	approveActionID = "opensre_approve"
-	rejectActionID  = "opensre_reject"
-	actionsBlockID  = "opensre_action"
+	approveActionID = "stromboli_approve"
+	rejectActionID  = "stromboli_reject"
+	actionsBlockID  = "stromboli_action"
 )
 
 // Decider approves and rejects actions; *action.Service implements it.
@@ -58,7 +58,7 @@ func (s *Slack) EnableButtons(d Decider, invs Investigations, signingSecret stri
 }
 
 // actionBlocks renders a proposed action's buttons, or its outcome once decided.
-func (b *buttons) actionBlocks(ctx context.Context, m *opensrev1.Mitigation) []slack.Block {
+func (b *buttons) actionBlocks(ctx context.Context, m *stromboliv1.Mitigation) []slack.Block {
 	id, err := uuid.Parse(m.ActionId)
 	if err != nil {
 		return nil
@@ -67,7 +67,7 @@ func (b *buttons) actionBlocks(ctx context.Context, m *opensrev1.Mitigation) []s
 	a, err := b.decider.Get(ctx, id)
 	if err != nil {
 		slog.Warn("slack: load action", "action", id, "err", err)
-		return []slack.Block{slack.NewContextBlock("", md(fmt.Sprintf("opensre can %s once approved: `%s`", what, ApproveCommand(m.ActionId))))}
+		return []slack.Block{slack.NewContextBlock("", md(fmt.Sprintf("stromboli can %s once approved: `%s`", what, ApproveCommand(m.ActionId))))}
 	}
 	if a.Status != "proposed" {
 		return []slack.Block{slack.NewContextBlock("", md(actionOutcome(a, what)))}
@@ -77,7 +77,7 @@ func (b *buttons) actionBlocks(ctx context.Context, m *opensrev1.Mitigation) []s
 		// Slack shows the confirmation dialog as plain text: no markdown.
 		WithConfirm(slack.NewConfirmationBlockObject(
 			plain("Apply this mitigation?"),
-			plain(shorten(fmt.Sprintf("opensre will %s now.\n\nRisk: %s\nUndo: %s", what, dash(m.Risk), machineUndo(m.MachineAction, m.Undo)), 300)),
+			plain(shorten(fmt.Sprintf("stromboli will %s now.\n\nRisk: %s\nUndo: %s", what, dash(m.Risk), machineUndo(m.MachineAction, m.Undo)), 300)),
 			plain("Apply"), plain("Cancel")))
 	reject := slack.NewButtonBlockElement(rejectActionID, m.ActionId, plain("Reject")).WithStyle(slack.StyleDanger)
 	expires := ""
@@ -85,7 +85,7 @@ func (b *buttons) actionBlocks(ctx context.Context, m *opensrev1.Mitigation) []s
 		expires = fmt.Sprintf(" · expires <!date^%d^{time}|%s>", a.ExpiresAt.Time.Unix(), a.ExpiresAt.Time.UTC().Format(time.Kitchen+" UTC"))
 	}
 	return []slack.Block{
-		slack.NewContextBlock("", md(fmt.Sprintf("*opensre can do it once approved:* %s%s", what, expires))),
+		slack.NewContextBlock("", md(fmt.Sprintf("*stromboli can do it once approved:* %s%s", what, expires))),
 		slack.NewActionBlock(actionsBlockID, approve, reject),
 	}
 }
@@ -93,7 +93,7 @@ func (b *buttons) actionBlocks(ctx context.Context, m *opensrev1.Mitigation) []s
 // machineUndo is how to revert m, with its real machine IDs: the model's
 // undo is often a template like `fly machine stop <id>`. fallback is used
 // when the undo depends on what the action creates.
-func machineUndo(m *opensrev1.MachineAction, fallback string) string {
+func machineUndo(m *stromboliv1.MachineAction, fallback string) string {
 	inverse := map[string]string{"start": "stop", "stop": "start", "cordon": "uncordon", "uncordon": "cordon"}
 	switch verb := m.GetAction(); {
 	case verb == "restart":
@@ -192,7 +192,7 @@ func (b *buttons) decide(ctx context.Context, s *Slack, cb slack.InteractionCall
 	}
 	if len(b.approvers) > 0 && !slices.Contains(b.approvers, cb.User.ID) {
 		log.Warn("slack: click from a user who is not in SLACK_APPROVERS")
-		tell("🚫 You are not allowed to decide opensre actions (SLACK_APPROVERS).")
+		tell("🚫 You are not allowed to decide stromboli actions (SLACK_APPROVERS).")
 		return
 	}
 	id, err := uuid.Parse(ba.Value)

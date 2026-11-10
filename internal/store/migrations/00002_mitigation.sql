@@ -1,5 +1,5 @@
 -- +goose Up
--- Mitigation proposed by the triage phase (opensre.v1.Mitigation as protojson),
+-- Mitigation proposed by the triage phase (stromboli.v1.Mitigation as protojson),
 -- published before the root-cause investigation finishes.
 ALTER TABLE investigations ADD COLUMN mitigation jsonb;
 ALTER TABLE investigations ADD COLUMN mitigated_at timestamptz;

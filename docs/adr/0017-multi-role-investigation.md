@@ -5,7 +5,7 @@
 
 ## Context
 
-One agent alone tends to confirm its first guess and loses track in long incidents (context rot). ResolveAI landed on Investigator, Verifier and Communicator roles after three rewrites. Today opensre runs a single agent ([0010](0010-investigation-flow.md)).
+One agent alone tends to confirm its first guess and loses track in long incidents (context rot). ResolveAI landed on Investigator, Verifier and Communicator roles after three rewrites. Today stromboli runs a single agent ([0010](0010-investigation-flow.md)).
 
 ## Decision
 
@@ -16,7 +16,7 @@ After the brief and the mitigation:
 3. **Verify.** A separate Verifier gets *only the evidence*, not the investigator's reasoning, and tries to refute each hypothesis: `supported`, `refuted` or `inconclusive`, with confidence. It should run on a different model than the Investigator.
 4. **Report.** A Communicator writes the update on a cheaper model.
 5. **Steer.** Replies in the Slack thread ("check the db", "ignore deploy X") go back into the loop as instructions.
-6. **Close.** When a human resolves the incident, opensre asks for the real root cause (one click) and stores it as eval data and a source of memory notes.
+6. **Close.** When a human resolves the incident, stromboli asks for the real root cause (one click) and stores it as eval data and a source of memory notes.
 
 ## Consequences
 

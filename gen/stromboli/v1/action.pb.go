@@ -2,9 +2,9 @@
 // versions:
 // 	protoc-gen-go v1.36.11
 // 	protoc        (unknown)
-// source: opensre/v1/action.proto
+// source: stromboli/v1/action.proto
 
-package opensrev1
+package stromboliv1
 
 import (
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
@@ -33,7 +33,7 @@ const (
 	ActionStatus_ACTION_STATUS_SUCCEEDED ActionStatus = 3
 	ActionStatus_ACTION_STATUS_FAILED    ActionStatus = 4
 	ActionStatus_ACTION_STATUS_REJECTED  ActionStatus = 5
-	// Not approved in time (OPENSRE_ACTION_TTL).
+	// Not approved in time (STROMBOLI_ACTION_TTL).
 	ActionStatus_ACTION_STATUS_EXPIRED ActionStatus = 6
 	// Replaced by a revised mitigation before anyone approved it.
 	ActionStatus_ACTION_STATUS_SUPERSEDED ActionStatus = 7
@@ -74,11 +74,11 @@ func (x ActionStatus) String() string {
 }
 
 func (ActionStatus) Descriptor() protoreflect.EnumDescriptor {
-	return file_opensre_v1_action_proto_enumTypes[0].Descriptor()
+	return file_stromboli_v1_action_proto_enumTypes[0].Descriptor()
 }
 
 func (ActionStatus) Type() protoreflect.EnumType {
-	return &file_opensre_v1_action_proto_enumTypes[0]
+	return &file_stromboli_v1_action_proto_enumTypes[0]
 }
 
 func (x ActionStatus) Number() protoreflect.EnumNumber {
@@ -87,7 +87,7 @@ func (x ActionStatus) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use ActionStatus.Descriptor instead.
 func (ActionStatus) EnumDescriptor() ([]byte, []int) {
-	return file_opensre_v1_action_proto_rawDescGZIP(), []int{0}
+	return file_stromboli_v1_action_proto_rawDescGZIP(), []int{0}
 }
 
 // Action is an executable mitigation and its audit record: who approved it,
@@ -100,7 +100,7 @@ type Action struct {
 	MachineAction   *MachineAction         `protobuf:"bytes,4,opt,name=machine_action,json=machineAction,proto3" json:"machine_action,omitempty"`
 	// Connector whose credentials run the action.
 	Connector string       `protobuf:"bytes,5,opt,name=connector,proto3" json:"connector,omitempty"`
-	Status    ActionStatus `protobuf:"varint,6,opt,name=status,proto3,enum=opensre.v1.ActionStatus" json:"status,omitempty"`
+	Status    ActionStatus `protobuf:"varint,6,opt,name=status,proto3,enum=stromboli.v1.ActionStatus" json:"status,omitempty"`
 	// Who approved or rejected it, and their note.
 	DecidedBy string `protobuf:"bytes,7,opt,name=decided_by,json=decidedBy,proto3" json:"decided_by,omitempty"`
 	Note      string `protobuf:"bytes,8,opt,name=note,proto3" json:"note,omitempty"`
@@ -117,7 +117,7 @@ type Action struct {
 
 func (x *Action) Reset() {
 	*x = Action{}
-	mi := &file_opensre_v1_action_proto_msgTypes[0]
+	mi := &file_stromboli_v1_action_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -129,7 +129,7 @@ func (x *Action) String() string {
 func (*Action) ProtoMessage() {}
 
 func (x *Action) ProtoReflect() protoreflect.Message {
-	mi := &file_opensre_v1_action_proto_msgTypes[0]
+	mi := &file_stromboli_v1_action_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -142,7 +142,7 @@ func (x *Action) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Action.ProtoReflect.Descriptor instead.
 func (*Action) Descriptor() ([]byte, []int) {
-	return file_opensre_v1_action_proto_rawDescGZIP(), []int{0}
+	return file_stromboli_v1_action_proto_rawDescGZIP(), []int{0}
 }
 
 func (x *Action) GetId() string {
@@ -248,7 +248,7 @@ type ListActionsRequest struct {
 	// Only the actions of this investigation.
 	InvestigationId string `protobuf:"bytes,1,opt,name=investigation_id,json=investigationId,proto3" json:"investigation_id,omitempty"`
 	// Only actions with this status.
-	Status        ActionStatus `protobuf:"varint,2,opt,name=status,proto3,enum=opensre.v1.ActionStatus" json:"status,omitempty"`
+	Status        ActionStatus `protobuf:"varint,2,opt,name=status,proto3,enum=stromboli.v1.ActionStatus" json:"status,omitempty"`
 	Limit         int32        `protobuf:"varint,3,opt,name=limit,proto3" json:"limit,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -256,7 +256,7 @@ type ListActionsRequest struct {
 
 func (x *ListActionsRequest) Reset() {
 	*x = ListActionsRequest{}
-	mi := &file_opensre_v1_action_proto_msgTypes[1]
+	mi := &file_stromboli_v1_action_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -268,7 +268,7 @@ func (x *ListActionsRequest) String() string {
 func (*ListActionsRequest) ProtoMessage() {}
 
 func (x *ListActionsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_opensre_v1_action_proto_msgTypes[1]
+	mi := &file_stromboli_v1_action_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -281,7 +281,7 @@ func (x *ListActionsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListActionsRequest.ProtoReflect.Descriptor instead.
 func (*ListActionsRequest) Descriptor() ([]byte, []int) {
-	return file_opensre_v1_action_proto_rawDescGZIP(), []int{1}
+	return file_stromboli_v1_action_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *ListActionsRequest) GetInvestigationId() string {
@@ -314,7 +314,7 @@ type ListActionsResponse struct {
 
 func (x *ListActionsResponse) Reset() {
 	*x = ListActionsResponse{}
-	mi := &file_opensre_v1_action_proto_msgTypes[2]
+	mi := &file_stromboli_v1_action_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -326,7 +326,7 @@ func (x *ListActionsResponse) String() string {
 func (*ListActionsResponse) ProtoMessage() {}
 
 func (x *ListActionsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_opensre_v1_action_proto_msgTypes[2]
+	mi := &file_stromboli_v1_action_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -339,7 +339,7 @@ func (x *ListActionsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListActionsResponse.ProtoReflect.Descriptor instead.
 func (*ListActionsResponse) Descriptor() ([]byte, []int) {
-	return file_opensre_v1_action_proto_rawDescGZIP(), []int{2}
+	return file_stromboli_v1_action_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *ListActionsResponse) GetActions() []*Action {
@@ -358,7 +358,7 @@ type GetActionRequest struct {
 
 func (x *GetActionRequest) Reset() {
 	*x = GetActionRequest{}
-	mi := &file_opensre_v1_action_proto_msgTypes[3]
+	mi := &file_stromboli_v1_action_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -370,7 +370,7 @@ func (x *GetActionRequest) String() string {
 func (*GetActionRequest) ProtoMessage() {}
 
 func (x *GetActionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_opensre_v1_action_proto_msgTypes[3]
+	mi := &file_stromboli_v1_action_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -383,7 +383,7 @@ func (x *GetActionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetActionRequest.ProtoReflect.Descriptor instead.
 func (*GetActionRequest) Descriptor() ([]byte, []int) {
-	return file_opensre_v1_action_proto_rawDescGZIP(), []int{3}
+	return file_stromboli_v1_action_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *GetActionRequest) GetId() string {
@@ -402,7 +402,7 @@ type GetActionResponse struct {
 
 func (x *GetActionResponse) Reset() {
 	*x = GetActionResponse{}
-	mi := &file_opensre_v1_action_proto_msgTypes[4]
+	mi := &file_stromboli_v1_action_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -414,7 +414,7 @@ func (x *GetActionResponse) String() string {
 func (*GetActionResponse) ProtoMessage() {}
 
 func (x *GetActionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_opensre_v1_action_proto_msgTypes[4]
+	mi := &file_stromboli_v1_action_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -427,7 +427,7 @@ func (x *GetActionResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetActionResponse.ProtoReflect.Descriptor instead.
 func (*GetActionResponse) Descriptor() ([]byte, []int) {
-	return file_opensre_v1_action_proto_rawDescGZIP(), []int{4}
+	return file_stromboli_v1_action_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *GetActionResponse) GetAction() *Action {
@@ -449,7 +449,7 @@ type ApproveActionRequest struct {
 
 func (x *ApproveActionRequest) Reset() {
 	*x = ApproveActionRequest{}
-	mi := &file_opensre_v1_action_proto_msgTypes[5]
+	mi := &file_stromboli_v1_action_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -461,7 +461,7 @@ func (x *ApproveActionRequest) String() string {
 func (*ApproveActionRequest) ProtoMessage() {}
 
 func (x *ApproveActionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_opensre_v1_action_proto_msgTypes[5]
+	mi := &file_stromboli_v1_action_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -474,7 +474,7 @@ func (x *ApproveActionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ApproveActionRequest.ProtoReflect.Descriptor instead.
 func (*ApproveActionRequest) Descriptor() ([]byte, []int) {
-	return file_opensre_v1_action_proto_rawDescGZIP(), []int{5}
+	return file_stromboli_v1_action_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *ApproveActionRequest) GetId() string {
@@ -508,7 +508,7 @@ type ApproveActionResponse struct {
 
 func (x *ApproveActionResponse) Reset() {
 	*x = ApproveActionResponse{}
-	mi := &file_opensre_v1_action_proto_msgTypes[6]
+	mi := &file_stromboli_v1_action_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -520,7 +520,7 @@ func (x *ApproveActionResponse) String() string {
 func (*ApproveActionResponse) ProtoMessage() {}
 
 func (x *ApproveActionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_opensre_v1_action_proto_msgTypes[6]
+	mi := &file_stromboli_v1_action_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -533,7 +533,7 @@ func (x *ApproveActionResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ApproveActionResponse.ProtoReflect.Descriptor instead.
 func (*ApproveActionResponse) Descriptor() ([]byte, []int) {
-	return file_opensre_v1_action_proto_rawDescGZIP(), []int{6}
+	return file_stromboli_v1_action_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *ApproveActionResponse) GetAction() *Action {
@@ -554,7 +554,7 @@ type RejectActionRequest struct {
 
 func (x *RejectActionRequest) Reset() {
 	*x = RejectActionRequest{}
-	mi := &file_opensre_v1_action_proto_msgTypes[7]
+	mi := &file_stromboli_v1_action_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -566,7 +566,7 @@ func (x *RejectActionRequest) String() string {
 func (*RejectActionRequest) ProtoMessage() {}
 
 func (x *RejectActionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_opensre_v1_action_proto_msgTypes[7]
+	mi := &file_stromboli_v1_action_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -579,7 +579,7 @@ func (x *RejectActionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RejectActionRequest.ProtoReflect.Descriptor instead.
 func (*RejectActionRequest) Descriptor() ([]byte, []int) {
-	return file_opensre_v1_action_proto_rawDescGZIP(), []int{7}
+	return file_stromboli_v1_action_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *RejectActionRequest) GetId() string {
@@ -612,7 +612,7 @@ type RejectActionResponse struct {
 
 func (x *RejectActionResponse) Reset() {
 	*x = RejectActionResponse{}
-	mi := &file_opensre_v1_action_proto_msgTypes[8]
+	mi := &file_stromboli_v1_action_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -624,7 +624,7 @@ func (x *RejectActionResponse) String() string {
 func (*RejectActionResponse) ProtoMessage() {}
 
 func (x *RejectActionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_opensre_v1_action_proto_msgTypes[8]
+	mi := &file_stromboli_v1_action_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -637,7 +637,7 @@ func (x *RejectActionResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RejectActionResponse.ProtoReflect.Descriptor instead.
 func (*RejectActionResponse) Descriptor() ([]byte, []int) {
-	return file_opensre_v1_action_proto_rawDescGZIP(), []int{8}
+	return file_stromboli_v1_action_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *RejectActionResponse) GetAction() *Action {
@@ -647,19 +647,18 @@ func (x *RejectActionResponse) GetAction() *Action {
 	return nil
 }
 
-var File_opensre_v1_action_proto protoreflect.FileDescriptor
+var File_stromboli_v1_action_proto protoreflect.FileDescriptor
 
-const file_opensre_v1_action_proto_rawDesc = "" +
+const file_stromboli_v1_action_proto_rawDesc = "" +
 	"\n" +
-	"\x17opensre/v1/action.proto\x12\n" +
-	"opensre.v1\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x1eopensre/v1/investigation.proto\"\xbe\x04\n" +
+	"\x19stromboli/v1/action.proto\x12\fstromboli.v1\x1a\x1fgoogle/protobuf/timestamp.proto\x1a stromboli/v1/investigation.proto\"\xc2\x04\n" +
 	"\x06Action\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12)\n" +
 	"\x10investigation_id\x18\x02 \x01(\tR\x0finvestigationId\x12\x18\n" +
-	"\aservice\x18\x03 \x01(\tR\aservice\x12@\n" +
-	"\x0emachine_action\x18\x04 \x01(\v2\x19.opensre.v1.MachineActionR\rmachineAction\x12\x1c\n" +
-	"\tconnector\x18\x05 \x01(\tR\tconnector\x120\n" +
-	"\x06status\x18\x06 \x01(\x0e2\x18.opensre.v1.ActionStatusR\x06status\x12\x1d\n" +
+	"\aservice\x18\x03 \x01(\tR\aservice\x12B\n" +
+	"\x0emachine_action\x18\x04 \x01(\v2\x1b.stromboli.v1.MachineActionR\rmachineAction\x12\x1c\n" +
+	"\tconnector\x18\x05 \x01(\tR\tconnector\x122\n" +
+	"\x06status\x18\x06 \x01(\x0e2\x1a.stromboli.v1.ActionStatusR\x06status\x12\x1d\n" +
 	"\n" +
 	"decided_by\x18\a \x01(\tR\tdecidedBy\x12\x12\n" +
 	"\x04note\x18\b \x01(\tR\x04note\x12\x16\n" +
@@ -673,29 +672,29 @@ const file_opensre_v1_action_proto_rawDesc = "" +
 	"\n" +
 	"decided_at\x18\r \x01(\v2\x1a.google.protobuf.TimestampR\tdecidedAt\x12;\n" +
 	"\vfinished_at\x18\x0e \x01(\v2\x1a.google.protobuf.TimestampR\n" +
-	"finishedAt\"\x87\x01\n" +
+	"finishedAt\"\x89\x01\n" +
 	"\x12ListActionsRequest\x12)\n" +
-	"\x10investigation_id\x18\x01 \x01(\tR\x0finvestigationId\x120\n" +
-	"\x06status\x18\x02 \x01(\x0e2\x18.opensre.v1.ActionStatusR\x06status\x12\x14\n" +
-	"\x05limit\x18\x03 \x01(\x05R\x05limit\"C\n" +
-	"\x13ListActionsResponse\x12,\n" +
-	"\aactions\x18\x01 \x03(\v2\x12.opensre.v1.ActionR\aactions\"\"\n" +
+	"\x10investigation_id\x18\x01 \x01(\tR\x0finvestigationId\x122\n" +
+	"\x06status\x18\x02 \x01(\x0e2\x1a.stromboli.v1.ActionStatusR\x06status\x12\x14\n" +
+	"\x05limit\x18\x03 \x01(\x05R\x05limit\"E\n" +
+	"\x13ListActionsResponse\x12.\n" +
+	"\aactions\x18\x01 \x03(\v2\x14.stromboli.v1.ActionR\aactions\"\"\n" +
 	"\x10GetActionRequest\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\tR\x02id\"?\n" +
-	"\x11GetActionResponse\x12*\n" +
-	"\x06action\x18\x01 \x01(\v2\x12.opensre.v1.ActionR\x06action\"V\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\"A\n" +
+	"\x11GetActionResponse\x12,\n" +
+	"\x06action\x18\x01 \x01(\v2\x14.stromboli.v1.ActionR\x06action\"V\n" +
 	"\x14ApproveActionRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1a\n" +
 	"\bapprover\x18\x02 \x01(\tR\bapprover\x12\x12\n" +
-	"\x04note\x18\x03 \x01(\tR\x04note\"C\n" +
-	"\x15ApproveActionResponse\x12*\n" +
-	"\x06action\x18\x01 \x01(\v2\x12.opensre.v1.ActionR\x06action\"Y\n" +
+	"\x04note\x18\x03 \x01(\tR\x04note\"E\n" +
+	"\x15ApproveActionResponse\x12,\n" +
+	"\x06action\x18\x01 \x01(\v2\x14.stromboli.v1.ActionR\x06action\"Y\n" +
 	"\x13RejectActionRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1a\n" +
 	"\bapprover\x18\x02 \x01(\tR\bapprover\x12\x16\n" +
-	"\x06reason\x18\x03 \x01(\tR\x06reason\"B\n" +
-	"\x14RejectActionResponse\x12*\n" +
-	"\x06action\x18\x01 \x01(\v2\x12.opensre.v1.ActionR\x06action*\xf0\x01\n" +
+	"\x06reason\x18\x03 \x01(\tR\x06reason\"D\n" +
+	"\x14RejectActionResponse\x12,\n" +
+	"\x06action\x18\x01 \x01(\v2\x14.stromboli.v1.ActionR\x06action*\xf0\x01\n" +
 	"\fActionStatus\x12\x1d\n" +
 	"\x19ACTION_STATUS_UNSPECIFIED\x10\x00\x12\x1a\n" +
 	"\x16ACTION_STATUS_PROPOSED\x10\x01\x12\x19\n" +
@@ -704,64 +703,62 @@ const file_opensre_v1_action_proto_rawDesc = "" +
 	"\x14ACTION_STATUS_FAILED\x10\x04\x12\x1a\n" +
 	"\x16ACTION_STATUS_REJECTED\x10\x05\x12\x19\n" +
 	"\x15ACTION_STATUS_EXPIRED\x10\x06\x12\x1c\n" +
-	"\x18ACTION_STATUS_SUPERSEDED\x10\a2\xdc\x02\n" +
-	"\rActionService\x12S\n" +
-	"\vListActions\x12\x1e.opensre.v1.ListActionsRequest\x1a\x1f.opensre.v1.ListActionsResponse\"\x03\x90\x02\x01\x12M\n" +
-	"\tGetAction\x12\x1c.opensre.v1.GetActionRequest\x1a\x1d.opensre.v1.GetActionResponse\"\x03\x90\x02\x01\x12T\n" +
-	"\rApproveAction\x12 .opensre.v1.ApproveActionRequest\x1a!.opensre.v1.ApproveActionResponse\x12Q\n" +
-	"\fRejectAction\x12\x1f.opensre.v1.RejectActionRequest\x1a .opensre.v1.RejectActionResponseB\xa0\x01\n" +
-	"\x0ecom.opensre.v1B\vActionProtoP\x01Z8github.com/openstatushq/opensre/gen/opensre/v1;opensrev1\xa2\x02\x03OXX\xaa\x02\n" +
-	"Opensre.V1\xca\x02\n" +
-	"Opensre\\V1\xe2\x02\x16Opensre\\V1\\GPBMetadata\xea\x02\vOpensre::V1b\x06proto3"
+	"\x18ACTION_STATUS_SUPERSEDED\x10\a2\xec\x02\n" +
+	"\rActionService\x12W\n" +
+	"\vListActions\x12 .stromboli.v1.ListActionsRequest\x1a!.stromboli.v1.ListActionsResponse\"\x03\x90\x02\x01\x12Q\n" +
+	"\tGetAction\x12\x1e.stromboli.v1.GetActionRequest\x1a\x1f.stromboli.v1.GetActionResponse\"\x03\x90\x02\x01\x12X\n" +
+	"\rApproveAction\x12\".stromboli.v1.ApproveActionRequest\x1a#.stromboli.v1.ApproveActionResponse\x12U\n" +
+	"\fRejectAction\x12!.stromboli.v1.RejectActionRequest\x1a\".stromboli.v1.RejectActionResponseB\xb0\x01\n" +
+	"\x10com.stromboli.v1B\vActionProtoP\x01Z>github.com/openstatushq/stromboli/gen/stromboli/v1;stromboliv1\xa2\x02\x03SXX\xaa\x02\fStromboli.V1\xca\x02\fStromboli\\V1\xe2\x02\x18Stromboli\\V1\\GPBMetadata\xea\x02\rStromboli::V1b\x06proto3"
 
 var (
-	file_opensre_v1_action_proto_rawDescOnce sync.Once
-	file_opensre_v1_action_proto_rawDescData []byte
+	file_stromboli_v1_action_proto_rawDescOnce sync.Once
+	file_stromboli_v1_action_proto_rawDescData []byte
 )
 
-func file_opensre_v1_action_proto_rawDescGZIP() []byte {
-	file_opensre_v1_action_proto_rawDescOnce.Do(func() {
-		file_opensre_v1_action_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_opensre_v1_action_proto_rawDesc), len(file_opensre_v1_action_proto_rawDesc)))
+func file_stromboli_v1_action_proto_rawDescGZIP() []byte {
+	file_stromboli_v1_action_proto_rawDescOnce.Do(func() {
+		file_stromboli_v1_action_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_stromboli_v1_action_proto_rawDesc), len(file_stromboli_v1_action_proto_rawDesc)))
 	})
-	return file_opensre_v1_action_proto_rawDescData
+	return file_stromboli_v1_action_proto_rawDescData
 }
 
-var file_opensre_v1_action_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_opensre_v1_action_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
-var file_opensre_v1_action_proto_goTypes = []any{
-	(ActionStatus)(0),             // 0: opensre.v1.ActionStatus
-	(*Action)(nil),                // 1: opensre.v1.Action
-	(*ListActionsRequest)(nil),    // 2: opensre.v1.ListActionsRequest
-	(*ListActionsResponse)(nil),   // 3: opensre.v1.ListActionsResponse
-	(*GetActionRequest)(nil),      // 4: opensre.v1.GetActionRequest
-	(*GetActionResponse)(nil),     // 5: opensre.v1.GetActionResponse
-	(*ApproveActionRequest)(nil),  // 6: opensre.v1.ApproveActionRequest
-	(*ApproveActionResponse)(nil), // 7: opensre.v1.ApproveActionResponse
-	(*RejectActionRequest)(nil),   // 8: opensre.v1.RejectActionRequest
-	(*RejectActionResponse)(nil),  // 9: opensre.v1.RejectActionResponse
-	(*MachineAction)(nil),         // 10: opensre.v1.MachineAction
+var file_stromboli_v1_action_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
+var file_stromboli_v1_action_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
+var file_stromboli_v1_action_proto_goTypes = []any{
+	(ActionStatus)(0),             // 0: stromboli.v1.ActionStatus
+	(*Action)(nil),                // 1: stromboli.v1.Action
+	(*ListActionsRequest)(nil),    // 2: stromboli.v1.ListActionsRequest
+	(*ListActionsResponse)(nil),   // 3: stromboli.v1.ListActionsResponse
+	(*GetActionRequest)(nil),      // 4: stromboli.v1.GetActionRequest
+	(*GetActionResponse)(nil),     // 5: stromboli.v1.GetActionResponse
+	(*ApproveActionRequest)(nil),  // 6: stromboli.v1.ApproveActionRequest
+	(*ApproveActionResponse)(nil), // 7: stromboli.v1.ApproveActionResponse
+	(*RejectActionRequest)(nil),   // 8: stromboli.v1.RejectActionRequest
+	(*RejectActionResponse)(nil),  // 9: stromboli.v1.RejectActionResponse
+	(*MachineAction)(nil),         // 10: stromboli.v1.MachineAction
 	(*timestamppb.Timestamp)(nil), // 11: google.protobuf.Timestamp
 }
-var file_opensre_v1_action_proto_depIdxs = []int32{
-	10, // 0: opensre.v1.Action.machine_action:type_name -> opensre.v1.MachineAction
-	0,  // 1: opensre.v1.Action.status:type_name -> opensre.v1.ActionStatus
-	11, // 2: opensre.v1.Action.created_at:type_name -> google.protobuf.Timestamp
-	11, // 3: opensre.v1.Action.expires_at:type_name -> google.protobuf.Timestamp
-	11, // 4: opensre.v1.Action.decided_at:type_name -> google.protobuf.Timestamp
-	11, // 5: opensre.v1.Action.finished_at:type_name -> google.protobuf.Timestamp
-	0,  // 6: opensre.v1.ListActionsRequest.status:type_name -> opensre.v1.ActionStatus
-	1,  // 7: opensre.v1.ListActionsResponse.actions:type_name -> opensre.v1.Action
-	1,  // 8: opensre.v1.GetActionResponse.action:type_name -> opensre.v1.Action
-	1,  // 9: opensre.v1.ApproveActionResponse.action:type_name -> opensre.v1.Action
-	1,  // 10: opensre.v1.RejectActionResponse.action:type_name -> opensre.v1.Action
-	2,  // 11: opensre.v1.ActionService.ListActions:input_type -> opensre.v1.ListActionsRequest
-	4,  // 12: opensre.v1.ActionService.GetAction:input_type -> opensre.v1.GetActionRequest
-	6,  // 13: opensre.v1.ActionService.ApproveAction:input_type -> opensre.v1.ApproveActionRequest
-	8,  // 14: opensre.v1.ActionService.RejectAction:input_type -> opensre.v1.RejectActionRequest
-	3,  // 15: opensre.v1.ActionService.ListActions:output_type -> opensre.v1.ListActionsResponse
-	5,  // 16: opensre.v1.ActionService.GetAction:output_type -> opensre.v1.GetActionResponse
-	7,  // 17: opensre.v1.ActionService.ApproveAction:output_type -> opensre.v1.ApproveActionResponse
-	9,  // 18: opensre.v1.ActionService.RejectAction:output_type -> opensre.v1.RejectActionResponse
+var file_stromboli_v1_action_proto_depIdxs = []int32{
+	10, // 0: stromboli.v1.Action.machine_action:type_name -> stromboli.v1.MachineAction
+	0,  // 1: stromboli.v1.Action.status:type_name -> stromboli.v1.ActionStatus
+	11, // 2: stromboli.v1.Action.created_at:type_name -> google.protobuf.Timestamp
+	11, // 3: stromboli.v1.Action.expires_at:type_name -> google.protobuf.Timestamp
+	11, // 4: stromboli.v1.Action.decided_at:type_name -> google.protobuf.Timestamp
+	11, // 5: stromboli.v1.Action.finished_at:type_name -> google.protobuf.Timestamp
+	0,  // 6: stromboli.v1.ListActionsRequest.status:type_name -> stromboli.v1.ActionStatus
+	1,  // 7: stromboli.v1.ListActionsResponse.actions:type_name -> stromboli.v1.Action
+	1,  // 8: stromboli.v1.GetActionResponse.action:type_name -> stromboli.v1.Action
+	1,  // 9: stromboli.v1.ApproveActionResponse.action:type_name -> stromboli.v1.Action
+	1,  // 10: stromboli.v1.RejectActionResponse.action:type_name -> stromboli.v1.Action
+	2,  // 11: stromboli.v1.ActionService.ListActions:input_type -> stromboli.v1.ListActionsRequest
+	4,  // 12: stromboli.v1.ActionService.GetAction:input_type -> stromboli.v1.GetActionRequest
+	6,  // 13: stromboli.v1.ActionService.ApproveAction:input_type -> stromboli.v1.ApproveActionRequest
+	8,  // 14: stromboli.v1.ActionService.RejectAction:input_type -> stromboli.v1.RejectActionRequest
+	3,  // 15: stromboli.v1.ActionService.ListActions:output_type -> stromboli.v1.ListActionsResponse
+	5,  // 16: stromboli.v1.ActionService.GetAction:output_type -> stromboli.v1.GetActionResponse
+	7,  // 17: stromboli.v1.ActionService.ApproveAction:output_type -> stromboli.v1.ApproveActionResponse
+	9,  // 18: stromboli.v1.ActionService.RejectAction:output_type -> stromboli.v1.RejectActionResponse
 	15, // [15:19] is the sub-list for method output_type
 	11, // [11:15] is the sub-list for method input_type
 	11, // [11:11] is the sub-list for extension type_name
@@ -769,28 +766,28 @@ var file_opensre_v1_action_proto_depIdxs = []int32{
 	0,  // [0:11] is the sub-list for field type_name
 }
 
-func init() { file_opensre_v1_action_proto_init() }
-func file_opensre_v1_action_proto_init() {
-	if File_opensre_v1_action_proto != nil {
+func init() { file_stromboli_v1_action_proto_init() }
+func file_stromboli_v1_action_proto_init() {
+	if File_stromboli_v1_action_proto != nil {
 		return
 	}
-	file_opensre_v1_investigation_proto_init()
+	file_stromboli_v1_investigation_proto_init()
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
-			RawDescriptor: unsafe.Slice(unsafe.StringData(file_opensre_v1_action_proto_rawDesc), len(file_opensre_v1_action_proto_rawDesc)),
+			RawDescriptor: unsafe.Slice(unsafe.StringData(file_stromboli_v1_action_proto_rawDesc), len(file_stromboli_v1_action_proto_rawDesc)),
 			NumEnums:      1,
 			NumMessages:   9,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
-		GoTypes:           file_opensre_v1_action_proto_goTypes,
-		DependencyIndexes: file_opensre_v1_action_proto_depIdxs,
-		EnumInfos:         file_opensre_v1_action_proto_enumTypes,
-		MessageInfos:      file_opensre_v1_action_proto_msgTypes,
+		GoTypes:           file_stromboli_v1_action_proto_goTypes,
+		DependencyIndexes: file_stromboli_v1_action_proto_depIdxs,
+		EnumInfos:         file_stromboli_v1_action_proto_enumTypes,
+		MessageInfos:      file_stromboli_v1_action_proto_msgTypes,
 	}.Build()
-	File_opensre_v1_action_proto = out.File
-	file_opensre_v1_action_proto_goTypes = nil
-	file_opensre_v1_action_proto_depIdxs = nil
+	File_stromboli_v1_action_proto = out.File
+	file_stromboli_v1_action_proto_goTypes = nil
+	file_stromboli_v1_action_proto_depIdxs = nil
 }

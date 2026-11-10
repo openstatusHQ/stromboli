@@ -5,7 +5,7 @@
 
 ## Context
 
-The design of opensre lived in a single `PLAN.md` that mixed decisions, a roadmap, status notes and open questions. As the code moved past the plan, the file needed a status banner listing where reality differed, and it was hard to tell which parts were still true and why a choice had been made.
+The design of stromboli lived in a single `PLAN.md` that mixed decisions, a roadmap, status notes and open questions. As the code moved past the plan, the file needed a status banner listing where reality differed, and it was hard to tell which parts were still true and why a choice had been made.
 
 ## Decision
 

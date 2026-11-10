@@ -12,7 +12,7 @@ import (
 	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/pressly/goose/v3"
 
-	"github.com/openstatushq/opensre/internal/store/db"
+	"github.com/openstatushq/stromboli/internal/store/db"
 )
 
 //go:generate sqlc generate -f ../../sqlc.yaml

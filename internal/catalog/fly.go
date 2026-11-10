@@ -5,10 +5,10 @@ import (
 	"slices"
 	"strings"
 
-	opensrev1 "github.com/openstatushq/opensre/gen/opensre/v1"
+	stromboliv1 "github.com/openstatushq/stromboli/gen/stromboli/v1"
 )
 
-// MachineActions are the Fly machine actions opensre can run once approved.
+// MachineActions are the Fly machine actions stromboli can run once approved.
 var MachineActions = []string{"restart", "clone", "cordon", "uncordon", "stop", "start"}
 
 // DefaultMachineActions are allowed when a service's fly.allow is empty. Stop
@@ -16,7 +16,7 @@ var MachineActions = []string{"restart", "clone", "cordon", "uncordon", "stop", 
 var DefaultMachineActions = []string{"restart", "clone", "cordon", "uncordon"}
 
 // IsFly reports whether the service runs on Fly.io machines.
-func IsFly(s *opensrev1.Service) bool {
+func IsFly(s *stromboliv1.Service) bool {
 	if s.Fly != nil {
 		return true
 	}
@@ -31,7 +31,7 @@ var appMatcher = regexp.MustCompile(`^\s*app\s*=\s*"([^"]+)"\s*$`)
 
 // FlyApp is the service's Fly app: fly.app, else the app="..." metrics
 // selector, else the service name.
-func FlyApp(s *opensrev1.Service) string {
+func FlyApp(s *stromboliv1.Service) string {
 	if s.Fly != nil && s.Fly.App != "" {
 		return s.Fly.App
 	}
@@ -48,7 +48,7 @@ func FlyApp(s *opensrev1.Service) string {
 }
 
 // AllowedMachineActions is the service's fly.allow, or the defaults.
-func AllowedMachineActions(s *opensrev1.Service) []string {
+func AllowedMachineActions(s *stromboliv1.Service) []string {
 	if s.Fly != nil && len(s.Fly.Allow) > 0 {
 		return slices.Clone(s.Fly.Allow)
 	}

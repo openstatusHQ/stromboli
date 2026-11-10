@@ -1,6 +1,6 @@
 // Package fly is a client for the Fly.io Machines API
 // (https://fly.io/docs/machines/api/): it lists an app's machines for the
-// brief, and runs the few machine actions opensre can execute once a human
+// brief, and runs the few machine actions stromboli can execute once a human
 // approves them.
 package fly
 
