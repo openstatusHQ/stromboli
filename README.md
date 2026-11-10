@@ -182,6 +182,8 @@ The catalog lives in opensre's database. YAML is its import/export format, so yo
 
 ```sh
 opensre catalog import services.yaml --runbooks runbooks/ --prune --yes   # --prune makes the file authoritative
+opensre catalog list                                                        # name, tier, owners, dependencies, sources
+opensre catalog export > services.yaml                                      # the full entries
 ```
 
 A full example is in [`examples/catalog`](examples/catalog).
