@@ -1,4 +1,4 @@
-# Fly.io deployment of stromboli (see docs/deploy/fly.md).
+# Fly.io deployment of stromboli (see docs/how-to/deploy-on-fly.md).
 #
 #   deploy/fly/setup.sh <app-name>          # first deploy: app, database, secrets
 #   fly deploy --app <app-name> --ha=false  # later deploys

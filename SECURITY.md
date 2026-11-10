@@ -10,11 +10,11 @@ Include what you found, how to reproduce it and the version affected (`stromboli
 
 ## Supported versions
 
-Security fixes go into the latest release. Self-hosters should keep up with releases; see [upgrading](docs/self-hosting.md#upgrading).
+Security fixes go into the latest release. Self-hosters should keep up with releases; see [upgrading](docs/how-to/self-host.md#upgrading).
 
 ## Hardening your instance
 
-See the [production checklist](docs/self-hosting.md#production-checklist). In short:
+See the [production checklist](docs/how-to/self-host.md#production-checklist). In short:
 
 - set `STROMBOLI_API_TOKEN` (without it the API is unauthenticated) and a separate `STROMBOLI_WEBHOOK_TOKEN`
 - serve stromboli behind TLS

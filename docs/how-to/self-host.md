@@ -1,11 +1,11 @@
 # Self-hosting stromboli
 
-stromboli is a single Go binary (or container image) plus a Postgres database. One instance serves one organisation ([ADR 0002](adr/0002-self-hosted-one-instance-per-organisation.md)).
+stromboli is a single Go binary (or container image) plus a Postgres database. One instance serves one organisation ([ADR 0002](../adr/0002-self-hosted-one-instance-per-organisation.md)).
 
 ## What you need
 
 - **Postgres.** The compose file and CI use Postgres 17 (`pgvector/pgvector:pg17`). Migrations run on startup.
-- **An LLM API key** for investigations (Anthropic by default; see [Models](../README.md#models)). Briefs work without one.
+- **An LLM API key** for investigations (Anthropic by default; see [Models](choose-models.md)). Briefs work without one.
 - **Network access** from stromboli to your log, metric and deploy sources, to your LLM provider and to Slack. Alert sources must reach stromboli's `/webhooks/*`.
 - **Resources:** stromboli is light: it queries logs and metrics where they live and stores only the evidence each investigation used, so a small VM or container is enough.
 
@@ -38,11 +38,11 @@ Download the archive for your platform from [Releases](https://github.com/openst
 
 ### Railway
 
-One command deploys stromboli and Postgres: see [deploy/railway](deploy/railway.md).
+One command deploys stromboli and Postgres: see [deploy/railway](deploy-on-railway.md).
 
 ### Fly.io
 
-`fly.toml` and a setup script deploy stromboli with Fly Managed Postgres: see [deploy/fly](deploy/fly.md).
+`fly.toml` and a setup script deploy stromboli with Fly Managed Postgres: see [deploy/fly](deploy-on-fly.md).
 
 ### Image tags
 
@@ -62,7 +62,7 @@ One command deploys stromboli and Postgres: see [deploy/railway](deploy/railway.
 - [ ] **Postgres is not the default.** Change `POSTGRES_PASSWORD` before the first `docker compose up`, or use a managed database with `sslmode=require`.
 - [ ] **Backups.** All state is in Postgres (catalog, connectors, investigations, actions): back it up like any other database, e.g. `docker compose exec postgres pg_dump -U stromboli stromboli > stromboli.sql`.
 - [ ] **Read-only connector credentials.** stromboli only reads from your sources; give it tokens scoped accordingly.
-- [ ] **Machine actions stay off** (`STROMBOLI_ACTIONS_ENABLED=false`) unless you need them. If you enable them, set `SLACK_APPROVERS` ([Machine actions](../README.md#machine-actions)).
+- [ ] **Machine actions stay off** (`STROMBOLI_ACTIONS_ENABLED=false`) unless you need them. If you enable them, set `SLACK_APPROVERS` ([Machine actions](enable-machine-actions.md)).
 - [ ] **Health check** on `GET /healthz` (no auth): it returns 200 when the database is reachable.
 - [ ] **Logs** go to stdout as structured logs; collect them like your other services.
 
@@ -83,4 +83,4 @@ To roll back, restore the backup taken before the upgrade and start the previous
 
 ## Configuration
 
-Every setting is an environment variable: see [Configuration](../README.md#configuration) and [`.env.example`](../.env.example).
+Every setting is an environment variable: see [Configuration](../reference/configuration.md) and [`.env.example`](../../.env.example).
