@@ -1,5 +1,29 @@
 # stromboli
 
+```text
+                              (   )  (    )
+                           (    )  (   )    )
+                             (   ) (   )  (
+                               (  ) (  )
+                          *   .  \ | /  .   *
+                       .    *  -=  *  =-  *    .
+                               ' _/^\_ '
+                               _/  ' \\_
+                             _/  .    \\\_
+                           _/       '  \\\\_
+                         _/   .         \\\\\_
+                       _/          .   ' \\\\\\_
+                     _/    '              \\\\\\\_
+                   _/            .       ' \\\\\\\\_
+                 _/      .                  \\\\\\\\\_    ( )
+               _/              '     .     ' \\\\\\\\\\_    ) (
+   ~~~~~~~~~~~/~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\~~~~~~~~~~~~~
+     ~~~   ~~~~     ~~~      ~~~~~      ~~~~     ~~~      ~~~~   ~~~
+          ~~~~         ~~~         ~~~~        ~~~~          ~~~
+
+                         s t r o m b o l i . d e v
+```
+
 [![ci](https://github.com/openstatushq/stromboli/actions/workflows/ci.yml/badge.svg)](https://github.com/openstatushq/stromboli/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 **An open-source AI SRE agent you host yourself.** When an alert fires, stromboli gathers the context, tells you how to stop the bleeding, then finds the root cause, and posts all of it to Slack.
