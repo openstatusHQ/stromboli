@@ -63,7 +63,7 @@ func Railway() railway.Project {
 			"OPENSRE_MAX_TOOL_CALLS":        "30",
 			"OPENSRE_MITIGATION_TOOL_CALLS": "6",
 			"OPENSRE_INVESTIGATION_TIMEOUT": "8m",
-			"OPENSRE_DEDUPE_WINDOW":         "30m",
+			"OPENSRE_DEDUPE_WINDOW":         "5m",
 
 			// --- Machine actions (Fly.io): off in the server by default, on here ---
 			"OPENSRE_ACTIONS_ENABLED": "true",
