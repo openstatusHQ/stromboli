@@ -27,6 +27,7 @@ type fake struct {
 	deleted  []string
 	imported *opensrev1.ImportCatalogRequest
 	existing string // services YAML returned by ExportCatalog
+	services []*opensrev1.Service
 }
 
 func (f *fake) ListConnectors(context.Context, *connect.Request[opensrev1.ListConnectorsRequest]) (*connect.Response[opensrev1.ListConnectorsResponse], error) {
@@ -51,6 +52,10 @@ func (f *fake) DeleteConnector(_ context.Context, req *connect.Request[opensrev1
 
 func (f *fake) ExportCatalog(context.Context, *connect.Request[opensrev1.ExportCatalogRequest]) (*connect.Response[opensrev1.ExportCatalogResponse], error) {
 	return connect.NewResponse(&opensrev1.ExportCatalogResponse{ServicesYaml: []byte(f.existing)}), nil
+}
+
+func (f *fake) ListServices(context.Context, *connect.Request[opensrev1.ListServicesRequest]) (*connect.Response[opensrev1.ListServicesResponse], error) {
+	return connect.NewResponse(&opensrev1.ListServicesResponse{Services: f.services}), nil
 }
 
 func (f *fake) ImportCatalog(_ context.Context, req *connect.Request[opensrev1.ImportCatalogRequest]) (*connect.Response[opensrev1.ImportCatalogResponse], error) {
@@ -120,6 +125,29 @@ func TestConnectorList(t *testing.T) {
 	}
 	r = run(t, &fake{}, "", false, "connector", "ls", "--json")
 	if r.code != 0 || !strings.Contains(r.stdout, `"connectors": [`) || r.stderr != "" {
+		t.Fatalf("json: exit %d, stdout %q, stderr %q", r.code, r.stdout, r.stderr)
+	}
+}
+
+func TestCatalogList(t *testing.T) {
+	r := run(t, &fake{}, "", false, "catalog", "list")
+	if r.code != 0 || r.stdout != "" || !strings.Contains(r.stderr, "The catalog is empty") {
+		t.Fatalf("empty: exit %d, stdout %q, stderr %q", r.code, r.stdout, r.stderr)
+	}
+	f := &fake{services: []*opensrev1.Service{
+		{Name: "api", Tier: 1, Owners: []string{"team-a", "team-b"}, DependsOn: []string{"db"},
+			Logs: &opensrev1.LogsConfig{Source: "loki"}, Metrics: &opensrev1.MetricsConfig{Source: "fly"}},
+		{Name: "db"},
+	}}
+	r = run(t, f, "", false, "catalog", "list")
+	if r.code != 0 || !strings.Contains(r.stdout, "team-a,team-b") || !strings.Contains(r.stdout, "logs=loki,metrics=fly") {
+		t.Fatalf("exit %d, stdout %q, stderr %q", r.code, r.stdout, r.stderr)
+	}
+	if lines := strings.Split(strings.TrimSpace(r.stdout), "\n"); len(lines) != 3 || strings.Fields(lines[2])[1] != "-" {
+		t.Fatalf("stdout %q", r.stdout)
+	}
+	r = run(t, f, "", false, "catalog", "ls", "--json")
+	if r.code != 0 || !strings.Contains(r.stdout, `"services": [`) || r.stderr != "" {
 		t.Fatalf("json: exit %d, stdout %q, stderr %q", r.code, r.stdout, r.stderr)
 	}
 }
