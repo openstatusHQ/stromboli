@@ -96,7 +96,7 @@ alert ──▶ 1. match ──▶ 2. brief ──▶ 3. mitigate ──▶ 4. i
                         (no LLM)    (posted now)    (read-only tools)   (Slack + API)
 ```
 
-1. **Match.** The alert is matched to a catalog service (openstatus monitor ID, `service`/`app` labels). Repeats within `OPENSRE_DEDUPE_WINDOW` are dropped.
+1. **Match.** The alert is matched to a catalog service (openstatus monitor ID, `service`/`app` labels). Repeats are merged into the running investigation, or into one that finished within `OPENSRE_DEDUPE_WINDOW`, unless the alert resolved since (openstatus `recovered`, Alertmanager `resolved`) or one of its machine actions succeeded: the alert firing again is then a new incident. Merged alerts and webhooks with a wrong token are logged.
 2. **Brief (no LLM).** opensre collects what an on-call engineer would look at first:
    - the service, its dependencies and blast radius
    - log error patterns, compared with the preceding window of the same length

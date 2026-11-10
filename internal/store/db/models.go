@@ -56,6 +56,7 @@ type Investigation struct {
 	FinishedAt   pgtype.Timestamptz
 	Mitigation   json.RawMessage
 	MitigatedAt  pgtype.Timestamptz
+	ResolvedAt   pgtype.Timestamptz
 }
 
 type Runbook struct {

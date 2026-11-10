@@ -15,6 +15,7 @@ import (
 
 	"github.com/anthropics/anthropic-sdk-go/v2"
 	"github.com/anthropics/anthropic-sdk-go/v2/option"
+	"github.com/jackc/pgx/v5/pgtype"
 	"google.golang.org/protobuf/encoding/protojson"
 
 	opensrev1 "github.com/openstatushq/opensre/gen/opensre/v1"
@@ -434,6 +435,33 @@ func runInvestigation(t *testing.T, st *store.Store, b logBackend) {
 	}
 	if len(model.requests) != 5 {
 		t.Errorf("a deduplicated start must not call the model, got %d requests", len(model.requests))
+	}
+
+	// Once one of its actions succeeded, or the alert resolved, the alert firing
+	// again is a new incident: the investigation is no longer reused.
+	findOpen := func() error {
+		_, err := st.Queries.FindOpenInvestigation(ctx, db.FindOpenInvestigationParams{
+			Fingerprint: pgtype.Text{String: "healthcheck:x", Valid: true}, WindowMinutes: 60})
+		return err
+	}
+	if _, err := st.Pool.Exec(ctx, `INSERT INTO actions (id, investigation_id, service, kind, spec, connector, status, expires_at)
+		VALUES (gen_random_uuid(), $1, $2, 'fly_machine', '{}', 'fly', 'succeeded', now())`, inv.ID, svcName); err != nil {
+		t.Fatal(err)
+	}
+	if err := findOpen(); !store.IsNotFound(err) {
+		t.Errorf("an investigation whose action succeeded must not be reused, got err=%v", err)
+	}
+	if _, err := st.Pool.Exec(ctx, `DELETE FROM actions WHERE investigation_id = $1`, inv.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := findOpen(); err != nil {
+		t.Fatalf("without the action it is reused again, got err=%v", err)
+	}
+	if n, err := st.Queries.ResolveInvestigations(ctx, pgtype.Text{String: "healthcheck:x", Valid: true}); err != nil || n != 1 {
+		t.Fatalf("resolve: n=%d err=%v", n, err)
+	}
+	if err := findOpen(); !store.IsNotFound(err) {
+		t.Errorf("a resolved investigation must not be reused, got err=%v", err)
 	}
 }
 

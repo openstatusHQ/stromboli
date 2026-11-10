@@ -17,10 +17,20 @@ import (
 	"github.com/openstatushq/opensre/internal/store/db"
 )
 
+// mitigationVerb is what the headline says will be done: the machine action
+// when there is one (Kind is a generic class, so a "start" is filed as
+// "restart"), else the kind.
+func mitigationVerb(m *opensrev1.Mitigation) string {
+	if a := m.GetMachineAction().GetAction(); a != "" {
+		return a
+	}
+	return m.Kind
+}
+
 // MitigationMarkdown renders a proposed mitigation for terminals.
 func MitigationMarkdown(m *opensrev1.Mitigation) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "Mitigate first: %s %s (risk: %s, confidence: %s)\n", m.Kind, m.Target, m.Risk, m.Confidence)
+	fmt.Fprintf(&b, "Mitigate first: %s %s (risk: %s, confidence: %s)\n", mitigationVerb(m), m.Target, m.Risk, m.Confidence)
 	for _, f := range [][2]string{{"Impact", m.Impact}, {"Why", m.Rationale}, {"Run", m.Action}, {"Verify", m.Verify}, {"Undo", m.Undo}} {
 		if f[1] != "" {
 			fmt.Fprintf(&b, "  %s: %s\n", f[0], indent(f[1]))
@@ -277,7 +287,7 @@ func (s *Slack) mitigationBlocks(ctx context.Context, inv db.Investigation, m *o
 		when = fmt.Sprintf(" · proposed %s after the alert", inv.MitigatedAt.Time.Sub(inv.CreatedAt.Time).Round(time.Second))
 	}
 	lines := []string{
-		fmt.Sprintf("🩹 *Mitigate first: %s* %s", m.Kind, m.Target),
+		fmt.Sprintf("🩹 *Mitigate first: %s* %s", mitigationVerb(m), m.Target),
 	}
 	if m.Impact != "" {
 		lines = append(lines, "*Impact:* "+shorten(m.Impact, 400))

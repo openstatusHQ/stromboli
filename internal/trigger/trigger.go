@@ -13,6 +13,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgtype"
+
 	"github.com/openstatushq/opensre/internal/agent"
 	"github.com/openstatushq/opensre/internal/catalog"
 	"github.com/openstatushq/opensre/internal/store"
@@ -26,7 +28,8 @@ type Alert struct {
 	Fingerprint string
 	At          time.Time
 	Raw         map[string]any
-	// Resolved alerts are acknowledged but do not start an investigation.
+	// Resolved alerts do not start an investigation; they mark the previous
+	// ones for the fingerprint resolved, so they are not reused.
 	Resolved bool
 }
 
@@ -77,6 +80,8 @@ func (r resolver) byMonitor(monitor string) []string {
 func (h *Handler) handle(parse parser) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !h.authorized(r) {
+			// Logged: an alert source with a wrong token otherwise fails silently.
+			slog.Warn("webhook rejected: invalid or missing token", "path", r.URL.Path, "user_agent", r.UserAgent())
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}
@@ -116,7 +121,18 @@ func (h *Handler) start(ctx context.Context, a Alert) (res startResult) {
 	res.Title = a.Title
 	switch {
 	case a.Resolved:
-		res.Status = "ignored: resolved"
+		// The next alert with this fingerprint is a new incident, even within
+		// the dedupe window.
+		res.Status = "resolved"
+		if a.Fingerprint != "" {
+			n, err := h.store.Queries.ResolveInvestigations(ctx, pgtype.Text{String: a.Fingerprint, Valid: true})
+			if err != nil {
+				slog.Error("resolve investigations", "source", a.Source, "fingerprint", a.Fingerprint, "err", err)
+				res.Status = "error: " + err.Error()
+				return
+			}
+			slog.Info("alert resolved", "source", a.Source, "fingerprint", a.Fingerprint, "investigations", n)
+		}
 		return
 	case len(a.Services) == 0:
 		res.Status = "ignored: no matching service in the catalog"
@@ -132,6 +148,8 @@ func (h *Handler) start(ctx context.Context, a Alert) (res startResult) {
 		slog.Error("start investigation", "source", a.Source, "err", err)
 	case reused:
 		res.Status, res.InvestigationID = "deduplicated", inv.ID.String()
+		slog.Info("alert deduplicated: merged into an existing investigation",
+			"investigation", inv.ID, "investigation_status", inv.Status, "source", a.Source, "fingerprint", a.Fingerprint, "title", a.Title)
 	default:
 		res.Status, res.InvestigationID = "started", inv.ID.String()
 	}

@@ -56,10 +56,21 @@ SELECT * FROM investigations WHERE id = $1;
 SELECT * FROM investigations ORDER BY created_at DESC LIMIT $1;
 
 -- name: FindOpenInvestigation :one
-SELECT * FROM investigations
-WHERE fingerprint = $1 AND (status = 'running' OR finished_at > now() - make_interval(mins => @window_minutes::int))
-ORDER BY created_at DESC
+-- A running investigation always absorbs a repeat of its alert. A finished one
+-- does only within the window, and never once the alert resolved or one of its
+-- actions succeeded: the alert firing again is then a new incident.
+SELECT * FROM investigations i
+WHERE i.fingerprint = $1 AND i.resolved_at IS NULL AND (
+    i.status = 'running'
+    OR (i.finished_at > now() - make_interval(mins => @window_minutes::int)
+        AND NOT EXISTS (SELECT 1 FROM actions a WHERE a.investigation_id = i.id AND a.status = 'succeeded'))
+)
+ORDER BY i.created_at DESC
 LIMIT 1;
+
+-- name: ResolveInvestigations :execrows
+UPDATE investigations SET resolved_at = now()
+WHERE fingerprint = $1 AND resolved_at IS NULL;
 
 -- name: SetInvestigationSlack :exec
 UPDATE investigations SET slack_channel = $2, slack_ts = $3 WHERE id = $1;
