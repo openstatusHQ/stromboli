@@ -10,3 +10,4 @@ examples
 .railway
 docker-compose*.yml
 README.md
+fly.toml

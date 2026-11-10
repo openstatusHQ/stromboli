@@ -69,6 +69,11 @@ func Railway() railway.Project {
 			"OPENSRE_ACTIONS_ENABLED": "true",
 			"OPENSRE_ACTION_TTL":      "30m",
 
+			// --- Health checks (Fly.io): off in the server by default, hourly here ---
+			// Checks memory, CPU, disk and volumes of every service with a fly metrics
+			// source and investigates breaches. At least 5m; "0" turns it off.
+			"OPENSRE_HEALTHCHECK_INTERVAL": "1h",
+
 			// --- Slack (optional) ---
 			// Reports need both SLACK_BOT_TOKEN and SLACK_CHANNEL (a channel ID).
 			"SLACK_BOT_TOKEN": railway.Preserve(),

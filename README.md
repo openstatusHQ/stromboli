@@ -50,6 +50,13 @@ railway login
 ANTHROPIC_API_KEY=sk-ant-... deploy/railway/setup.sh
 ```
 
+On Fly.io, [`fly.toml`](fly.toml) and a setup script do the same with Fly Managed Postgres ([details](docs/deploy/fly.md)):
+
+```sh
+fly auth login
+FLY_MPG_CLUSTER=<cluster-id> ANTHROPIC_API_KEY=sk-ant-... deploy/fly/setup.sh <app-name>
+```
+
 ### 2. Connect your logs, metrics and deploys
 
 opensre is configured with its CLI (the same binary, so `docker compose exec opensre opensre ...` works too):
