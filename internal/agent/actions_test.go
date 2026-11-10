@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -271,6 +272,35 @@ func TestMachineActionRefused(t *testing.T) {
 	}
 	if len(env.fly.Calls())+len(envClone.fly.Calls()) != 0 {
 		t.Error("refused actions must not touch machines")
+	}
+}
+
+func TestMachineActionFromCommand(t *testing.T) {
+	// The model wrote `fly machine restart 148e` but no machine_action: the
+	// approve button is offered anyway.
+	env := newActionEnv(t, true)
+	inv, model := env.investigate(t, restartMitigation(`null`))
+	m := storedMitigation(t, inv)
+	if m.ActionId == "" || m.MachineAction.GetAction() != "restart" || !slices.Equal(m.MachineAction.GetMachineIds(), []string{"148e"}) ||
+		m.MachineAction.App != "acme-api" {
+		t.Fatalf("the restart command should become an action waiting for approval: %v", m)
+	}
+	if out := toolResult(t, model, 1); !strings.Contains(out, "filled in from your command") {
+		t.Errorf("the model should be told the action was filled in: %s", out)
+	}
+
+	// When the command is not allowed, it stays a suggestion, without
+	// scolding the model for a machine_action it did not send.
+	envCordon := newActionEnv(t, true, "cordon")
+	inv, model = envCordon.investigate(t, restartMitigation(`null`))
+	if m := storedMitigation(t, inv); m.ActionId != "" || m.MachineAction != nil {
+		t.Errorf("a command outside the allow-list must not become an action: %v", m)
+	}
+	if out := toolResult(t, model, 1); strings.Contains(out, "machine_action") {
+		t.Errorf("nothing to correct for the model: %s", out)
+	}
+	if len(env.fly.Calls())+len(envCordon.fly.Calls()) != 0 {
+		t.Error("nothing runs without approval")
 	}
 }
 

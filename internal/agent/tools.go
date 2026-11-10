@@ -364,8 +364,8 @@ var tools = []tool{
 			"impact":     str("Current user impact in one short sentence: who is affected, since when, ongoing or not."),
 			"machine_action": map[string]any{
 				"type": "object",
-				"description": "Only when the brief's Fly.io section says opensre can run machine actions for the service: the same mitigation as a Fly machine action, " +
-					"which a human approves before opensre runs it. Omit it otherwise.",
+				"description": "Required whenever the mitigation is one of the machine actions the brief's Fly.io section says opensre can run for the service: " +
+					"the same mitigation as a Fly machine action, which a human approves before opensre runs it (the approve button). Omit it otherwise.",
 				"properties": map[string]any{
 					"service":     str("Catalog service the machines belong to."),
 					"action":      map[string]any{"type": "string", "enum": catalog.MachineActions},
