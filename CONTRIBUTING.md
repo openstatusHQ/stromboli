@@ -45,7 +45,7 @@ sqlc generate                # after editing internal/store/queries or migration
 - **The API stays backwards compatible.** Self-hosters upgrade on their own schedule; `buf breaking` runs on every PR. Database migrations only move forward and must be safe to run on startup.
 - **The CLI follows [clig.dev](https://clig.dev)** ([0015](docs/adr/0015-cli-follows-clig.md)): data on stdout, messages on stderr, `--help` with examples.
 - **No secrets in logs, errors or reports.** Connector credentials are encrypted at rest; keep them that way.
-- **Document new settings** in [`.env.example`](.env.example) and the [Configuration](README.md#configuration) table.
+- **Document new settings** in [`.env.example`](.env.example), the [Configuration](README.md#configuration) table and the [configuration reference](docs/reference/configuration.md).
 
 ## License
 

@@ -1,6 +1,6 @@
 // Railway infrastructure as code: stromboli and its Postgres database.
 //
-// Preview and apply from the repository root (see docs/deploy/railway.md):
+// Preview and apply from the repository root (see docs/how-to/deploy-on-railway.md):
 //
 //	railway config plan
 //	railway config apply

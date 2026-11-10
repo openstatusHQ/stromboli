@@ -7,7 +7,7 @@ stromboli's Fly.io setup is [`fly.toml`](../../fly.toml) at the repository root,
 | the `stromboli` app | built from [`deploy/Dockerfile`](../../deploy/Dockerfile) | one machine (`shared-cpu-1x`, 512 MB), never auto-stopped, health check on `/healthz` |
 | Postgres | [Fly Managed Postgres](https://fly.io/docs/mpg/) or any Postgres you bring | stromboli connects over the private network and runs its migrations on startup |
 
-`/healthz` pings the database, so a machine that can't reach Postgres never takes traffic. The machine is never stopped when idle: stromboli receives webhooks and runs [health checks](../../README.md#health-checks) on a timer.
+`/healthz` pings the database, so a machine that can't reach Postgres never takes traffic. The machine is never stopped when idle: stromboli receives webhooks and runs [health checks](enable-health-checks.md) on a timer.
 
 ## Deploy
 
@@ -70,6 +70,6 @@ export STROMBOLI_API_TOKEN=<the token the script printed>
 stromboli connector add loki loki url=https://loki.example.com
 ```
 
-Then continue the [Quickstart](../../README.md#2-connect-your-logs-metrics-and-deploys) from step 2. Alert webhooks go to `https://<app-name>.fly.dev/webhooks/...`.
+Then continue the [Quickstart](../tutorials/02-connect-a-real-service.md) from step 2. Alert webhooks go to `https://<app-name>.fly.dev/webhooks/...`.
 
-To have stromboli investigate the Fly apps of your organization, add a `fly` connector with a [read-only token](../../README.md#flyio): it is separate from the app stromboli itself runs in.
+To have stromboli investigate the Fly apps of your organization, add a `fly` connector with a [read-only token](connect-metrics.md#flyio): it is separate from the app stromboli itself runs in.
