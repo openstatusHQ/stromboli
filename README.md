@@ -15,6 +15,7 @@ See [docs/adr](docs/adr) for the design decisions behind opensre and what is pla
 ## Contents
 
 - [Quickstart](#quickstart)
+- [Slack](#slack)
 - [How an investigation works](#how-an-investigation-works)
 - [The service catalog](#the-service-catalog)
 - [Connecting your data](#connecting-your-data): [logs](#log-connectors), [metrics](#metric-connectors), [Google Cloud](#google-cloud), [Fly.io](#flyio)
@@ -36,7 +37,7 @@ cp .env.example .env   # fill in OPENSRE_SECRET_KEY, OPENSRE_API_TOKEN and an LL
 docker compose up -d   # opensre + Postgres on http://localhost:8080
 ```
 
-Generate the secret key with `openssl rand -base64 32`. Slack is optional: set `SLACK_BOT_TOKEN` and `SLACK_CHANNEL` to get reports there.
+Generate the secret key with `openssl rand -base64 32`. Slack is optional: [create the app from its manifest](#slack) to get reports there.
 
 Already have Postgres? Run the image alone with `OPENSRE_DB_URL=postgres://...`. Migrations run on startup. Binaries for Linux, macOS and Windows are on the [releases page](https://github.com/openstatushq/opensre/releases).
 
@@ -62,12 +63,21 @@ opensre connector add github github token               # deploys and commits; p
 
 Loki is just an example: see [Connecting your data](#connecting-your-data) for Axiom, CloudWatch, Google Cloud, Prometheus and Fly.io.
 
-### 3. Describe your services
-
-opensre can propose a catalog from what it finds in your logs. Review the file, add owners, dependencies and runbooks, then import it:
+On Fly.io, a **read-only** org token is enough for metrics, the machine list and catalog discovery. It cannot deploy, restart or read secrets:
 
 ```sh
-opensre catalog discover loki > services.yaml
+fly tokens create readonly <org-slug>                    # prints FlyV1 fm2_...; or pass it inline:
+opensre connector add fly fly org=<org-slug> token="$(fly tokens create readonly <org-slug>)"
+```
+
+`<org-slug>` is in `fly orgs list` (`personal` for a personal org). Revoke it later with `fly tokens list` and `fly tokens revoke <id>`.
+
+### 3. Describe your services
+
+opensre can propose a catalog from what it finds in your logs or Fly metrics. Review the file, add owners, dependencies and runbooks, then import it:
+
+```sh
+opensre catalog discover loki > services.yaml   # or: discover fly, one service per Fly app
 opensre catalog import services.yaml --runbooks runbooks/
 ```
 
@@ -88,6 +98,24 @@ opensre investigate api --description "5xx on /v1/monitors"   # a full investiga
 | Anything else, as `{"service","title","fingerprint","details"}` | `POST /webhooks/generic` |
 
 That's it: the next alert starts an investigation on its own.
+
+## Slack
+
+opensre posts one message per investigation (the mitigation first, then the report) and replies in its thread. The app only needs the `chat:write` scope, and it is described in [`deploy/slack/manifest.json`](deploy/slack/manifest.json):
+
+1. **Create the app.** [Create it from the manifest](https://api.slack.com/apps?new_app=1&manifest_json=%7B%22display_information%22%3A%7B%22name%22%3A%22opensre%22%2C%22description%22%3A%22AI%20SRE%20agent%3A%20posts%20the%20mitigation%20and%20root%20cause%20of%20your%20alerts.%22%2C%22background_color%22%3A%22%231f2937%22%7D%2C%22features%22%3A%7B%22bot_user%22%3A%7B%22display_name%22%3A%22opensre%22%2C%22always_online%22%3Atrue%7D%7D%2C%22oauth_config%22%3A%7B%22scopes%22%3A%7B%22bot%22%3A%5B%22chat%3Awrite%22%5D%7D%7D%2C%22settings%22%3A%7B%22interactivity%22%3A%7B%22is_enabled%22%3Atrue%2C%22request_url%22%3A%22https%3A%2F%2Fopensre.example.com%2Fslack%2Finteractions%22%7D%2C%22org_deploy_enabled%22%3Afalse%2C%22socket_mode_enabled%22%3Afalse%2C%22token_rotation_enabled%22%3Afalse%7D%7D) and pick your workspace. Or go to [api.slack.com/apps](https://api.slack.com/apps) → **Create New App** → **From a manifest** and paste the file. Before creating it, replace `opensre.example.com` in `request_url` with your opensre's public URL (or remove the `interactivity` block if you won't use [Apply/Reject buttons](#approve-from-slack)).
+2. **Install it.** **Install App** → **Install to Workspace**, then copy the **Bot User OAuth Token** (`xoxb-...`).
+3. **Invite the bot** to the channel: `/invite @opensre` in it.
+4. **Configure opensre** and restart it:
+
+   ```sh
+   SLACK_BOT_TOKEN=xoxb-...
+   SLACK_CHANNEL=#incidents             # a name or a channel ID (C0123...)
+   SLACK_SIGNING_SECRET=...             # optional: Basic Information → Signing Secret, enables the buttons
+   SLACK_APPROVERS=U0123,U0456          # optional: who may click Apply/Reject (profile → Copy member ID)
+   ```
+
+Check it with `opensre investigate <service> --description "testing Slack"`: the message should appear in the channel. `not_in_channel` in the logs means step 3 is missing; `invalid_auth`, a wrong token.
 
 ## How an investigation works
 
@@ -337,7 +365,7 @@ opensre connector add fly-deploy fly_machines org=<org-slug> token="$(fly tokens
 
 With `SLACK_SIGNING_SECRET` set (and `OPENSRE_ACTIONS_ENABLED=true`), a proposed action shows **Apply** and **Reject** buttons in the investigation's Slack message instead of the CLI command. Apply asks to confirm, showing the risk and the undo. The click goes through the same `Approve`/`Reject` as the CLI, with the Slack user recorded as the approver (`@alice (Slack U0123)`). The outcome is posted in the thread and replaces the buttons. Expired or superseded actions lose their buttons on the next redraw, and a click on one is answered with why it cannot run.
 
-1. In your Slack app, turn on **Interactivity & Shortcuts** with Request URL `https://<opensre>/slack/interactions`.
+1. In your Slack app, turn on **Interactivity & Shortcuts** with Request URL `https://<opensre>/slack/interactions` (already on if you created it from the [manifest](#slack)).
 2. Set `SLACK_SIGNING_SECRET` (Basic Information → Signing Secret). Requests without a valid Slack signature, or older than 5 minutes, are refused.
 3. Recommended: `SLACK_APPROVERS=U0123,U0456` limits the buttons to those Slack user IDs. Without it, anyone who can see the channel can approve.
 
