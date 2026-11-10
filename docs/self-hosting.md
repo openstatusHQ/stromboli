@@ -40,6 +40,10 @@ Download the archive for your platform from [Releases](https://github.com/openst
 
 One command deploys opensre and Postgres: see [deploy/railway](deploy/railway.md).
 
+### Fly.io
+
+`fly.toml` and a setup script deploy opensre with Fly Managed Postgres: see [deploy/fly](deploy/fly.md).
+
 ### Image tags
 
 | Tag | |

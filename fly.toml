@@ -1,0 +1,65 @@
+# Fly.io deployment of opensre (see docs/deploy/fly.md).
+#
+#   deploy/fly/setup.sh <app-name>          # first deploy: app, database, secrets
+#   fly deploy --app <app-name> --ha=false  # later deploys
+#
+# `app` is a placeholder: Fly app names are global, so pass yours with --app.
+# Plain settings live in [env]; secrets live in Fly (`fly secrets`), never here.
+app = "opensre"
+primary_region = "ams"
+kill_signal = "SIGTERM"
+kill_timeout = "30s"
+
+[build]
+  dockerfile = "deploy/Dockerfile"
+
+# Every variable the server reads (internal/config, internal/llm). Secrets
+# (OPENSRE_DB_URL, OPENSRE_SECRET_KEY, OPENSRE_API_TOKEN, OPENSRE_WEBHOOK_TOKEN,
+# the provider API keys, SLACK_*) are set with `fly secrets`.
+[env]
+  OPENSRE_ADDR = ":8080"
+
+  # --- Models ("provider:model") ---
+  OPENSRE_MODEL = "anthropic:claude-opus-5-5"
+  # Optional: OPENSRE_EFFORT, OPENSRE_TRIAGE_MODEL, OPENSRE_TRIAGE_EFFORT,
+  # OPENSRE_INVESTIGATE_MODEL, OPENSRE_INVESTIGATE_EFFORT.
+
+  # --- Investigation limits ---
+  OPENSRE_MAX_TOOL_CALLS = "30"
+  OPENSRE_MITIGATION_TOOL_CALLS = "6"
+  OPENSRE_INVESTIGATION_TIMEOUT = "8m"
+  OPENSRE_DEDUPE_WINDOW = "5m"
+
+  # --- Machine actions (Fly.io): off in the server by default, on here ---
+  OPENSRE_ACTIONS_ENABLED = "true"
+  OPENSRE_ACTION_TTL = "30m"
+
+  # --- Health checks (Fly.io): off in the server by default, hourly here ---
+  # Checks memory, CPU, disk and volumes of every service with a fly metrics
+  # source and investigates breaches. At least 5m; "0" turns it off.
+  OPENSRE_HEALTHCHECK_INTERVAL = "1h"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  # opensre receives webhooks and runs health checks on a timer: it must
+  # never be stopped for being idle.
+  auto_stop_machines = "off"
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [http_service.http_options]
+    # The server speaks h2c: lets gRPC clients and WatchInvestigation streams through.
+    h2_backend = true
+
+  # /healthz pings the database: a machine that can't reach it never takes traffic.
+  [[http_service.checks]]
+    method = "GET"
+    path = "/healthz"
+    interval = "15s"
+    timeout = "5s"
+    grace_period = "30s"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"
