@@ -121,6 +121,22 @@ func (s *Slack) Started(ctx context.Context, inv db.Investigation) (string, stri
 	return ch, ts, err
 }
 
+// Healthy posts the all-clear of a health check run that found every checked
+// service under its thresholds.
+func (s *Slack) Healthy(ctx context.Context, services []string) error {
+	_, _, err := s.client.PostMessageContext(ctx, s.channel, slack.MsgOptionText(HealthyText(services), false))
+	return err
+}
+
+// HealthyText is the health check all-clear message.
+func HealthyText(services []string) string {
+	noun := "services"
+	if len(services) == 1 {
+		noun = "service"
+	}
+	return fmt.Sprintf("✅ Health check: all %d %s operational (%s)", len(services), noun, shorten(strings.Join(services, ", "), 2000))
+}
+
 // Mitigated edits the message to lead with the mitigation while the root-cause
 // investigation continues, and pings the thread so on-call is notified.
 func (s *Slack) Mitigated(ctx context.Context, inv db.Investigation, m *stromboliv1.Mitigation) error {

@@ -105,7 +105,16 @@ func Run(ctx context.Context, cfg config.Config) error {
 			s, _, err := catalog.Load(ctx, st.Queries)
 			return s, err
 		}
-		go healthcheck.New(cfg.HealthcheckInterval, services, reg.Metrics, starter).Run(engineCtx)
+		checker := healthcheck.New(cfg.HealthcheckInterval, services, reg.Metrics, starter)
+		switch {
+		case cfg.HealthcheckSummary && slack != nil:
+			checker.WithSummary(slack)
+		case cfg.HealthcheckSummary:
+			slog.Warn("STROMBOLI_HEALTHCHECK_SUMMARY is set but Slack is not configured (SLACK_BOT_TOKEN, SLACK_CHANNEL): healthy runs are only logged")
+		}
+		go checker.Run(engineCtx)
+	} else if cfg.HealthcheckSummary {
+		slog.Warn("STROMBOLI_HEALTHCHECK_SUMMARY is set but health checks are off: set STROMBOLI_HEALTHCHECK_INTERVAL")
 	}
 
 	if cfg.APIToken == "" {

@@ -73,6 +73,9 @@ func Railway() railway.Project {
 			// Checks memory, CPU, disk and volumes of every service with a fly metrics
 			// source and investigates breaches. At least 5m; "0" turns it off.
 			"STROMBOLI_HEALTHCHECK_INTERVAL": "1h",
+			// Post "all services operational" to Slack after each healthy run
+			// (off in the server by default: only breaches are posted).
+			"STROMBOLI_HEALTHCHECK_SUMMARY": "true",
 
 			// --- Slack (optional) ---
 			// Reports need both SLACK_BOT_TOKEN and SLACK_CHANNEL (a channel ID).

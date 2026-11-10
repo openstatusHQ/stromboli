@@ -56,6 +56,9 @@ type Config struct {
 	// thresholds (memory, CPU, disk, volume); a breach starts an
 	// investigation. Zero (the default) disables health checks.
 	HealthcheckInterval time.Duration // STROMBOLI_HEALTHCHECK_INTERVAL
+	// HealthcheckSummary posts an all-clear to Slack after each health check
+	// run where every service is healthy. Off by default: only breaches post.
+	HealthcheckSummary bool // STROMBOLI_HEALTHCHECK_SUMMARY
 
 	// MCPEnabled serves stromboli's MCP tools at /mcp (ADR 0021).
 	MCPEnabled bool // STROMBOLI_MCP_ENABLED
@@ -123,6 +126,9 @@ func Load() (Config, error) {
 		if c.HealthcheckInterval > 0 && c.HealthcheckInterval < 5*time.Minute {
 			return c, fmt.Errorf("STROMBOLI_HEALTHCHECK_INTERVAL: %s is too short, use at least 5m", v)
 		}
+	}
+	if c.HealthcheckSummary, err = strconv.ParseBool(env("STROMBOLI_HEALTHCHECK_SUMMARY", "false")); err != nil {
+		return c, fmt.Errorf("STROMBOLI_HEALTHCHECK_SUMMARY: %w", err)
 	}
 	if c.MCPEnabled, err = strconv.ParseBool(env("STROMBOLI_MCP_ENABLED", "false")); err != nil {
 		return c, fmt.Errorf("STROMBOLI_MCP_ENABLED: %w", err)

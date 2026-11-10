@@ -190,3 +190,40 @@ func TestRunOnceStartError(t *testing.T) {
 		t.Errorf("errors = %v", r.Errors)
 	}
 }
+
+type fakeSummary struct{ calls [][]string }
+
+func (f *fakeSummary) Healthy(_ context.Context, services []string) error {
+	f.calls = append(f.calls, services)
+	return nil
+}
+
+func TestRunOnceSummary(t *testing.T) {
+	healthy := map[string][]metrics.Series{"volume_used_percent": {series(nil, 50)}}
+	tests := []struct {
+		name     string
+		src      *fakeSource
+		services []*stromboliv1.Service
+		want     []string
+	}{
+		{"all healthy", &fakeSource{series: healthy}, []*stromboliv1.Service{flySvc("api"), flySvc("web"), {Name: "worker"}}, []string{"api", "web"}},
+		{"unhealthy", &fakeSource{series: map[string][]metrics.Series{"volume_used_percent": {series(nil, 99)}}}, []*stromboliv1.Service{flySvc("api")}, nil},
+		{"check failed", &fakeSource{series: healthy, fail: "cpu_percent"}, []*stromboliv1.Service{flySvc("api")}, nil},
+		{"nothing checked", &fakeSource{}, []*stromboliv1.Service{{Name: "worker"}}, nil},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sum := &fakeSummary{}
+			newChecker(tt.src, &fakeStarter{}, tt.services...).WithSummary(sum).RunOnce(context.Background())
+			if tt.want == nil {
+				if len(sum.calls) != 0 {
+					t.Errorf("summary posted: %v", sum.calls)
+				}
+				return
+			}
+			if len(sum.calls) != 1 || strings.Join(sum.calls[0], ",") != strings.Join(tt.want, ",") {
+				t.Errorf("summary calls = %v, want one with %v", sum.calls, tt.want)
+			}
+		})
+	}
+}

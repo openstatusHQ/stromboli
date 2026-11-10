@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"text/tabwriter"
 
 	"connectrpc.com/connect"
 	"github.com/spf13/cobra"
@@ -22,8 +23,70 @@ func (a *app) catalogCmd() *cobra.Command {
 		`The service catalog lists your services, their owners, dependencies, log and
 deploy sources, and runbooks. It is stored on the server; YAML is its import and
 export format, so you can keep a copy in git.`)
-	cmd.AddCommand(a.catalogImportCmd(), a.catalogExportCmd(), a.catalogValidateCmd(), a.catalogDiscoverCmd())
+	cmd.AddCommand(a.catalogListCmd(), a.catalogImportCmd(), a.catalogExportCmd(), a.catalogValidateCmd(), a.catalogDiscoverCmd())
 	return cmd
+}
+
+func (a *app) catalogListCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:     "list",
+		Aliases: []string{"ls"},
+		Short:   "List the services in the catalog",
+		Long: `List the services in the catalog with their tier, owners, dependencies and
+data sources. Use catalog export for the full entries.`,
+		Example: `  stromboli catalog list
+  stromboli catalog list --json`,
+		Args: noArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			c, err := a.api()
+			if err != nil {
+				return err
+			}
+			resp, err := c.catalog.ListServices(cmd.Context(), connect.NewRequest(&stromboliv1.ListServicesRequest{}))
+			if err != nil {
+				return err
+			}
+			if a.json {
+				return a.printJSON(resp.Msg)
+			}
+			if len(resp.Msg.Services) == 0 {
+				a.info("The catalog is empty. Propose entries with `stromboli catalog discover <connector>`, then `stromboli catalog import <file>`.")
+				return nil
+			}
+			tw := tabwriter.NewWriter(a.stdout, 0, 4, 2, ' ', 0)
+			fmt.Fprintln(tw, "NAME\tTIER\tOWNERS\tDEPENDS ON\tSOURCES")
+			for _, s := range resp.Msg.Services {
+				tier := "-"
+				if s.Tier != 0 {
+					tier = fmt.Sprint(s.Tier)
+				}
+				fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\n", s.Name, tier, orDash(s.Owners), orDash(s.DependsOn), orDash(serviceSources(s)))
+			}
+			return tw.Flush()
+		},
+	}
+}
+
+// serviceSources names the connectors a service reads from, e.g. "logs=loki".
+func serviceSources(s *stromboliv1.Service) []string {
+	var out []string
+	if src := s.GetLogs().GetSource(); src != "" {
+		out = append(out, "logs="+src)
+	}
+	if src := s.GetMetrics().GetSource(); src != "" {
+		out = append(out, "metrics="+src)
+	}
+	if src := s.GetDeploys().GetSource(); src != "" {
+		out = append(out, "deploys="+src)
+	}
+	return out
+}
+
+func orDash(v []string) string {
+	if len(v) == 0 {
+		return "-"
+	}
+	return strings.Join(v, ",")
 }
 
 func (a *app) catalogImportCmd() *cobra.Command {

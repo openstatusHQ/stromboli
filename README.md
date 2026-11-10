@@ -182,6 +182,8 @@ The catalog lives in stromboli's database. YAML is its import/export format, so 
 
 ```sh
 stromboli catalog import services.yaml --runbooks runbooks/ --prune --yes   # --prune makes the file authoritative
+stromboli catalog list                                                        # name, tier, owners, dependencies, sources
+stromboli catalog export > services.yaml                                      # the full entries
 ```
 
 A full example is in [`examples/catalog`](examples/catalog).
@@ -330,7 +332,7 @@ Some failures never fire an alert until it is too late, like a volume filling up
 | `memory_used_percent` | last value ≥ 90% |
 | `cpu_percent` | 15-minute average ≥ 90% |
 
-When everything is fine, it only logs a line. Each unhealthy service gets one investigation, with the findings in its alert payload, posted to Slack like any other. While the same checks keep failing, it is not investigated again for 6 hours. Without an LLM, findings are only logged.
+When everything is fine, it only logs a line, unless `STROMBOLI_HEALTHCHECK_SUMMARY=true`: then it also posts `✅ Health check: all N services operational` to Slack. That message is only sent when every checked service is under its thresholds and no check failed. Each unhealthy service gets one investigation, with the findings in its alert payload, posted to Slack like any other. While the same checks keep failing, it is not investigated again for 6 hours. Without an LLM, findings are only logged.
 
 ## Machine actions
 
@@ -441,6 +443,7 @@ All settings are environment variables; [`.env.example`](.env.example) has them 
 | `STROMBOLI_ACTIONS_ENABLED` | `false` | let investigations propose machine actions a human can approve (requires `STROMBOLI_API_TOKEN`) |
 | `STROMBOLI_ACTION_TTL` | `30m` | how long a proposed action can be approved |
 | `STROMBOLI_HEALTHCHECK_INTERVAL` | empty = off | check Fly machine metrics on this schedule, e.g. `1h` (at least `5m`), and investigate breaches ([Health checks](#health-checks)) |
+| `STROMBOLI_HEALTHCHECK_SUMMARY` | `false` | post an all-clear to Slack after each health check run where every service is healthy |
 | `SLACK_BOT_TOKEN`, `SLACK_CHANNEL` | | bot needs `chat:write` |
 | `SLACK_SIGNING_SECRET` | | enables Apply/Reject buttons ([Approve from Slack](#approve-from-slack)) |
 | `SLACK_APPROVERS` | empty = anyone in the channel | Slack user IDs allowed to click Apply/Reject |
