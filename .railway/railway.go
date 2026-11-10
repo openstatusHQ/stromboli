@@ -65,8 +65,8 @@ func Railway() railway.Project {
 			"OPENSRE_INVESTIGATION_TIMEOUT": "8m",
 			"OPENSRE_DEDUPE_WINDOW":         "30m",
 
-			// --- Machine actions (Fly.io), off by default ---
-			"OPENSRE_ACTIONS_ENABLED": "false",
+			// --- Machine actions (Fly.io): off in the server by default, on here ---
+			"OPENSRE_ACTIONS_ENABLED": "true",
 			"OPENSRE_ACTION_TTL":      "30m",
 
 			// --- Slack (optional) ---
