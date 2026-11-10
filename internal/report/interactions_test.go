@@ -114,8 +114,54 @@ func TestInteractionApprove(t *testing.T) {
 	if got := wait(t, d.decisions); got != "approve @alice (Slack U1)" {
 		t.Fatalf("decision %q", got)
 	}
-	if got := wait(t, responses); !strings.Contains(got, "Running action") {
-		t.Fatalf("response %q", got)
+	// No ephemeral "running" note: the message itself shows the action running.
+	select {
+	case got := <-responses:
+		t.Fatalf("an approval that runs should not answer with an ephemeral message, got %q", got)
+	case <-time.After(200 * time.Millisecond):
+	}
+}
+
+func TestActionFinishedMessage(t *testing.T) {
+	m := &opensrev1.MachineAction{Action: "start", MachineIds: []string{"683e", "286d"}, App: "pebble"}
+	a := db.Action{Status: "succeeded", DecidedBy: pgtype.Text{String: "@thibault (Slack U05)", Valid: true},
+		Note:   pgtype.Text{String: "approved from Slack", Valid: true},
+		Result: pgtype.Text{String: "started 683e · undo: fly machine stop 683e -a pebble", Valid: true}}
+	text, blocks := actionFinishedMessage(a, m)
+	if text != "✅ start done · 683e, 286d · approved by <@U05>" {
+		t.Errorf("text = %q", text)
+	}
+	if len(blocks) != 2 {
+		t.Fatalf("want the outcome and the result, without the default note: %d blocks", len(blocks))
+	}
+	if got := blocks[1].(*slack.SectionBlock).Text.Text; got != "```started 683e · undo: fly machine stop 683e -a pebble```" {
+		t.Errorf("result block = %q", got)
+	}
+	a.Note.String = "ok from the incident call"
+	if _, blocks := actionFinishedMessage(a, m); len(blocks) != 3 {
+		t.Error("a human-written note is kept")
+	}
+	if slackMention("alice") != "alice" {
+		t.Error("a CLI approver is kept as written")
+	}
+}
+
+func TestListBlocksStayShort(t *testing.T) {
+	items := []string{strings.Repeat("a", 150), strings.Repeat("b", 150), strings.Repeat("c", 150), strings.Repeat("d", 500)}
+	blocks := listBlocks("Evidence", items)
+	if len(blocks) < 2 {
+		t.Fatalf("a long list should be split, got %d block(s)", len(blocks))
+	}
+	var all string
+	for _, b := range blocks {
+		txt := b.(*slack.SectionBlock).Text.Text
+		if len(txt) > listBlockSize+len("*Evidence*\n") {
+			t.Errorf("block of %d characters", len(txt))
+		}
+		all += txt + "\n"
+	}
+	if !strings.HasPrefix(all, "*Evidence*\n• a") || strings.Count(all, "• ") != 4 {
+		t.Errorf("every item once, after the title: %q", all)
 	}
 }
 
@@ -172,7 +218,8 @@ func TestActionBlocks(t *testing.T) {
 	d.action.Status, d.action.DecidedBy = "succeeded", pgtype.Text{String: "@alice (Slack U1)", Valid: true}
 	d.mu.Unlock()
 	out, _ = json.Marshal(s.buttons.actionBlocks(context.Background(), m))
-	if strings.Contains(string(out), approveActionID) || !strings.Contains(string(out), "done, approved by @alice") {
+	// The approver is a mention, <@U1> (escaped by json.Marshal).
+	if strings.Contains(string(out), approveActionID) || !strings.Contains(string(out), "done, approved by") || !strings.Contains(string(out), "@U1") {
 		t.Errorf("succeeded: %s", out)
 	}
 }

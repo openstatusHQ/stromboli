@@ -91,13 +91,13 @@ func (b *buttons) actionBlocks(ctx context.Context, m *opensrev1.Mitigation) []s
 func actionOutcome(a db.Action, what string) string {
 	switch a.Status {
 	case "running":
-		return fmt.Sprintf("⏳ %s: approved by %s, running…", what, a.DecidedBy.String)
+		return fmt.Sprintf("⏳ %s: approved by %s, running…", what, slackMention(a.DecidedBy.String))
 	case "succeeded":
-		return fmt.Sprintf("✅ %s: done, approved by %s", what, a.DecidedBy.String)
+		return fmt.Sprintf("✅ %s: done, approved by %s", what, slackMention(a.DecidedBy.String))
 	case "failed":
-		return fmt.Sprintf("❌ %s: approved by %s, failed (see thread)", what, a.DecidedBy.String)
+		return fmt.Sprintf("❌ %s: approved by %s, failed (see thread)", what, slackMention(a.DecidedBy.String))
 	case "rejected":
-		return fmt.Sprintf("🚫 %s: rejected by %s", what, a.DecidedBy.String)
+		return fmt.Sprintf("🚫 %s: rejected by %s", what, slackMention(a.DecidedBy.String))
 	case "expired":
 		return fmt.Sprintf("⌛ %s: expired without a decision", what)
 	case "superseded":
@@ -192,8 +192,8 @@ func (b *buttons) decide(ctx context.Context, s *Slack, cb slack.InteractionCall
 		return
 	}
 	log.Info("slack: action approved")
-	tell(fmt.Sprintf("⏳ Running action `%s`; the outcome will be posted in the thread.", id))
-	// Approve posts the outcome in the thread and redraws the message.
+	// No ephemeral note: Approve redraws the message with the action running
+	// in place of its buttons, then posts the outcome in the thread.
 	if _, err := b.decider.Approve(ctx, id, who, "approved from Slack"); err != nil {
 		// Not run (no longer pending, or no longer valid): Approve did not notify.
 		log.Warn("slack: approve", "err", err)

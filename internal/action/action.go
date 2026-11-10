@@ -274,6 +274,7 @@ func (s *Service) Approve(ctx context.Context, id uuid.UUID, approver, note stri
 	}
 	log := slog.With("action", a.ID, "investigation", a.InvestigationID, "app", m.App, "do", m.Action, "machines", m.MachineIds, "approved_by", approver)
 	log.Info("action approved, running")
+	s.notifyStarted(ctx, a, m)
 
 	// The action must not stop halfway because the caller went away.
 	runCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), execTimeout)
@@ -321,6 +322,26 @@ func (s *Service) Reject(ctx context.Context, id uuid.UUID, approver, reason str
 		s.notify(ctx, a, m)
 	}
 	return a, nil
+}
+
+// StartNotifier is an optional Notifier that also hears when an approved
+// action starts running, e.g. to show it as running in place of its buttons.
+type StartNotifier interface {
+	ActionStarted(ctx context.Context, inv db.Investigation, a db.Action, m *opensrev1.MachineAction) error
+}
+
+func (s *Service) notifyStarted(ctx context.Context, a db.Action, m *opensrev1.MachineAction) {
+	sn, ok := s.notifier.(StartNotifier)
+	if !ok {
+		return
+	}
+	inv, err := s.store.GetInvestigation(ctx, a.InvestigationID)
+	if err == nil {
+		err = sn.ActionStarted(ctx, inv, a, m)
+	}
+	if err != nil {
+		slog.Warn("notify action started", "action", a.ID, "err", err)
+	}
 }
 
 func (s *Service) notify(ctx context.Context, a db.Action, m *opensrev1.MachineAction) {
