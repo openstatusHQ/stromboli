@@ -3,7 +3,7 @@ managed:
   enabled: true
   override:
     - file_option: go_package_prefix
-      value: github.com/openstatushq/opensre/gen
+      value: github.com/openstatushq/stromboli/gen
 plugins:
   - local: protoc-gen-go
     out: gen

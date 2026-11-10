@@ -13,9 +13,9 @@ import (
 	yamlv3 "gopkg.in/yaml.v3"
 	"sigs.k8s.io/yaml"
 
-	opensrev1 "github.com/openstatushq/opensre/gen/opensre/v1"
-	"github.com/openstatushq/opensre/internal/connector/logs"
-	"github.com/openstatushq/opensre/internal/connector/metrics"
+	stromboliv1 "github.com/openstatushq/stromboli/gen/stromboli/v1"
+	"github.com/openstatushq/stromboli/internal/connector/logs"
+	"github.com/openstatushq/stromboli/internal/connector/metrics"
 )
 
 var (
@@ -24,11 +24,11 @@ var (
 )
 
 // MarshalSpec encodes a service for storage.
-func MarshalSpec(s *opensrev1.Service) ([]byte, error) { return jsonOut.Marshal(s) }
+func MarshalSpec(s *stromboliv1.Service) ([]byte, error) { return jsonOut.Marshal(s) }
 
 // UnmarshalSpec decodes a stored service.
-func UnmarshalSpec(b []byte) (*opensrev1.Service, error) {
-	s := &opensrev1.Service{}
+func UnmarshalSpec(b []byte) (*stromboliv1.Service, error) {
+	s := &stromboliv1.Service{}
 	if err := jsonIn.Unmarshal(b, s); err != nil {
 		return nil, err
 	}
@@ -36,7 +36,7 @@ func UnmarshalSpec(b []byte) (*opensrev1.Service, error) {
 }
 
 // ParseYAML decodes a YAML list of services.
-func ParseYAML(b []byte) ([]*opensrev1.Service, error) {
+func ParseYAML(b []byte) ([]*stromboliv1.Service, error) {
 	raw, err := yaml.YAMLToJSON(b)
 	if err != nil {
 		return nil, fmt.Errorf("parse yaml: %w", err)
@@ -45,9 +45,9 @@ func ParseYAML(b []byte) ([]*opensrev1.Service, error) {
 	if err := json.Unmarshal(raw, &items); err != nil {
 		return nil, fmt.Errorf("services file must be a YAML list: %w", err)
 	}
-	out := make([]*opensrev1.Service, 0, len(items))
+	out := make([]*stromboliv1.Service, 0, len(items))
 	for i, item := range items {
-		s := &opensrev1.Service{}
+		s := &stromboliv1.Service{}
 		if err := jsonIn.Unmarshal(item, s); err != nil {
 			return nil, fmt.Errorf("service #%d: %w", i+1, err)
 		}
@@ -57,7 +57,7 @@ func ParseYAML(b []byte) ([]*opensrev1.Service, error) {
 }
 
 // MarshalYAML encodes services as a YAML list, sorted by name.
-func MarshalYAML(services []*opensrev1.Service) ([]byte, error) {
+func MarshalYAML(services []*stromboliv1.Service) ([]byte, error) {
 	sorted := slices.Clone(services)
 	sort.Slice(sorted, func(i, j int) bool { return sorted[i].Name < sorted[j].Name })
 	items := make([]json.RawMessage, 0, len(sorted))
@@ -99,10 +99,10 @@ type ValidateOptions struct {
 }
 
 // Validate checks a full catalog. Errors block a write; warnings do not.
-func Validate(services []*opensrev1.Service, opts ValidateOptions) []*opensrev1.ValidationIssue {
-	var issues []*opensrev1.ValidationIssue
+func Validate(services []*stromboliv1.Service, opts ValidateOptions) []*stromboliv1.ValidationIssue {
+	var issues []*stromboliv1.ValidationIssue
 	add := func(svc, field, msg string, warn bool) {
-		issues = append(issues, &opensrev1.ValidationIssue{Service: svc, Field: field, Message: msg, Warning: warn})
+		issues = append(issues, &stromboliv1.ValidationIssue{Service: svc, Field: field, Message: msg, Warning: warn})
 	}
 
 	names := map[string]bool{}
@@ -190,6 +190,6 @@ func Validate(services []*opensrev1.Service, opts ValidateOptions) []*opensrev1.
 }
 
 // HasErrors reports whether any issue is blocking.
-func HasErrors(issues []*opensrev1.ValidationIssue) bool {
-	return slices.ContainsFunc(issues, func(i *opensrev1.ValidationIssue) bool { return !i.Warning })
+func HasErrors(issues []*stromboliv1.ValidationIssue) bool {
+	return slices.ContainsFunc(issues, func(i *stromboliv1.ValidationIssue) bool { return !i.Warning })
 }

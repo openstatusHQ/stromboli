@@ -13,8 +13,8 @@ import (
 	"connectrpc.com/connect"
 	"github.com/spf13/cobra"
 
-	opensrev1 "github.com/openstatushq/opensre/gen/opensre/v1"
-	"github.com/openstatushq/opensre/internal/catalog"
+	stromboliv1 "github.com/openstatushq/stromboli/gen/stromboli/v1"
+	"github.com/openstatushq/stromboli/internal/catalog"
 )
 
 func (a *app) catalogCmd() *cobra.Command {
@@ -38,17 +38,17 @@ YAML from stdin.
 
 With --prune the file becomes the source of truth: services and runbooks that
 are not in it are deleted. This asks for confirmation unless --yes is given.`,
-		Example: `  opensre catalog import services.yaml --runbooks runbooks/
-  opensre catalog import services.yaml --dry-run
-  opensre catalog import services.yaml --runbooks runbooks/ --prune --yes   # in CI
-  opensre catalog discover loki | opensre catalog import -`,
+		Example: `  stromboli catalog import services.yaml --runbooks runbooks/
+  stromboli catalog import services.yaml --dry-run
+  stromboli catalog import services.yaml --runbooks runbooks/ --prune --yes   # in CI
+  stromboli catalog discover loki | stromboli catalog import -`,
 		Args: exactArgs(1, "<services.yaml> (or - for stdin)"),
 		RunE: func(cmd *cobra.Command, pos []string) error {
 			data, err := a.readInput(pos[0])
 			if err != nil {
 				return err
 			}
-			req := &opensrev1.ImportCatalogRequest{ServicesYaml: data, Prune: prune, DryRun: dryRun}
+			req := &stromboliv1.ImportCatalogRequest{ServicesYaml: data, Prune: prune, DryRun: dryRun}
 			if runbooks != "" {
 				if req.Runbooks, err = readRunbooks(runbooks); err != nil {
 					return err
@@ -89,12 +89,12 @@ are not in it are deleted. This asks for confirmation unless --yes is given.`,
 }
 
 // confirmPrune lists what --prune would delete and asks before going ahead.
-func (a *app) confirmPrune(cmd *cobra.Command, c *clients, file string, req *opensrev1.ImportCatalogRequest, yes bool) error {
+func (a *app) confirmPrune(cmd *cobra.Command, c *clients, file string, req *stromboliv1.ImportCatalogRequest, yes bool) error {
 	services, err := catalog.ParseYAML(req.ServicesYaml)
 	if err != nil {
 		return fmt.Errorf("%s: %w", file, err)
 	}
-	cur, err := c.catalog.ExportCatalog(cmd.Context(), connect.NewRequest(&opensrev1.ExportCatalogRequest{}))
+	cur, err := c.catalog.ExportCatalog(cmd.Context(), connect.NewRequest(&stromboliv1.ExportCatalogRequest{}))
 	if err != nil {
 		return err
 	}
@@ -104,12 +104,12 @@ func (a *app) confirmPrune(cmd *cobra.Command, c *clients, file string, req *ope
 	}
 	var goneServices, goneRunbooks []string
 	for _, s := range existing {
-		if !slices.ContainsFunc(services, func(n *opensrev1.Service) bool { return n.Name == s.Name }) {
+		if !slices.ContainsFunc(services, func(n *stromboliv1.Service) bool { return n.Name == s.Name }) {
 			goneServices = append(goneServices, s.Name)
 		}
 	}
 	for _, rb := range cur.Msg.Runbooks {
-		if !slices.ContainsFunc(req.Runbooks, func(n *opensrev1.Runbook) bool { return n.Path == rb.Path }) {
+		if !slices.ContainsFunc(req.Runbooks, func(n *stromboliv1.Runbook) bool { return n.Path == rb.Path }) {
 			goneRunbooks = append(goneRunbooks, rb.Path)
 		}
 	}
@@ -134,15 +134,15 @@ func (a *app) catalogExportCmd() *cobra.Command {
 		Short: "Print the catalog as YAML",
 		Long: `Print the catalog as YAML on stdout. With --runbooks, also write the runbooks
 into that directory, in the layout catalog import expects.`,
-		Example: `  opensre catalog export > services.yaml
-  opensre catalog export --runbooks runbooks/ > services.yaml`,
+		Example: `  stromboli catalog export > services.yaml
+  stromboli catalog export --runbooks runbooks/ > services.yaml`,
 		Args: noArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			c, err := a.api()
 			if err != nil {
 				return err
 			}
-			resp, err := c.catalog.ExportCatalog(cmd.Context(), connect.NewRequest(&opensrev1.ExportCatalogRequest{}))
+			resp, err := c.catalog.ExportCatalog(cmd.Context(), connect.NewRequest(&stromboliv1.ExportCatalogRequest{}))
 			if err != nil {
 				return err
 			}
@@ -177,15 +177,15 @@ func (a *app) catalogValidateCmd() *cobra.Command {
 		Long: `Check the catalog stored on the server: schema, unknown dependencies, cycles
 and missing runbooks. Exits with status 1 if there are errors (warnings alone
 do not fail).`,
-		Example: `  opensre catalog validate
-  opensre catalog validate --check-connectors`,
+		Example: `  stromboli catalog validate
+  stromboli catalog validate --check-connectors`,
 		Args: noArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			c, err := a.api()
 			if err != nil {
 				return err
 			}
-			resp, err := c.catalog.ValidateCatalog(cmd.Context(), connect.NewRequest(&opensrev1.ValidateCatalogRequest{CheckConnectors: checkConnectors}))
+			resp, err := c.catalog.ValidateCatalog(cmd.Context(), connect.NewRequest(&stromboliv1.ValidateCatalogRequest{CheckConnectors: checkConnectors}))
 			if err != nil {
 				return err
 			}
@@ -216,15 +216,15 @@ func (a *app) catalogDiscoverCmd() *cobra.Command {
 		Long: `Ask a log or metrics connector which services it can see, and print one catalog entry per
 service not in the catalog yet, with its selector filled in. Add owners and
 depends_on, then import the file.`,
-		Example: `  opensre catalog discover loki > services.yaml
-  opensre catalog import services.yaml`,
+		Example: `  stromboli catalog discover loki > services.yaml
+  stromboli catalog import services.yaml`,
 		Args: exactArgs(1, "<log-or-metrics-connector>"),
 		RunE: func(cmd *cobra.Command, pos []string) error {
 			c, err := a.api()
 			if err != nil {
 				return err
 			}
-			resp, err := c.catalog.DiscoverServices(cmd.Context(), connect.NewRequest(&opensrev1.DiscoverServicesRequest{Connector: pos[0]}))
+			resp, err := c.catalog.DiscoverServices(cmd.Context(), connect.NewRequest(&stromboliv1.DiscoverServicesRequest{Connector: pos[0]}))
 			if err != nil {
 				return err
 			}
@@ -242,7 +242,7 @@ depends_on, then import the file.`,
 			if _, err := a.stdout.Write(out); err != nil {
 				return err
 			}
-			a.info("Found %s. Add owners and depends_on, then run `opensre catalog import <file>`.", plural(int32(len(resp.Msg.Candidates)), "service"))
+			a.info("Found %s. Add owners and depends_on, then run `stromboli catalog import <file>`.", plural(int32(len(resp.Msg.Candidates)), "service"))
 			return nil
 		},
 	}
@@ -257,8 +257,8 @@ func (a *app) readInput(path string) ([]byte, error) {
 }
 
 // readRunbooks loads *.md files; their path is "runbooks/<relative path>".
-func readRunbooks(dir string) ([]*opensrev1.Runbook, error) {
-	var out []*opensrev1.Runbook
+func readRunbooks(dir string) ([]*stromboliv1.Runbook, error) {
+	var out []*stromboliv1.Runbook
 	err := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil || d.IsDir() || !strings.HasSuffix(path, ".md") {
 			return err
@@ -271,13 +271,13 @@ func readRunbooks(dir string) ([]*opensrev1.Runbook, error) {
 		if err != nil {
 			return err
 		}
-		out = append(out, &opensrev1.Runbook{Path: "runbooks/" + filepath.ToSlash(rel), Content: string(content)})
+		out = append(out, &stromboliv1.Runbook{Path: "runbooks/" + filepath.ToSlash(rel), Content: string(content)})
 		return nil
 	})
 	return out, err
 }
 
-func (a *app) printIssues(issues []*opensrev1.ValidationIssue) {
+func (a *app) printIssues(issues []*stromboliv1.ValidationIssue) {
 	for _, i := range issues {
 		level := "error"
 		if i.Warning {

@@ -11,9 +11,9 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
-	opensrev1 "github.com/openstatushq/opensre/gen/opensre/v1"
-	"github.com/openstatushq/opensre/internal/action"
-	"github.com/openstatushq/opensre/internal/store/db"
+	stromboliv1 "github.com/openstatushq/stromboli/gen/stromboli/v1"
+	"github.com/openstatushq/stromboli/internal/action"
+	"github.com/openstatushq/stromboli/internal/store/db"
 )
 
 type ActionService struct {
@@ -22,7 +22,7 @@ type ActionService struct {
 
 func NewActionService(a *action.Service) *ActionService { return &ActionService{actions: a} }
 
-func (s *ActionService) ListActions(ctx context.Context, req *connect.Request[opensrev1.ListActionsRequest]) (*connect.Response[opensrev1.ListActionsResponse], error) {
+func (s *ActionService) ListActions(ctx context.Context, req *connect.Request[stromboliv1.ListActionsRequest]) (*connect.Response[stromboliv1.ListActionsResponse], error) {
 	m := req.Msg
 	p := db.ListActionsParams{Limit: m.Limit}
 	if p.Limit <= 0 || p.Limit > 200 {
@@ -35,21 +35,21 @@ func (s *ActionService) ListActions(ctx context.Context, req *connect.Request[op
 		}
 		p.InvestigationID = pgtype.UUID{Bytes: id, Valid: true}
 	}
-	if m.Status != opensrev1.ActionStatus_ACTION_STATUS_UNSPECIFIED {
+	if m.Status != stromboliv1.ActionStatus_ACTION_STATUS_UNSPECIFIED {
 		p.Status = statusName(m.Status)
 	}
 	rows, err := s.actions.List(ctx, p)
 	if err != nil {
 		return nil, internal(err)
 	}
-	resp := &opensrev1.ListActionsResponse{}
+	resp := &stromboliv1.ListActionsResponse{}
 	for _, r := range rows {
 		resp.Actions = append(resp.Actions, toAction(r))
 	}
 	return connect.NewResponse(resp), nil
 }
 
-func (s *ActionService) GetAction(ctx context.Context, req *connect.Request[opensrev1.GetActionRequest]) (*connect.Response[opensrev1.GetActionResponse], error) {
+func (s *ActionService) GetAction(ctx context.Context, req *connect.Request[stromboliv1.GetActionRequest]) (*connect.Response[stromboliv1.GetActionResponse], error) {
 	id, err := actionID(req.Msg.Id)
 	if err != nil {
 		return nil, err
@@ -58,10 +58,10 @@ func (s *ActionService) GetAction(ctx context.Context, req *connect.Request[open
 	if err != nil {
 		return nil, actionError(err)
 	}
-	return connect.NewResponse(&opensrev1.GetActionResponse{Action: toAction(a)}), nil
+	return connect.NewResponse(&stromboliv1.GetActionResponse{Action: toAction(a)}), nil
 }
 
-func (s *ActionService) ApproveAction(ctx context.Context, req *connect.Request[opensrev1.ApproveActionRequest]) (*connect.Response[opensrev1.ApproveActionResponse], error) {
+func (s *ActionService) ApproveAction(ctx context.Context, req *connect.Request[stromboliv1.ApproveActionRequest]) (*connect.Response[stromboliv1.ApproveActionResponse], error) {
 	id, err := actionID(req.Msg.Id)
 	if err != nil {
 		return nil, err
@@ -70,10 +70,10 @@ func (s *ActionService) ApproveAction(ctx context.Context, req *connect.Request[
 	if err != nil {
 		return nil, actionError(err)
 	}
-	return connect.NewResponse(&opensrev1.ApproveActionResponse{Action: toAction(a)}), nil
+	return connect.NewResponse(&stromboliv1.ApproveActionResponse{Action: toAction(a)}), nil
 }
 
-func (s *ActionService) RejectAction(ctx context.Context, req *connect.Request[opensrev1.RejectActionRequest]) (*connect.Response[opensrev1.RejectActionResponse], error) {
+func (s *ActionService) RejectAction(ctx context.Context, req *connect.Request[stromboliv1.RejectActionRequest]) (*connect.Response[stromboliv1.RejectActionResponse], error) {
 	id, err := actionID(req.Msg.Id)
 	if err != nil {
 		return nil, err
@@ -82,7 +82,7 @@ func (s *ActionService) RejectAction(ctx context.Context, req *connect.Request[o
 	if err != nil {
 		return nil, actionError(err)
 	}
-	return connect.NewResponse(&opensrev1.RejectActionResponse{Action: toAction(a)}), nil
+	return connect.NewResponse(&stromboliv1.RejectActionResponse{Action: toAction(a)}), nil
 }
 
 func actionID(s string) (uuid.UUID, error) {
@@ -105,17 +105,17 @@ func actionError(err error) error {
 	return connect.NewError(connect.CodeFailedPrecondition, err)
 }
 
-func statusName(s opensrev1.ActionStatus) string {
+func statusName(s stromboliv1.ActionStatus) string {
 	return strings.ToLower(strings.TrimPrefix(s.String(), "ACTION_STATUS_"))
 }
 
-func toAction(a db.Action) *opensrev1.Action {
-	out := &opensrev1.Action{
+func toAction(a db.Action) *stromboliv1.Action {
+	out := &stromboliv1.Action{
 		Id:              a.ID.String(),
 		InvestigationId: a.InvestigationID.String(),
 		Service:         a.Service,
 		Connector:       a.Connector,
-		Status:          opensrev1.ActionStatus(opensrev1.ActionStatus_value["ACTION_STATUS_"+strings.ToUpper(a.Status)]),
+		Status:          stromboliv1.ActionStatus(stromboliv1.ActionStatus_value["ACTION_STATUS_"+strings.ToUpper(a.Status)]),
 		DecidedBy:       a.DecidedBy.String,
 		Note:            a.Note.String,
 		Result:          a.Result.String,

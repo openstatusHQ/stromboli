@@ -20,8 +20,8 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/slack-go/slack"
 
-	opensrev1 "github.com/openstatushq/opensre/gen/opensre/v1"
-	"github.com/openstatushq/opensre/internal/store/db"
+	stromboliv1 "github.com/openstatushq/stromboli/gen/stromboli/v1"
+	"github.com/openstatushq/stromboli/internal/store/db"
 )
 
 const secret = "s3cret"
@@ -124,9 +124,9 @@ func TestInteractionApprove(t *testing.T) {
 
 func TestConfirmDialogIsPlainText(t *testing.T) {
 	s, d, _ := newTestSlack(t, nil)
-	m := &opensrev1.Mitigation{
+	m := &stromboliv1.Mitigation{
 		Kind: "restart", ActionId: d.action.ID.String(), Risk: "safe", Undo: "fly machine stop <id> -a pebble",
-		MachineAction: &opensrev1.MachineAction{Action: "start", App: "pebble", MachineIds: []string{"286d", "683e"}},
+		MachineAction: &stromboliv1.MachineAction{Action: "start", App: "pebble", MachineIds: []string{"286d", "683e"}},
 	}
 	var confirm *slack.ConfirmationBlockObject
 	for _, b := range s.buttons.actionBlocks(context.Background(), m) {
@@ -137,14 +137,14 @@ func TestConfirmDialogIsPlainText(t *testing.T) {
 	if confirm == nil {
 		t.Fatal("the Apply button should ask to confirm")
 	}
-	want := "opensre will start 286d, 683e of app pebble now.\n\nRisk: safe\nUndo: fly machine stop 286d -a pebble\nfly machine stop 683e -a pebble"
+	want := "stromboli will start 286d, 683e of app pebble now.\n\nRisk: safe\nUndo: fly machine stop 286d -a pebble\nfly machine stop 683e -a pebble"
 	if confirm.Text.Type != slack.PlainTextType || confirm.Text.Text != want {
 		t.Errorf("confirm text (%s) = %q, want %q", confirm.Text.Type, confirm.Text.Text, want)
 	}
 }
 
 func TestActionFinishedMessage(t *testing.T) {
-	m := &opensrev1.MachineAction{Action: "start", MachineIds: []string{"683e", "286d"}, App: "pebble"}
+	m := &stromboliv1.MachineAction{Action: "start", MachineIds: []string{"683e", "286d"}, App: "pebble"}
 	a := db.Action{Status: "succeeded", DecidedBy: pgtype.Text{String: "@thibault (Slack U05)", Valid: true},
 		Note:   pgtype.Text{String: "approved from Slack", Valid: true},
 		Result: pgtype.Text{String: "started 683e · undo: fly machine stop 683e -a pebble", Valid: true}}
@@ -223,9 +223,9 @@ func TestInteractionApproverNotAllowed(t *testing.T) {
 
 func TestActionBlocks(t *testing.T) {
 	s, d, _ := newTestSlack(t, nil)
-	m := &opensrev1.Mitigation{
+	m := &stromboliv1.Mitigation{
 		Kind: "restart", ActionId: d.action.ID.String(), Risk: "reversible",
-		MachineAction: &opensrev1.MachineAction{Action: "restart", App: "api", MachineIds: []string{"148e"}},
+		MachineAction: &stromboliv1.MachineAction{Action: "restart", App: "api", MachineIds: []string{"148e"}},
 	}
 	d.action.ExpiresAt = pgtype.Timestamptz{Time: time.Now().Add(time.Hour), Valid: true}
 	out, _ := json.Marshal(s.buttons.actionBlocks(context.Background(), m))

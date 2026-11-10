@@ -13,11 +13,11 @@ import (
 	"google.golang.org/protobuf/types/known/structpb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
-	opensrev1 "github.com/openstatushq/opensre/gen/opensre/v1"
-	"github.com/openstatushq/opensre/internal/agent"
-	"github.com/openstatushq/opensre/internal/mcpserver"
-	"github.com/openstatushq/opensre/internal/store"
-	"github.com/openstatushq/opensre/internal/store/db"
+	stromboliv1 "github.com/openstatushq/stromboli/gen/stromboli/v1"
+	"github.com/openstatushq/stromboli/internal/agent"
+	"github.com/openstatushq/stromboli/internal/mcpserver"
+	"github.com/openstatushq/stromboli/internal/store"
+	"github.com/openstatushq/stromboli/internal/store/db"
 )
 
 type InvestigationService struct {
@@ -29,7 +29,7 @@ func NewInvestigationService(s *store.Store, e *agent.Engine) *InvestigationServ
 	return &InvestigationService{store: s, engine: e}
 }
 
-func (i *InvestigationService) StartInvestigation(ctx context.Context, req *connect.Request[opensrev1.StartInvestigationRequest]) (*connect.Response[opensrev1.StartInvestigationResponse], error) {
+func (i *InvestigationService) StartInvestigation(ctx context.Context, req *connect.Request[stromboliv1.StartInvestigationRequest]) (*connect.Response[stromboliv1.StartInvestigationResponse], error) {
 	m := req.Msg
 	if m.Service == "" {
 		return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("service is required"))
@@ -50,10 +50,10 @@ func (i *InvestigationService) StartInvestigation(ctx context.Context, req *conn
 	if err != nil {
 		return nil, connect.NewError(connect.CodeFailedPrecondition, err)
 	}
-	return connect.NewResponse(&opensrev1.StartInvestigationResponse{Investigation: toInvestigation(inv)}), nil
+	return connect.NewResponse(&stromboliv1.StartInvestigationResponse{Investigation: toInvestigation(inv)}), nil
 }
 
-func (i *InvestigationService) GetInvestigation(ctx context.Context, req *connect.Request[opensrev1.GetInvestigationRequest]) (*connect.Response[opensrev1.GetInvestigationResponse], error) {
+func (i *InvestigationService) GetInvestigation(ctx context.Context, req *connect.Request[stromboliv1.GetInvestigationRequest]) (*connect.Response[stromboliv1.GetInvestigationResponse], error) {
 	inv, err := i.get(ctx, req.Msg.Id)
 	if err != nil {
 		return nil, err
@@ -62,14 +62,14 @@ func (i *InvestigationService) GetInvestigation(ctx context.Context, req *connec
 	if err != nil {
 		return nil, internal(err)
 	}
-	resp := &opensrev1.GetInvestigationResponse{Investigation: toInvestigation(inv)}
+	resp := &stromboliv1.GetInvestigationResponse{Investigation: toInvestigation(inv)}
 	for _, r := range rows {
 		resp.Steps = append(resp.Steps, toStep(r))
 	}
 	return connect.NewResponse(resp), nil
 }
 
-func (i *InvestigationService) ListInvestigations(ctx context.Context, req *connect.Request[opensrev1.ListInvestigationsRequest]) (*connect.Response[opensrev1.ListInvestigationsResponse], error) {
+func (i *InvestigationService) ListInvestigations(ctx context.Context, req *connect.Request[stromboliv1.ListInvestigationsRequest]) (*connect.Response[stromboliv1.ListInvestigationsResponse], error) {
 	limit := req.Msg.Limit
 	if limit <= 0 || limit > 200 {
 		limit = 50
@@ -78,7 +78,7 @@ func (i *InvestigationService) ListInvestigations(ctx context.Context, req *conn
 	if err != nil {
 		return nil, internal(err)
 	}
-	resp := &opensrev1.ListInvestigationsResponse{}
+	resp := &stromboliv1.ListInvestigationsResponse{}
 	for _, r := range rows {
 		resp.Investigations = append(resp.Investigations, toInvestigation(r))
 	}
@@ -89,7 +89,7 @@ func (i *InvestigationService) ListInvestigations(ctx context.Context, req *conn
 // keeps Watch correct across server restarts and multiple replicas.
 const watchPoll = time.Second
 
-func (i *InvestigationService) WatchInvestigation(ctx context.Context, req *connect.Request[opensrev1.WatchInvestigationRequest], stream *connect.ServerStream[opensrev1.WatchInvestigationResponse]) error {
+func (i *InvestigationService) WatchInvestigation(ctx context.Context, req *connect.Request[stromboliv1.WatchInvestigationRequest], stream *connect.ServerStream[stromboliv1.WatchInvestigationResponse]) error {
 	inv, err := i.get(ctx, req.Msg.Id)
 	if err != nil {
 		return err
@@ -103,13 +103,13 @@ func (i *InvestigationService) WatchInvestigation(ctx context.Context, req *conn
 			return internal(err)
 		}
 		for _, r := range rows {
-			if err := stream.Send(&opensrev1.WatchInvestigationResponse{Event: &opensrev1.WatchInvestigationResponse_Step{Step: toStep(r)}}); err != nil {
+			if err := stream.Send(&stromboliv1.WatchInvestigationResponse{Event: &stromboliv1.WatchInvestigationResponse_Step{Step: toStep(r)}}); err != nil {
 				return err
 			}
 			after = r.Seq
 		}
 		if inv.Status != agent.StatusRunning {
-			return stream.Send(&opensrev1.WatchInvestigationResponse{Event: &opensrev1.WatchInvestigationResponse_Finished{Finished: toInvestigation(inv)}})
+			return stream.Send(&stromboliv1.WatchInvestigationResponse{Event: &stromboliv1.WatchInvestigationResponse_Finished{Finished: toInvestigation(inv)}})
 		}
 		select {
 		case <-ctx.Done():
@@ -122,7 +122,7 @@ func (i *InvestigationService) WatchInvestigation(ctx context.Context, req *conn
 	}
 }
 
-func (i *InvestigationService) GetBrief(ctx context.Context, req *connect.Request[opensrev1.GetBriefRequest]) (*connect.Response[opensrev1.GetBriefResponse], error) {
+func (i *InvestigationService) GetBrief(ctx context.Context, req *connect.Request[stromboliv1.GetBriefRequest]) (*connect.Response[stromboliv1.GetBriefResponse], error) {
 	since := time.Hour
 	if req.Msg.Since != "" {
 		d, err := time.ParseDuration(req.Msg.Since)
@@ -136,7 +136,7 @@ func (i *InvestigationService) GetBrief(ctx context.Context, req *connect.Reques
 	if err != nil {
 		return nil, connect.NewError(connect.CodeFailedPrecondition, err)
 	}
-	return connect.NewResponse(&opensrev1.GetBriefResponse{Brief: brief}), nil
+	return connect.NewResponse(&stromboliv1.GetBriefResponse{Brief: brief}), nil
 }
 
 func (i *InvestigationService) get(ctx context.Context, id string) (db.Investigation, error) {
@@ -154,14 +154,14 @@ func (i *InvestigationService) get(ctx context.Context, id string) (db.Investiga
 	return inv, nil
 }
 
-var statuses = map[string]opensrev1.InvestigationStatus{
-	agent.StatusRunning:   opensrev1.InvestigationStatus_INVESTIGATION_STATUS_RUNNING,
-	agent.StatusCompleted: opensrev1.InvestigationStatus_INVESTIGATION_STATUS_COMPLETED,
-	agent.StatusFailed:    opensrev1.InvestigationStatus_INVESTIGATION_STATUS_FAILED,
+var statuses = map[string]stromboliv1.InvestigationStatus{
+	agent.StatusRunning:   stromboliv1.InvestigationStatus_INVESTIGATION_STATUS_RUNNING,
+	agent.StatusCompleted: stromboliv1.InvestigationStatus_INVESTIGATION_STATUS_COMPLETED,
+	agent.StatusFailed:    stromboliv1.InvestigationStatus_INVESTIGATION_STATUS_FAILED,
 }
 
-func toInvestigation(r db.Investigation) *opensrev1.Investigation {
-	out := &opensrev1.Investigation{
+func toInvestigation(r db.Investigation) *stromboliv1.Investigation {
+	out := &stromboliv1.Investigation{
 		Id:           r.ID.String(),
 		Title:        r.Title,
 		Source:       r.Source,
@@ -179,7 +179,7 @@ func toInvestigation(r db.Investigation) *opensrev1.Investigation {
 		out.Alert = toStruct(r.Alert)
 	}
 	if len(r.Mitigation) > 0 {
-		m := &opensrev1.Mitigation{}
+		m := &stromboliv1.Mitigation{}
 		if err := protojson.Unmarshal(r.Mitigation, m); err == nil {
 			out.Mitigation = m
 		}
@@ -188,7 +188,7 @@ func toInvestigation(r db.Investigation) *opensrev1.Investigation {
 		out.MitigatedAt = timestamppb.New(r.MitigatedAt.Time)
 	}
 	if len(r.Report) > 0 {
-		rep := &opensrev1.Report{}
+		rep := &stromboliv1.Report{}
 		if err := protojson.Unmarshal(r.Report, rep); err == nil {
 			out.Report = rep
 		}
@@ -196,8 +196,8 @@ func toInvestigation(r db.Investigation) *opensrev1.Investigation {
 	return out
 }
 
-func toStep(r db.Step) *opensrev1.Step {
-	return &opensrev1.Step{
+func toStep(r db.Step) *stromboliv1.Step {
+	return &stromboliv1.Step{
 		Seq:        r.Seq,
 		Kind:       r.Kind,
 		Name:       r.Name,

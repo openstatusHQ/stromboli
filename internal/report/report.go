@@ -13,14 +13,14 @@ import (
 	"github.com/slack-go/slack"
 	"google.golang.org/protobuf/encoding/protojson"
 
-	opensrev1 "github.com/openstatushq/opensre/gen/opensre/v1"
-	"github.com/openstatushq/opensre/internal/store/db"
+	stromboliv1 "github.com/openstatushq/stromboli/gen/stromboli/v1"
+	"github.com/openstatushq/stromboli/internal/store/db"
 )
 
 // mitigationVerb is what the headline says will be done: the machine action
 // when there is one (Kind is a generic class, so a "start" is filed as
 // "restart"), else the kind.
-func mitigationVerb(m *opensrev1.Mitigation) string {
+func mitigationVerb(m *stromboliv1.Mitigation) string {
 	if a := m.GetMachineAction().GetAction(); a != "" {
 		return a
 	}
@@ -28,7 +28,7 @@ func mitigationVerb(m *opensrev1.Mitigation) string {
 }
 
 // MitigationMarkdown renders a proposed mitigation for terminals.
-func MitigationMarkdown(m *opensrev1.Mitigation) string {
+func MitigationMarkdown(m *stromboliv1.Mitigation) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "Mitigate first: %s %s (risk: %s, confidence: %s)\n", mitigationVerb(m), m.Target, m.Risk, m.Confidence)
 	for _, f := range [][2]string{{"Impact", m.Impact}, {"Why", m.Rationale}, {"Run", m.Action}, {"Verify", m.Verify}, {"Undo", m.Undo}} {
@@ -37,17 +37,17 @@ func MitigationMarkdown(m *opensrev1.Mitigation) string {
 		}
 	}
 	if m.ActionId != "" {
-		fmt.Fprintf(&b, "  opensre can do it: %s\n    approve: %s\n", MachineActionText(m.MachineAction), ApproveCommand(m.ActionId))
+		fmt.Fprintf(&b, "  stromboli can do it: %s\n    approve: %s\n", MachineActionText(m.MachineAction), ApproveCommand(m.ActionId))
 	}
 	return strings.TrimRight(b.String(), "\n")
 }
 
 // Mitigation decodes the mitigation stored on an investigation, or nil.
-func Mitigation(inv db.Investigation) *opensrev1.Mitigation {
+func Mitigation(inv db.Investigation) *stromboliv1.Mitigation {
 	if len(inv.Mitigation) == 0 {
 		return nil
 	}
-	m := &opensrev1.Mitigation{}
+	m := &stromboliv1.Mitigation{}
 	if err := (protojson.UnmarshalOptions{DiscardUnknown: true}).Unmarshal(inv.Mitigation, m); err != nil {
 		return nil
 	}
@@ -55,7 +55,7 @@ func Mitigation(inv db.Investigation) *opensrev1.Mitigation {
 }
 
 // MachineActionText describes a machine action, e.g. "restart 148e of app api".
-func MachineActionText(m *opensrev1.MachineAction) string {
+func MachineActionText(m *stromboliv1.MachineAction) string {
 	if m == nil {
 		return ""
 	}
@@ -68,13 +68,13 @@ func MachineActionText(m *opensrev1.MachineAction) string {
 
 // ApproveCommand is the CLI command that approves and runs an action.
 func ApproveCommand(id string) string {
-	return fmt.Sprintf("opensre actions approve %s --as <your name>", id)
+	return fmt.Sprintf("stromboli actions approve %s --as <your name>", id)
 }
 
 func indent(s string) string { return strings.ReplaceAll(s, "\n", "\n    ") }
 
 // Markdown renders a report for terminals and the API.
-func Markdown(r *opensrev1.Report) string {
+func Markdown(r *stromboliv1.Report) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "Likely cause (confidence: %s): %s\n\n", r.Confidence, r.LikelyCause)
 	if r.Summary != "" {
@@ -123,7 +123,7 @@ func (s *Slack) Started(ctx context.Context, inv db.Investigation) (string, stri
 
 // Mitigated edits the message to lead with the mitigation while the root-cause
 // investigation continues, and pings the thread so on-call is notified.
-func (s *Slack) Mitigated(ctx context.Context, inv db.Investigation, m *opensrev1.Mitigation) error {
+func (s *Slack) Mitigated(ctx context.Context, inv db.Investigation, m *stromboliv1.Mitigation) error {
 	if !inv.SlackChannel.Valid {
 		return nil
 	}
@@ -144,7 +144,7 @@ func (s *Slack) Mitigated(ctx context.Context, inv db.Investigation, m *opensrev
 
 // ActionStarted shows the approved action as running in place of its
 // buttons, so the click gets feedback without an extra message.
-func (s *Slack) ActionStarted(ctx context.Context, inv db.Investigation, _ db.Action, _ *opensrev1.MachineAction) error {
+func (s *Slack) ActionStarted(ctx context.Context, inv db.Investigation, _ db.Action, _ *stromboliv1.MachineAction) error {
 	if s.buttons == nil {
 		return nil
 	}
@@ -153,7 +153,7 @@ func (s *Slack) ActionStarted(ctx context.Context, inv db.Investigation, _ db.Ac
 
 // Finished edits the message into the report and replies in the thread with
 // the supporting details, which would bury the conclusion.
-func (s *Slack) Finished(ctx context.Context, inv db.Investigation, r *opensrev1.Report) error {
+func (s *Slack) Finished(ctx context.Context, inv db.Investigation, r *stromboliv1.Report) error {
 	if !inv.SlackChannel.Valid {
 		return nil
 	}
@@ -170,7 +170,7 @@ func (s *Slack) Finished(ctx context.Context, inv db.Investigation, r *opensrev1
 	return err
 }
 
-func (s *Slack) mitigatedBlocks(ctx context.Context, inv db.Investigation, m *opensrev1.Mitigation) []slack.Block {
+func (s *Slack) mitigatedBlocks(ctx context.Context, inv db.Investigation, m *stromboliv1.Mitigation) []slack.Block {
 	out := headerBlocks(inv, "🔎")
 	out = append(out, s.mitigationBlocks(ctx, inv, m)...)
 	return append(out, slack.NewContextBlock("", md(fmt.Sprintf("⏳ Looking for the root cause… · investigation `%s` · nothing runs without a human's approval", inv.ID))))
@@ -186,9 +186,9 @@ func (s *Slack) refresh(ctx context.Context, inv db.Investigation) error {
 	var out []slack.Block
 	switch m := Mitigation(inv); {
 	case inv.Status != "running":
-		var r *opensrev1.Report
+		var r *stromboliv1.Report
 		if len(inv.Report) > 0 {
-			r = &opensrev1.Report{}
+			r = &stromboliv1.Report{}
 			if err := (protojson.UnmarshalOptions{DiscardUnknown: true}).Unmarshal(inv.Report, r); err != nil {
 				r = nil
 			}
@@ -207,7 +207,7 @@ func (s *Slack) refresh(ctx context.Context, inv db.Investigation) error {
 
 // ActionFinished replies in the investigation's thread with what an approved
 // action did, or that it was rejected.
-func (s *Slack) ActionFinished(ctx context.Context, inv db.Investigation, a db.Action, m *opensrev1.MachineAction) error {
+func (s *Slack) ActionFinished(ctx context.Context, inv db.Investigation, a db.Action, m *stromboliv1.MachineAction) error {
 	if !inv.SlackChannel.Valid {
 		return nil
 	}
@@ -228,7 +228,7 @@ func (s *Slack) ActionFinished(ctx context.Context, inv db.Investigation, a db.A
 
 // actionFinishedMessage is the thread reply for a decided action: one line
 // with the outcome and who decided, then what was done and its undo as code.
-func actionFinishedMessage(a db.Action, m *opensrev1.MachineAction) (string, []slack.Block) {
+func actionFinishedMessage(a db.Action, m *stromboliv1.MachineAction) (string, []slack.Block) {
 	verb, machines := m.GetAction(), strings.Join(m.GetMachineIds(), ", ")
 	who := slackMention(a.DecidedBy.String)
 	var head, body string
@@ -270,14 +270,14 @@ func slackMention(decidedBy string) string {
 }
 
 // mitigationText is the one-line form of a mitigation, for notifications.
-func mitigationText(inv db.Investigation, m *opensrev1.Mitigation) string {
+func mitigationText(inv db.Investigation, m *stromboliv1.Mitigation) string {
 	if isNone(m.Kind) {
 		return fmt.Sprintf("🟢 *%s*: no mitigation needed; looking for the root cause.", serviceLabel(inv))
 	}
 	return fmt.Sprintf("🩹 *%s*: mitigate first, %s %s", serviceLabel(inv), mitigationVerb(m), m.Target)
 }
 
-func fallbackText(inv db.Investigation, r *opensrev1.Report) string {
+func fallbackText(inv db.Investigation, r *stromboliv1.Report) string {
 	if r == nil {
 		return fmt.Sprintf("❌ Investigation of %s failed", serviceLabel(inv))
 	}
@@ -309,7 +309,7 @@ func headerBlocks(inv db.Investigation, emoji string) []slack.Block {
 
 // mitigationBlocks renders the mitigation, with how long after the start of
 // the investigation it was proposed (a proxy for time to mitigation).
-func (s *Slack) mitigationBlocks(ctx context.Context, inv db.Investigation, m *opensrev1.Mitigation) []slack.Block {
+func (s *Slack) mitigationBlocks(ctx context.Context, inv db.Investigation, m *stromboliv1.Mitigation) []slack.Block {
 	if m == nil {
 		return nil
 	}
@@ -336,7 +336,7 @@ func (s *Slack) mitigationBlocks(ctx context.Context, inv db.Investigation, m *o
 		out = append(out, slack.NewSectionBlock(md(clip(fmt.Sprintf("```%s```", strings.Trim(m.Action, "`\n ")))), nil, nil))
 	}
 	if m.ActionId != "" && s.buttons == nil {
-		out = append(out, slack.NewSectionBlock(md(clip(fmt.Sprintf("*opensre can do it once approved:* %s · `%s`", MachineActionText(m.MachineAction), ApproveCommand(m.ActionId)))), nil, nil))
+		out = append(out, slack.NewSectionBlock(md(clip(fmt.Sprintf("*stromboli can do it once approved:* %s · `%s`", MachineActionText(m.MachineAction), ApproveCommand(m.ActionId)))), nil, nil))
 	}
 	out = append(out, slack.NewContextBlock("", md(fmt.Sprintf("risk: %s · confidence: %s%s · why, verify and undo in the thread", dash(m.Risk), dash(m.Confidence), when))))
 	if m.ActionId != "" && s.buttons != nil {
@@ -345,7 +345,7 @@ func (s *Slack) mitigationBlocks(ctx context.Context, inv db.Investigation, m *o
 	return out
 }
 
-func (s *Slack) blocks(ctx context.Context, inv db.Investigation, r *opensrev1.Report) []slack.Block {
+func (s *Slack) blocks(ctx context.Context, inv db.Investigation, r *stromboliv1.Report) []slack.Block {
 	emoji := "📋"
 	if r == nil {
 		emoji = "❌"
@@ -378,7 +378,7 @@ func (s *Slack) blocks(ctx context.Context, inv db.Investigation, r *opensrev1.R
 // mitigationDetailBlocks is the reasoning behind a mitigation, posted in the
 // thread: one short block per field, which Slack does not fold behind
 // "Show more" the way it folds one long section.
-func mitigationDetailBlocks(m *opensrev1.Mitigation) []slack.Block {
+func mitigationDetailBlocks(m *stromboliv1.Mitigation) []slack.Block {
 	if isNone(m.Kind) {
 		if m.Rationale == "" {
 			return nil
@@ -397,7 +397,7 @@ func mitigationDetailBlocks(m *opensrev1.Mitigation) []slack.Block {
 // detailBlocks are the report's supporting details, posted in the thread.
 // Evidence is the substance; what was ruled out is secondary and set in small
 // print. Lists are split into short blocks so Slack shows them unfolded.
-func detailBlocks(r *opensrev1.Report) []slack.Block {
+func detailBlocks(r *stromboliv1.Report) []slack.Block {
 	if r == nil {
 		return nil
 	}

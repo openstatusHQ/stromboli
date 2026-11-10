@@ -10,10 +10,10 @@ import (
 
 	"github.com/google/uuid"
 
-	opensrev1 "github.com/openstatushq/opensre/gen/opensre/v1"
-	"github.com/openstatushq/opensre/internal/agent"
-	"github.com/openstatushq/opensre/internal/connector/metrics"
-	"github.com/openstatushq/opensre/internal/store/db"
+	stromboliv1 "github.com/openstatushq/stromboli/gen/stromboli/v1"
+	"github.com/openstatushq/stromboli/internal/agent"
+	"github.com/openstatushq/stromboli/internal/connector/metrics"
+	"github.com/openstatushq/stromboli/internal/store/db"
 )
 
 // fakeSource answers each query with the series of the first preset whose
@@ -69,9 +69,9 @@ func series(labels map[string]string, values ...float64) metrics.Series {
 	return s
 }
 
-func newChecker(src *fakeSource, st *fakeStarter, services ...*opensrev1.Service) *Checker {
+func newChecker(src *fakeSource, st *fakeStarter, services ...*stromboliv1.Service) *Checker {
 	c := New(time.Hour,
-		func(context.Context) ([]*opensrev1.Service, error) { return services, nil },
+		func(context.Context) ([]*stromboliv1.Service, error) { return services, nil },
 		func(_ context.Context, name string) (metrics.Source, string, error) {
 			if name != "fly" {
 				return nil, "", errors.New("unknown connector " + name)
@@ -83,8 +83,8 @@ func newChecker(src *fakeSource, st *fakeStarter, services ...*opensrev1.Service
 	return c
 }
 
-func flySvc(name string) *opensrev1.Service {
-	return &opensrev1.Service{Name: name, Metrics: &opensrev1.MetricsConfig{Source: "fly", Selectors: []string{`app="api"`}}}
+func flySvc(name string) *stromboliv1.Service {
+	return &stromboliv1.Service{Name: name, Metrics: &stromboliv1.MetricsConfig{Source: "fly", Selectors: []string{`app="api"`}}}
 }
 
 func TestRunOnceStartsInvestigation(t *testing.T) {
@@ -99,7 +99,7 @@ func TestRunOnceStartsInvestigation(t *testing.T) {
 		"cpu_percent": {series(map[string]string{"instance": "148e", "region": "ams"}, 20, 99, 20)},
 	}}
 	st := &fakeStarter{}
-	noMetrics := &opensrev1.Service{Name: "worker"}
+	noMetrics := &stromboliv1.Service{Name: "worker"}
 	results := newChecker(src, st, flySvc("api"), noMetrics).RunOnce(context.Background())
 
 	if len(results) != 1 || results[0].Service != "api" {

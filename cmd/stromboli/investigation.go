@@ -12,8 +12,8 @@ import (
 	"github.com/spf13/cobra"
 	"google.golang.org/protobuf/encoding/protojson"
 
-	opensrev1 "github.com/openstatushq/opensre/gen/opensre/v1"
-	"github.com/openstatushq/opensre/internal/report"
+	stromboliv1 "github.com/openstatushq/stromboli/gen/stromboli/v1"
+	"github.com/openstatushq/stromboli/internal/report"
 )
 
 func (a *app) briefCmd() *cobra.Command {
@@ -24,15 +24,15 @@ func (a *app) briefCmd() *cobra.Command {
 		Long: `Print the brief an investigation starts from: the service card, its upstream
 and downstream services, recent deploys, runbooks and log error patterns
 compared with the baseline. No LLM is involved.`,
-		Example: `  opensre brief api
-  opensre brief api --since 30m`,
+		Example: `  stromboli brief api
+  stromboli brief api --since 30m`,
 		Args: exactArgs(1, "<service>"),
 		RunE: func(cmd *cobra.Command, pos []string) error {
 			c, err := a.api()
 			if err != nil {
 				return err
 			}
-			resp, err := c.investigation.GetBrief(cmd.Context(), connect.NewRequest(&opensrev1.GetBriefRequest{Service: pos[0], Since: since}))
+			resp, err := c.investigation.GetBrief(cmd.Context(), connect.NewRequest(&stromboliv1.GetBriefRequest{Service: pos[0], Since: since}))
 			if err != nil {
 				return err
 			}
@@ -59,16 +59,16 @@ brief, each tool call, the proposed mitigation, then the root-cause report.
 Ctrl-C stops watching; the investigation keeps running on the server.
 With --no-watch, only the investigation ID is printed on stdout.
 With --json, every event is printed as one JSON object per line.`,
-		Example: `  opensre investigate api --description "5xx on /v1/monitors"
-  id=$(opensre investigate api --no-watch) && opensre show "$id" --follow
-  opensre investigate api --json | jq -c 'select(.finished)'`,
+		Example: `  stromboli investigate api --description "5xx on /v1/monitors"
+  id=$(stromboli investigate api --no-watch) && stromboli show "$id" --follow
+  stromboli investigate api --json | jq -c 'select(.finished)'`,
 		Args: exactArgs(1, "<service>"),
 		RunE: func(cmd *cobra.Command, pos []string) error {
 			c, err := a.api()
 			if err != nil {
 				return err
 			}
-			resp, err := c.investigation.StartInvestigation(cmd.Context(), connect.NewRequest(&opensrev1.StartInvestigationRequest{
+			resp, err := c.investigation.StartInvestigation(cmd.Context(), connect.NewRequest(&stromboliv1.StartInvestigationRequest{
 				Service: pos[0], Title: title, Description: desc,
 			}))
 			if err != nil {
@@ -80,7 +80,7 @@ With --json, every event is printed as one JSON object per line.`,
 					return a.printJSON(resp.Msg)
 				}
 				fmt.Fprintln(a.stdout, id)
-				a.info("Follow it with: opensre show %s --follow", id)
+				a.info("Follow it with: stromboli show %s --follow", id)
 				return nil
 			}
 			a.info("Investigation %s started.", id)
@@ -96,7 +96,7 @@ With --json, every event is printed as one JSON object per line.`,
 
 // follow streams an investigation's steps after afterSeq until it finishes.
 func (a *app) follow(ctx context.Context, c *clients, id string, afterSeq int64) error {
-	stream, err := c.investigation.WatchInvestigation(ctx, connect.NewRequest(&opensrev1.WatchInvestigationRequest{Id: id, AfterSeq: afterSeq}))
+	stream, err := c.investigation.WatchInvestigation(ctx, connect.NewRequest(&stromboliv1.WatchInvestigationRequest{Id: id, AfterSeq: afterSeq}))
 	if err != nil {
 		return err
 	}
@@ -110,21 +110,21 @@ func (a *app) follow(ctx context.Context, c *clients, id string, afterSeq int64)
 			continue
 		}
 		switch ev := msg.Event.(type) {
-		case *opensrev1.WatchInvestigationResponse_Step:
+		case *stromboliv1.WatchInvestigationResponse_Step:
 			a.printStep(ev.Step)
-		case *opensrev1.WatchInvestigationResponse_Finished:
+		case *stromboliv1.WatchInvestigationResponse_Finished:
 			a.printResult(ev.Finished)
 		}
 	}
 	err = stream.Err()
 	if ctx.Err() != nil || errors.Is(err, context.Canceled) {
-		fmt.Fprintf(a.stderr, "\nStopped watching. Investigation %s keeps running on the server.\nResume with: opensre show %s --follow\n", id, id)
+		fmt.Fprintf(a.stderr, "\nStopped watching. Investigation %s keeps running on the server.\nResume with: stromboli show %s --follow\n", id, id)
 		return context.Canceled
 	}
 	return err
 }
 
-func (a *app) printStep(s *opensrev1.Step) {
+func (a *app) printStep(s *stromboliv1.Step) {
 	w := a.stdout
 	d := time.Duration(s.DurationMs) * time.Millisecond
 	switch s.Kind {
@@ -142,7 +142,7 @@ func (a *app) printStep(s *opensrev1.Step) {
 			fmt.Fprintf(w, "· %s\n", indent(text))
 		}
 	case "mitigation":
-		m := &opensrev1.Mitigation{}
+		m := &stromboliv1.Mitigation{}
 		if err := protojson.Unmarshal([]byte(s.Output), m); err == nil {
 			fmt.Fprintf(w, "\n%s\n\n· investigating the root cause…\n", report.MitigationMarkdown(m))
 		}
@@ -151,7 +151,7 @@ func (a *app) printStep(s *opensrev1.Step) {
 	}
 }
 
-func (a *app) printResult(inv *opensrev1.Investigation) {
+func (a *app) printResult(inv *stromboliv1.Investigation) {
 	w := a.stdout
 	fmt.Fprintln(w)
 	if inv.Mitigation != nil {
@@ -175,8 +175,8 @@ func (a *app) investigationsCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "investigations",
 		Short: "List recent investigations",
-		Example: `  opensre investigations
-  opensre investigations --limit 5 --json`,
+		Example: `  stromboli investigations
+  stromboli investigations --limit 5 --json`,
 		Args: noArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if limit <= 0 {
@@ -186,7 +186,7 @@ func (a *app) investigationsCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			resp, err := c.investigation.ListInvestigations(cmd.Context(), connect.NewRequest(&opensrev1.ListInvestigationsRequest{Limit: limit}))
+			resp, err := c.investigation.ListInvestigations(cmd.Context(), connect.NewRequest(&stromboliv1.ListInvestigationsRequest{Limit: limit}))
 			if err != nil {
 				return err
 			}
@@ -194,7 +194,7 @@ func (a *app) investigationsCmd() *cobra.Command {
 				return a.printJSON(resp.Msg)
 			}
 			if len(resp.Msg.Investigations) == 0 {
-				a.info("No investigations yet. Start one with `opensre investigate <service>`.")
+				a.info("No investigations yet. Start one with `stromboli investigate <service>`.")
 				return nil
 			}
 			tw := tabwriter.NewWriter(a.stdout, 0, 4, 2, ' ', 0)
@@ -210,7 +210,7 @@ func (a *app) investigationsCmd() *cobra.Command {
 	return cmd
 }
 
-func status(inv *opensrev1.Investigation) string {
+func status(inv *stromboliv1.Investigation) string {
 	return strings.ToLower(strings.TrimPrefix(inv.Status.String(), "INVESTIGATION_STATUS_"))
 }
 
@@ -221,20 +221,20 @@ func (a *app) showCmd() *cobra.Command {
 		Short: "Show an investigation's steps and report",
 		Long: `Show every step of an investigation, then its mitigation and report.
 With --follow, keep streaming new steps until a running investigation finishes.`,
-		Example: `  opensre show 7c9e6679-7425-40de-944b-e07fc1f90ae7
-  opensre show 7c9e6679-7425-40de-944b-e07fc1f90ae7 --follow`,
+		Example: `  stromboli show 7c9e6679-7425-40de-944b-e07fc1f90ae7
+  stromboli show 7c9e6679-7425-40de-944b-e07fc1f90ae7 --follow`,
 		Args: exactArgs(1, "<investigation-id>"),
 		RunE: func(cmd *cobra.Command, pos []string) error {
 			c, err := a.api()
 			if err != nil {
 				return err
 			}
-			resp, err := c.investigation.GetInvestigation(cmd.Context(), connect.NewRequest(&opensrev1.GetInvestigationRequest{Id: pos[0]}))
+			resp, err := c.investigation.GetInvestigation(cmd.Context(), connect.NewRequest(&stromboliv1.GetInvestigationRequest{Id: pos[0]}))
 			if err != nil {
 				return err
 			}
 			inv := resp.Msg.Investigation
-			running := inv.Status == opensrev1.InvestigationStatus_INVESTIGATION_STATUS_RUNNING
+			running := inv.Status == stromboliv1.InvestigationStatus_INVESTIGATION_STATUS_RUNNING
 			if a.json && !followFlag {
 				return a.printJSON(resp.Msg)
 			}

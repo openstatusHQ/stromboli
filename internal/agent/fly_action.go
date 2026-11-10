@@ -5,8 +5,8 @@ import (
 	"slices"
 	"strings"
 
-	opensrev1 "github.com/openstatushq/opensre/gen/opensre/v1"
-	"github.com/openstatushq/opensre/internal/catalog"
+	stromboliv1 "github.com/openstatushq/stromboli/gen/stromboli/v1"
+	"github.com/openstatushq/stromboli/internal/catalog"
 )
 
 // machineActionFromCommands reads the Fly machine action out of a
@@ -15,8 +15,8 @@ import (
 // command uses the same verb and names at least one machine: anything else
 // (fly deploy, fly scale, mixed verbs) stays a suggestion for humans.
 // The result is validated like any proposed action (allow-list, machines).
-func machineActionFromCommands(commands string) *opensrev1.MachineAction {
-	var out *opensrev1.MachineAction
+func machineActionFromCommands(commands string) *stromboliv1.MachineAction {
+	var out *stromboliv1.MachineAction
 	for _, cmd := range commandSep.Split(commands, -1) {
 		f := strings.Fields(strings.NewReplacer("`", " ", `"`, " ", "'", " ").Replace(cmd))
 		i := slices.Index(f, "fly")
@@ -38,7 +38,7 @@ func machineActionFromCommands(commands string) *opensrev1.MachineAction {
 			return nil // e.g. a placeholder <id>: nothing to run
 		}
 		if out == nil {
-			out = &opensrev1.MachineAction{Action: verb, Region: region}
+			out = &stromboliv1.MachineAction{Action: verb, Region: region}
 		} else if out.Action != verb || out.Region != region {
 			return nil
 		}
@@ -59,7 +59,7 @@ var commandSep = regexp.MustCompile(`\n|;|&&|\|\|`)
 var machineID = regexp.MustCompile(`^[0-9a-z]{4,24}$`)
 
 // Other fly machine subcommands: their presence means the mitigation is not
-// one opensre can run.
+// one stromboli can run.
 var machineSubcommands = []string{"destroy", "remove", "rm", "kill", "update", "run", "exec", "suspend", "leases"}
 
 // machineArgs returns the machine IDs and --region of a fly machine command's

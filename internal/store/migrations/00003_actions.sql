@@ -7,7 +7,7 @@ CREATE TABLE actions (
     service          text NOT NULL,
     -- "fly_machine" for now.
     kind             text NOT NULL,
-    -- opensre.v1.MachineAction as protojson.
+    -- stromboli.v1.MachineAction as protojson.
     spec             jsonb NOT NULL,
     connector        text NOT NULL,
     -- proposed, running, succeeded, failed, rejected, expired, superseded.

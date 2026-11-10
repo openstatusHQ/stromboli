@@ -2,9 +2,9 @@
 // versions:
 // 	protoc-gen-go v1.36.11
 // 	protoc        (unknown)
-// source: opensre/v1/connector.proto
+// source: stromboli/v1/connector.proto
 
-package opensrev1
+package stromboliv1
 
 import (
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
@@ -36,7 +36,7 @@ type Connector struct {
 
 func (x *Connector) Reset() {
 	*x = Connector{}
-	mi := &file_opensre_v1_connector_proto_msgTypes[0]
+	mi := &file_stromboli_v1_connector_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -48,7 +48,7 @@ func (x *Connector) String() string {
 func (*Connector) ProtoMessage() {}
 
 func (x *Connector) ProtoReflect() protoreflect.Message {
-	mi := &file_opensre_v1_connector_proto_msgTypes[0]
+	mi := &file_stromboli_v1_connector_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -61,7 +61,7 @@ func (x *Connector) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Connector.ProtoReflect.Descriptor instead.
 func (*Connector) Descriptor() ([]byte, []int) {
-	return file_opensre_v1_connector_proto_rawDescGZIP(), []int{0}
+	return file_stromboli_v1_connector_proto_rawDescGZIP(), []int{0}
 }
 
 func (x *Connector) GetName() string {
@@ -102,7 +102,7 @@ type CreateConnectorRequest struct {
 
 func (x *CreateConnectorRequest) Reset() {
 	*x = CreateConnectorRequest{}
-	mi := &file_opensre_v1_connector_proto_msgTypes[1]
+	mi := &file_stromboli_v1_connector_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -114,7 +114,7 @@ func (x *CreateConnectorRequest) String() string {
 func (*CreateConnectorRequest) ProtoMessage() {}
 
 func (x *CreateConnectorRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_opensre_v1_connector_proto_msgTypes[1]
+	mi := &file_stromboli_v1_connector_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -127,7 +127,7 @@ func (x *CreateConnectorRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateConnectorRequest.ProtoReflect.Descriptor instead.
 func (*CreateConnectorRequest) Descriptor() ([]byte, []int) {
-	return file_opensre_v1_connector_proto_rawDescGZIP(), []int{1}
+	return file_stromboli_v1_connector_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *CreateConnectorRequest) GetName() string {
@@ -167,7 +167,7 @@ type CreateConnectorResponse struct {
 
 func (x *CreateConnectorResponse) Reset() {
 	*x = CreateConnectorResponse{}
-	mi := &file_opensre_v1_connector_proto_msgTypes[2]
+	mi := &file_stromboli_v1_connector_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -179,7 +179,7 @@ func (x *CreateConnectorResponse) String() string {
 func (*CreateConnectorResponse) ProtoMessage() {}
 
 func (x *CreateConnectorResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_opensre_v1_connector_proto_msgTypes[2]
+	mi := &file_stromboli_v1_connector_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -192,7 +192,7 @@ func (x *CreateConnectorResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateConnectorResponse.ProtoReflect.Descriptor instead.
 func (*CreateConnectorResponse) Descriptor() ([]byte, []int) {
-	return file_opensre_v1_connector_proto_rawDescGZIP(), []int{2}
+	return file_stromboli_v1_connector_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *CreateConnectorResponse) GetConnector() *Connector {
@@ -210,7 +210,7 @@ type ListConnectorsRequest struct {
 
 func (x *ListConnectorsRequest) Reset() {
 	*x = ListConnectorsRequest{}
-	mi := &file_opensre_v1_connector_proto_msgTypes[3]
+	mi := &file_stromboli_v1_connector_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -222,7 +222,7 @@ func (x *ListConnectorsRequest) String() string {
 func (*ListConnectorsRequest) ProtoMessage() {}
 
 func (x *ListConnectorsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_opensre_v1_connector_proto_msgTypes[3]
+	mi := &file_stromboli_v1_connector_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -235,7 +235,7 @@ func (x *ListConnectorsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListConnectorsRequest.ProtoReflect.Descriptor instead.
 func (*ListConnectorsRequest) Descriptor() ([]byte, []int) {
-	return file_opensre_v1_connector_proto_rawDescGZIP(), []int{3}
+	return file_stromboli_v1_connector_proto_rawDescGZIP(), []int{3}
 }
 
 type ListConnectorsResponse struct {
@@ -247,7 +247,7 @@ type ListConnectorsResponse struct {
 
 func (x *ListConnectorsResponse) Reset() {
 	*x = ListConnectorsResponse{}
-	mi := &file_opensre_v1_connector_proto_msgTypes[4]
+	mi := &file_stromboli_v1_connector_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -259,7 +259,7 @@ func (x *ListConnectorsResponse) String() string {
 func (*ListConnectorsResponse) ProtoMessage() {}
 
 func (x *ListConnectorsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_opensre_v1_connector_proto_msgTypes[4]
+	mi := &file_stromboli_v1_connector_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -272,7 +272,7 @@ func (x *ListConnectorsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListConnectorsResponse.ProtoReflect.Descriptor instead.
 func (*ListConnectorsResponse) Descriptor() ([]byte, []int) {
-	return file_opensre_v1_connector_proto_rawDescGZIP(), []int{4}
+	return file_stromboli_v1_connector_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *ListConnectorsResponse) GetConnectors() []*Connector {
@@ -291,7 +291,7 @@ type DeleteConnectorRequest struct {
 
 func (x *DeleteConnectorRequest) Reset() {
 	*x = DeleteConnectorRequest{}
-	mi := &file_opensre_v1_connector_proto_msgTypes[5]
+	mi := &file_stromboli_v1_connector_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -303,7 +303,7 @@ func (x *DeleteConnectorRequest) String() string {
 func (*DeleteConnectorRequest) ProtoMessage() {}
 
 func (x *DeleteConnectorRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_opensre_v1_connector_proto_msgTypes[5]
+	mi := &file_stromboli_v1_connector_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -316,7 +316,7 @@ func (x *DeleteConnectorRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteConnectorRequest.ProtoReflect.Descriptor instead.
 func (*DeleteConnectorRequest) Descriptor() ([]byte, []int) {
-	return file_opensre_v1_connector_proto_rawDescGZIP(), []int{5}
+	return file_stromboli_v1_connector_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *DeleteConnectorRequest) GetName() string {
@@ -334,7 +334,7 @@ type DeleteConnectorResponse struct {
 
 func (x *DeleteConnectorResponse) Reset() {
 	*x = DeleteConnectorResponse{}
-	mi := &file_opensre_v1_connector_proto_msgTypes[6]
+	mi := &file_stromboli_v1_connector_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -346,7 +346,7 @@ func (x *DeleteConnectorResponse) String() string {
 func (*DeleteConnectorResponse) ProtoMessage() {}
 
 func (x *DeleteConnectorResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_opensre_v1_connector_proto_msgTypes[6]
+	mi := &file_stromboli_v1_connector_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -359,7 +359,7 @@ func (x *DeleteConnectorResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteConnectorResponse.ProtoReflect.Descriptor instead.
 func (*DeleteConnectorResponse) Descriptor() ([]byte, []int) {
-	return file_opensre_v1_connector_proto_rawDescGZIP(), []int{6}
+	return file_stromboli_v1_connector_proto_rawDescGZIP(), []int{6}
 }
 
 type TestConnectorRequest struct {
@@ -371,7 +371,7 @@ type TestConnectorRequest struct {
 
 func (x *TestConnectorRequest) Reset() {
 	*x = TestConnectorRequest{}
-	mi := &file_opensre_v1_connector_proto_msgTypes[7]
+	mi := &file_stromboli_v1_connector_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -383,7 +383,7 @@ func (x *TestConnectorRequest) String() string {
 func (*TestConnectorRequest) ProtoMessage() {}
 
 func (x *TestConnectorRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_opensre_v1_connector_proto_msgTypes[7]
+	mi := &file_stromboli_v1_connector_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -396,7 +396,7 @@ func (x *TestConnectorRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TestConnectorRequest.ProtoReflect.Descriptor instead.
 func (*TestConnectorRequest) Descriptor() ([]byte, []int) {
-	return file_opensre_v1_connector_proto_rawDescGZIP(), []int{7}
+	return file_stromboli_v1_connector_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *TestConnectorRequest) GetName() string {
@@ -416,7 +416,7 @@ type TestConnectorResponse struct {
 
 func (x *TestConnectorResponse) Reset() {
 	*x = TestConnectorResponse{}
-	mi := &file_opensre_v1_connector_proto_msgTypes[8]
+	mi := &file_stromboli_v1_connector_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -428,7 +428,7 @@ func (x *TestConnectorResponse) String() string {
 func (*TestConnectorResponse) ProtoMessage() {}
 
 func (x *TestConnectorResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_opensre_v1_connector_proto_msgTypes[8]
+	mi := &file_stromboli_v1_connector_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -441,7 +441,7 @@ func (x *TestConnectorResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TestConnectorResponse.ProtoReflect.Descriptor instead.
 func (*TestConnectorResponse) Descriptor() ([]byte, []int) {
-	return file_opensre_v1_connector_proto_rawDescGZIP(), []int{8}
+	return file_stromboli_v1_connector_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *TestConnectorResponse) GetOk() bool {
@@ -458,33 +458,32 @@ func (x *TestConnectorResponse) GetMessage() string {
 	return ""
 }
 
-var File_opensre_v1_connector_proto protoreflect.FileDescriptor
+var File_stromboli_v1_connector_proto protoreflect.FileDescriptor
 
-const file_opensre_v1_connector_proto_rawDesc = "" +
+const file_stromboli_v1_connector_proto_rawDesc = "" +
 	"\n" +
-	"\x1aopensre/v1/connector.proto\x12\n" +
-	"opensre.v1\"\xa9\x01\n" +
+	"\x1cstromboli/v1/connector.proto\x12\fstromboli.v1\"\xab\x01\n" +
 	"\tConnector\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x12\n" +
-	"\x04kind\x18\x02 \x01(\tR\x04kind\x129\n" +
-	"\x06config\x18\x03 \x03(\v2!.opensre.v1.Connector.ConfigEntryR\x06config\x1a9\n" +
+	"\x04kind\x18\x02 \x01(\tR\x04kind\x12;\n" +
+	"\x06config\x18\x03 \x03(\v2#.stromboli.v1.Connector.ConfigEntryR\x06config\x1a9\n" +
 	"\vConfigEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xdd\x01\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xdf\x01\n" +
 	"\x16CreateConnectorRequest\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x12\n" +
-	"\x04kind\x18\x02 \x01(\tR\x04kind\x12F\n" +
-	"\x06config\x18\x03 \x03(\v2..opensre.v1.CreateConnectorRequest.ConfigEntryR\x06config\x12\x18\n" +
+	"\x04kind\x18\x02 \x01(\tR\x04kind\x12H\n" +
+	"\x06config\x18\x03 \x03(\v20.stromboli.v1.CreateConnectorRequest.ConfigEntryR\x06config\x12\x18\n" +
 	"\areplace\x18\x04 \x01(\bR\areplace\x1a9\n" +
 	"\vConfigEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"N\n" +
-	"\x17CreateConnectorResponse\x123\n" +
-	"\tconnector\x18\x01 \x01(\v2\x15.opensre.v1.ConnectorR\tconnector\"\x17\n" +
-	"\x15ListConnectorsRequest\"O\n" +
-	"\x16ListConnectorsResponse\x125\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"P\n" +
+	"\x17CreateConnectorResponse\x125\n" +
+	"\tconnector\x18\x01 \x01(\v2\x17.stromboli.v1.ConnectorR\tconnector\"\x17\n" +
+	"\x15ListConnectorsRequest\"Q\n" +
+	"\x16ListConnectorsResponse\x127\n" +
 	"\n" +
-	"connectors\x18\x01 \x03(\v2\x15.opensre.v1.ConnectorR\n" +
+	"connectors\x18\x01 \x03(\v2\x17.stromboli.v1.ConnectorR\n" +
 	"connectors\",\n" +
 	"\x16DeleteConnectorRequest\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\"\x19\n" +
@@ -493,55 +492,53 @@ const file_opensre_v1_connector_proto_rawDesc = "" +
 	"\x04name\x18\x01 \x01(\tR\x04name\"A\n" +
 	"\x15TestConnectorResponse\x12\x0e\n" +
 	"\x02ok\x18\x01 \x01(\bR\x02ok\x12\x18\n" +
-	"\amessage\x18\x02 \x01(\tR\amessage2\x83\x03\n" +
-	"\x10ConnectorService\x12Z\n" +
-	"\x0fCreateConnector\x12\".opensre.v1.CreateConnectorRequest\x1a#.opensre.v1.CreateConnectorResponse\x12\\\n" +
-	"\x0eListConnectors\x12!.opensre.v1.ListConnectorsRequest\x1a\".opensre.v1.ListConnectorsResponse\"\x03\x90\x02\x01\x12Z\n" +
-	"\x0fDeleteConnector\x12\".opensre.v1.DeleteConnectorRequest\x1a#.opensre.v1.DeleteConnectorResponse\x12Y\n" +
-	"\rTestConnector\x12 .opensre.v1.TestConnectorRequest\x1a!.opensre.v1.TestConnectorResponse\"\x03\x90\x02\x01B\xa3\x01\n" +
-	"\x0ecom.opensre.v1B\x0eConnectorProtoP\x01Z8github.com/openstatushq/opensre/gen/opensre/v1;opensrev1\xa2\x02\x03OXX\xaa\x02\n" +
-	"Opensre.V1\xca\x02\n" +
-	"Opensre\\V1\xe2\x02\x16Opensre\\V1\\GPBMetadata\xea\x02\vOpensre::V1b\x06proto3"
+	"\amessage\x18\x02 \x01(\tR\amessage2\x93\x03\n" +
+	"\x10ConnectorService\x12^\n" +
+	"\x0fCreateConnector\x12$.stromboli.v1.CreateConnectorRequest\x1a%.stromboli.v1.CreateConnectorResponse\x12`\n" +
+	"\x0eListConnectors\x12#.stromboli.v1.ListConnectorsRequest\x1a$.stromboli.v1.ListConnectorsResponse\"\x03\x90\x02\x01\x12^\n" +
+	"\x0fDeleteConnector\x12$.stromboli.v1.DeleteConnectorRequest\x1a%.stromboli.v1.DeleteConnectorResponse\x12]\n" +
+	"\rTestConnector\x12\".stromboli.v1.TestConnectorRequest\x1a#.stromboli.v1.TestConnectorResponse\"\x03\x90\x02\x01B\xb3\x01\n" +
+	"\x10com.stromboli.v1B\x0eConnectorProtoP\x01Z>github.com/openstatushq/stromboli/gen/stromboli/v1;stromboliv1\xa2\x02\x03SXX\xaa\x02\fStromboli.V1\xca\x02\fStromboli\\V1\xe2\x02\x18Stromboli\\V1\\GPBMetadata\xea\x02\rStromboli::V1b\x06proto3"
 
 var (
-	file_opensre_v1_connector_proto_rawDescOnce sync.Once
-	file_opensre_v1_connector_proto_rawDescData []byte
+	file_stromboli_v1_connector_proto_rawDescOnce sync.Once
+	file_stromboli_v1_connector_proto_rawDescData []byte
 )
 
-func file_opensre_v1_connector_proto_rawDescGZIP() []byte {
-	file_opensre_v1_connector_proto_rawDescOnce.Do(func() {
-		file_opensre_v1_connector_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_opensre_v1_connector_proto_rawDesc), len(file_opensre_v1_connector_proto_rawDesc)))
+func file_stromboli_v1_connector_proto_rawDescGZIP() []byte {
+	file_stromboli_v1_connector_proto_rawDescOnce.Do(func() {
+		file_stromboli_v1_connector_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_stromboli_v1_connector_proto_rawDesc), len(file_stromboli_v1_connector_proto_rawDesc)))
 	})
-	return file_opensre_v1_connector_proto_rawDescData
+	return file_stromboli_v1_connector_proto_rawDescData
 }
 
-var file_opensre_v1_connector_proto_msgTypes = make([]protoimpl.MessageInfo, 11)
-var file_opensre_v1_connector_proto_goTypes = []any{
-	(*Connector)(nil),               // 0: opensre.v1.Connector
-	(*CreateConnectorRequest)(nil),  // 1: opensre.v1.CreateConnectorRequest
-	(*CreateConnectorResponse)(nil), // 2: opensre.v1.CreateConnectorResponse
-	(*ListConnectorsRequest)(nil),   // 3: opensre.v1.ListConnectorsRequest
-	(*ListConnectorsResponse)(nil),  // 4: opensre.v1.ListConnectorsResponse
-	(*DeleteConnectorRequest)(nil),  // 5: opensre.v1.DeleteConnectorRequest
-	(*DeleteConnectorResponse)(nil), // 6: opensre.v1.DeleteConnectorResponse
-	(*TestConnectorRequest)(nil),    // 7: opensre.v1.TestConnectorRequest
-	(*TestConnectorResponse)(nil),   // 8: opensre.v1.TestConnectorResponse
-	nil,                             // 9: opensre.v1.Connector.ConfigEntry
-	nil,                             // 10: opensre.v1.CreateConnectorRequest.ConfigEntry
+var file_stromboli_v1_connector_proto_msgTypes = make([]protoimpl.MessageInfo, 11)
+var file_stromboli_v1_connector_proto_goTypes = []any{
+	(*Connector)(nil),               // 0: stromboli.v1.Connector
+	(*CreateConnectorRequest)(nil),  // 1: stromboli.v1.CreateConnectorRequest
+	(*CreateConnectorResponse)(nil), // 2: stromboli.v1.CreateConnectorResponse
+	(*ListConnectorsRequest)(nil),   // 3: stromboli.v1.ListConnectorsRequest
+	(*ListConnectorsResponse)(nil),  // 4: stromboli.v1.ListConnectorsResponse
+	(*DeleteConnectorRequest)(nil),  // 5: stromboli.v1.DeleteConnectorRequest
+	(*DeleteConnectorResponse)(nil), // 6: stromboli.v1.DeleteConnectorResponse
+	(*TestConnectorRequest)(nil),    // 7: stromboli.v1.TestConnectorRequest
+	(*TestConnectorResponse)(nil),   // 8: stromboli.v1.TestConnectorResponse
+	nil,                             // 9: stromboli.v1.Connector.ConfigEntry
+	nil,                             // 10: stromboli.v1.CreateConnectorRequest.ConfigEntry
 }
-var file_opensre_v1_connector_proto_depIdxs = []int32{
-	9,  // 0: opensre.v1.Connector.config:type_name -> opensre.v1.Connector.ConfigEntry
-	10, // 1: opensre.v1.CreateConnectorRequest.config:type_name -> opensre.v1.CreateConnectorRequest.ConfigEntry
-	0,  // 2: opensre.v1.CreateConnectorResponse.connector:type_name -> opensre.v1.Connector
-	0,  // 3: opensre.v1.ListConnectorsResponse.connectors:type_name -> opensre.v1.Connector
-	1,  // 4: opensre.v1.ConnectorService.CreateConnector:input_type -> opensre.v1.CreateConnectorRequest
-	3,  // 5: opensre.v1.ConnectorService.ListConnectors:input_type -> opensre.v1.ListConnectorsRequest
-	5,  // 6: opensre.v1.ConnectorService.DeleteConnector:input_type -> opensre.v1.DeleteConnectorRequest
-	7,  // 7: opensre.v1.ConnectorService.TestConnector:input_type -> opensre.v1.TestConnectorRequest
-	2,  // 8: opensre.v1.ConnectorService.CreateConnector:output_type -> opensre.v1.CreateConnectorResponse
-	4,  // 9: opensre.v1.ConnectorService.ListConnectors:output_type -> opensre.v1.ListConnectorsResponse
-	6,  // 10: opensre.v1.ConnectorService.DeleteConnector:output_type -> opensre.v1.DeleteConnectorResponse
-	8,  // 11: opensre.v1.ConnectorService.TestConnector:output_type -> opensre.v1.TestConnectorResponse
+var file_stromboli_v1_connector_proto_depIdxs = []int32{
+	9,  // 0: stromboli.v1.Connector.config:type_name -> stromboli.v1.Connector.ConfigEntry
+	10, // 1: stromboli.v1.CreateConnectorRequest.config:type_name -> stromboli.v1.CreateConnectorRequest.ConfigEntry
+	0,  // 2: stromboli.v1.CreateConnectorResponse.connector:type_name -> stromboli.v1.Connector
+	0,  // 3: stromboli.v1.ListConnectorsResponse.connectors:type_name -> stromboli.v1.Connector
+	1,  // 4: stromboli.v1.ConnectorService.CreateConnector:input_type -> stromboli.v1.CreateConnectorRequest
+	3,  // 5: stromboli.v1.ConnectorService.ListConnectors:input_type -> stromboli.v1.ListConnectorsRequest
+	5,  // 6: stromboli.v1.ConnectorService.DeleteConnector:input_type -> stromboli.v1.DeleteConnectorRequest
+	7,  // 7: stromboli.v1.ConnectorService.TestConnector:input_type -> stromboli.v1.TestConnectorRequest
+	2,  // 8: stromboli.v1.ConnectorService.CreateConnector:output_type -> stromboli.v1.CreateConnectorResponse
+	4,  // 9: stromboli.v1.ConnectorService.ListConnectors:output_type -> stromboli.v1.ListConnectorsResponse
+	6,  // 10: stromboli.v1.ConnectorService.DeleteConnector:output_type -> stromboli.v1.DeleteConnectorResponse
+	8,  // 11: stromboli.v1.ConnectorService.TestConnector:output_type -> stromboli.v1.TestConnectorResponse
 	8,  // [8:12] is the sub-list for method output_type
 	4,  // [4:8] is the sub-list for method input_type
 	4,  // [4:4] is the sub-list for extension type_name
@@ -549,26 +546,26 @@ var file_opensre_v1_connector_proto_depIdxs = []int32{
 	0,  // [0:4] is the sub-list for field type_name
 }
 
-func init() { file_opensre_v1_connector_proto_init() }
-func file_opensre_v1_connector_proto_init() {
-	if File_opensre_v1_connector_proto != nil {
+func init() { file_stromboli_v1_connector_proto_init() }
+func file_stromboli_v1_connector_proto_init() {
+	if File_stromboli_v1_connector_proto != nil {
 		return
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
-			RawDescriptor: unsafe.Slice(unsafe.StringData(file_opensre_v1_connector_proto_rawDesc), len(file_opensre_v1_connector_proto_rawDesc)),
+			RawDescriptor: unsafe.Slice(unsafe.StringData(file_stromboli_v1_connector_proto_rawDesc), len(file_stromboli_v1_connector_proto_rawDesc)),
 			NumEnums:      0,
 			NumMessages:   11,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
-		GoTypes:           file_opensre_v1_connector_proto_goTypes,
-		DependencyIndexes: file_opensre_v1_connector_proto_depIdxs,
-		MessageInfos:      file_opensre_v1_connector_proto_msgTypes,
+		GoTypes:           file_stromboli_v1_connector_proto_goTypes,
+		DependencyIndexes: file_stromboli_v1_connector_proto_depIdxs,
+		MessageInfos:      file_stromboli_v1_connector_proto_msgTypes,
 	}.Build()
-	File_opensre_v1_connector_proto = out.File
-	file_opensre_v1_connector_proto_goTypes = nil
-	file_opensre_v1_connector_proto_depIdxs = nil
+	File_stromboli_v1_connector_proto = out.File
+	file_stromboli_v1_connector_proto_goTypes = nil
+	file_stromboli_v1_connector_proto_depIdxs = nil
 }

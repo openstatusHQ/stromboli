@@ -8,9 +8,9 @@ import (
 	"sync"
 	"time"
 
-	opensrev1 "github.com/openstatushq/opensre/gen/opensre/v1"
-	"github.com/openstatushq/opensre/internal/connector/metrics"
-	"github.com/openstatushq/opensre/internal/policy"
+	stromboliv1 "github.com/openstatushq/stromboli/gen/stromboli/v1"
+	"github.com/openstatushq/stromboli/internal/connector/metrics"
+	"github.com/openstatushq/stromboli/internal/policy"
 )
 
 // metricAnalysis is the summarised evidence for one metric query.
@@ -49,7 +49,7 @@ func analyzeMetric(ctx context.Context, src metrics.Source, expr string, w Windo
 	}, nil
 }
 
-func metricsTarget(svc *opensrev1.Service) (source, matchers string, err error) {
+func metricsTarget(svc *stromboliv1.Service) (source, matchers string, err error) {
 	m := svc.Metrics
 	if m == nil || m.Source == "" {
 		return "", "", fmt.Errorf("service %q has no metrics source configured", svc.Name)
@@ -63,7 +63,7 @@ func metricsTarget(svc *opensrev1.Service) (source, matchers string, err error) 
 
 // briefMetrics shows the brief presets of the service's metrics connector:
 // per series, the window's average, peak and last value against the baseline.
-func (e *Engine) briefMetrics(ctx context.Context, svc *opensrev1.Service, w Window) string {
+func (e *Engine) briefMetrics(ctx context.Context, svc *stromboliv1.Service, w Window) string {
 	if svc.Metrics == nil || svc.Metrics.Source == "" {
 		return "_No metrics source configured for this service._\n"
 	}

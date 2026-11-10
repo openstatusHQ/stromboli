@@ -4,20 +4,20 @@ import (
 	"slices"
 	"sort"
 
-	opensrev1 "github.com/openstatushq/opensre/gen/opensre/v1"
+	stromboliv1 "github.com/openstatushq/stromboli/gen/stromboli/v1"
 )
 
 // Graph is the dependency graph of the catalog. Edges point from a service to
 // what it depends on (downstream = what I call, upstream = who calls me).
 type Graph struct {
-	services map[string]*opensrev1.Service
+	services map[string]*stromboliv1.Service
 	deps     map[string][]string
 	rdeps    map[string][]string
 }
 
-func NewGraph(services []*opensrev1.Service) *Graph {
+func NewGraph(services []*stromboliv1.Service) *Graph {
 	g := &Graph{
-		services: map[string]*opensrev1.Service{},
+		services: map[string]*stromboliv1.Service{},
 		deps:     map[string][]string{},
 		rdeps:    map[string][]string{},
 	}
@@ -38,7 +38,7 @@ func NewGraph(services []*opensrev1.Service) *Graph {
 	return g
 }
 
-func (g *Graph) Service(name string) (*opensrev1.Service, bool) {
+func (g *Graph) Service(name string) (*stromboliv1.Service, bool) {
 	s, ok := g.services[name]
 	return s, ok
 }
@@ -70,7 +70,7 @@ func (g *Graph) BlastRadius(name string) []string {
 }
 
 // FindByMonitor returns the service that lists monitor (e.g. "openstatus:42").
-func (g *Graph) FindByMonitor(monitor string) (*opensrev1.Service, bool) {
+func (g *Graph) FindByMonitor(monitor string) (*stromboliv1.Service, bool) {
 	for _, s := range g.services {
 		if slices.Contains(s.Monitors, monitor) {
 			return s, true

@@ -4,11 +4,11 @@ import (
 	"slices"
 	"testing"
 
-	opensrev1 "github.com/openstatushq/opensre/gen/opensre/v1"
-	"github.com/openstatushq/opensre/internal/catalog"
+	stromboliv1 "github.com/openstatushq/stromboli/gen/stromboli/v1"
+	"github.com/openstatushq/stromboli/internal/catalog"
 )
 
-var res = resolver{graph: catalog.NewGraph([]*opensrev1.Service{
+var res = resolver{graph: catalog.NewGraph([]*stromboliv1.Service{
 	{Name: "api", Monitors: []string{"openstatus:1"}},
 	{Name: "checker"},
 })}

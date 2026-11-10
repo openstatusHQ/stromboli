@@ -19,8 +19,8 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 
-	"github.com/openstatushq/opensre/gen/opensre/v1/opensrev1connect"
-	"github.com/openstatushq/opensre/internal/api"
+	"github.com/openstatushq/stromboli/gen/stromboli/v1/stromboliv1connect"
+	"github.com/openstatushq/stromboli/internal/api"
 )
 
 // usageError is a mistake in how a command was invoked (exit code 2).
@@ -247,22 +247,22 @@ func (a *app) explain(err error) string {
 	msg := ce.Message()
 	switch ce.Code() {
 	case connect.CodeUnavailable:
-		return fmt.Sprintf("cannot reach the opensre server at %s (%s)\nIs it running? Set OPENSRE_URL or --url to its address.", a.url, msg)
+		return fmt.Sprintf("cannot reach the stromboli server at %s (%s)\nIs it running? Set STROMBOLI_URL or --url to its address.", a.url, msg)
 	case connect.CodeUnauthenticated:
-		return fmt.Sprintf("the server rejected the API token (%s)\nSet OPENSRE_API_TOKEN, or --token-file, to the token the server was started with.", msg)
+		return fmt.Sprintf("the server rejected the API token (%s)\nSet STROMBOLI_API_TOKEN, or --token-file, to the token the server was started with.", msg)
 	case connect.CodeUnimplemented:
-		return fmt.Sprintf("%s\nThe server at %s may be running an older version of opensre.", msg, a.url)
+		return fmt.Sprintf("%s\nThe server at %s may be running an older version of stromboli.", msg, a.url)
 	case connect.CodeInternal, connect.CodeUnknown:
-		return fmt.Sprintf("%s\nThis looks like a server problem: check the opensre server logs.", msg)
+		return fmt.Sprintf("%s\nThis looks like a server problem: check the stromboli server logs.", msg)
 	}
 	return msg
 }
 
 type clients struct {
-	catalog       opensrev1connect.CatalogServiceClient
-	connectors    opensrev1connect.ConnectorServiceClient
-	investigation opensrev1connect.InvestigationServiceClient
-	actions       opensrev1connect.ActionServiceClient
+	catalog       stromboliv1connect.CatalogServiceClient
+	connectors    stromboliv1connect.ConnectorServiceClient
+	investigation stromboliv1connect.InvestigationServiceClient
+	actions       stromboliv1connect.ActionServiceClient
 }
 
 // api returns the RPC clients, configured from --url and the API token.
@@ -270,7 +270,7 @@ func (a *app) api() (*clients, error) {
 	if a.clients != nil {
 		return a.clients, nil
 	}
-	token := os.Getenv("OPENSRE_API_TOKEN")
+	token := os.Getenv("STROMBOLI_API_TOKEN")
 	if a.tokenFile != "" {
 		b, err := os.ReadFile(a.tokenFile)
 		if err != nil {
@@ -280,15 +280,15 @@ func (a *app) api() (*clients, error) {
 	}
 	url := strings.TrimRight(a.url, "/")
 	if u, err := neturl.Parse(url); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
-		return nil, usageError{err: fmt.Errorf("invalid server URL %q: use a full URL such as http://localhost:8080 (set with --url or OPENSRE_URL)", a.url)}
+		return nil, usageError{err: fmt.Errorf("invalid server URL %q: use a full URL such as http://localhost:8080 (set with --url or STROMBOLI_URL)", a.url)}
 	}
 	opts := connect.WithInterceptors(api.BearerToken(token))
 	hc := &http.Client{}
 	a.clients = &clients{
-		catalog:       opensrev1connect.NewCatalogServiceClient(hc, url, opts),
-		connectors:    opensrev1connect.NewConnectorServiceClient(hc, url, opts),
-		investigation: opensrev1connect.NewInvestigationServiceClient(hc, url, opts),
-		actions:       opensrev1connect.NewActionServiceClient(hc, url, opts),
+		catalog:       stromboliv1connect.NewCatalogServiceClient(hc, url, opts),
+		connectors:    stromboliv1connect.NewConnectorServiceClient(hc, url, opts),
+		investigation: stromboliv1connect.NewInvestigationServiceClient(hc, url, opts),
+		actions:       stromboliv1connect.NewActionServiceClient(hc, url, opts),
 	}
 	return a.clients, nil
 }

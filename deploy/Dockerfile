@@ -8,15 +8,15 @@ ARG VERSION=dev
 ARG TARGETOS
 ARG TARGETARCH
 RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH \
-	go build -trimpath -ldflags="-s -w -X main.version=${VERSION}" -o /out/opensre ./cmd/opensre
+	go build -trimpath -ldflags="-s -w -X main.version=${VERSION}" -o /out/stromboli ./cmd/stromboli
 
 FROM gcr.io/distroless/static-debian12:nonroot
-LABEL org.opencontainers.image.title="opensre" \
+LABEL org.opencontainers.image.title="stromboli" \
 	org.opencontainers.image.description="An open-source AI SRE agent you host yourself" \
-	org.opencontainers.image.source="https://github.com/openstatushq/opensre" \
+	org.opencontainers.image.source="https://github.com/openstatushq/stromboli" \
 	org.opencontainers.image.licenses="MIT"
-COPY --from=build /out/opensre /usr/local/bin/opensre
-ENV OPENSRE_ADDR=:8080
+COPY --from=build /out/stromboli /usr/local/bin/stromboli
+ENV STROMBOLI_ADDR=:8080
 EXPOSE 8080
-ENTRYPOINT ["/usr/local/bin/opensre"]
+ENTRYPOINT ["/usr/local/bin/stromboli"]
 CMD ["serve"]

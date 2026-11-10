@@ -1,9 +1,9 @@
 syntax = "proto3";
 
-package opensre.v1;
+package stromboli.v1;
 
 import "google/protobuf/timestamp.proto";
-import "opensre/v1/investigation.proto";
+import "stromboli/v1/investigation.proto";
 
 enum ActionStatus {
   ACTION_STATUS_UNSPECIFIED = 0;
@@ -14,7 +14,7 @@ enum ActionStatus {
   ACTION_STATUS_SUCCEEDED = 3;
   ACTION_STATUS_FAILED = 4;
   ACTION_STATUS_REJECTED = 5;
-  // Not approved in time (OPENSRE_ACTION_TTL).
+  // Not approved in time (STROMBOLI_ACTION_TTL).
   ACTION_STATUS_EXPIRED = 6;
   // Replaced by a revised mitigation before anyone approved it.
   ACTION_STATUS_SUPERSEDED = 7;
@@ -84,7 +84,7 @@ message RejectActionResponse {
   Action action = 1;
 }
 
-// ActionService approves and runs mitigations the agent proposed. opensre
+// ActionService approves and runs mitigations the agent proposed. stromboli
 // never runs one on its own.
 service ActionService {
   rpc ListActions(ListActionsRequest) returns (ListActionsResponse) {

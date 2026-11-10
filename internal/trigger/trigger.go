@@ -15,9 +15,9 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 
-	"github.com/openstatushq/opensre/internal/agent"
-	"github.com/openstatushq/opensre/internal/catalog"
-	"github.com/openstatushq/opensre/internal/store"
+	"github.com/openstatushq/stromboli/internal/agent"
+	"github.com/openstatushq/stromboli/internal/catalog"
+	"github.com/openstatushq/stromboli/internal/store"
 )
 
 // Alert is the normalized form of any incoming alert.

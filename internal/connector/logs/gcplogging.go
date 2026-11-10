@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/openstatushq/opensre/internal/connector/mcpconn"
+	"github.com/openstatushq/stromboli/internal/connector/mcpconn"
 )
 
 // GCPLogging reads Cloud Logging through Google's remote MCP server

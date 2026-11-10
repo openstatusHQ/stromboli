@@ -18,14 +18,14 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"google.golang.org/protobuf/encoding/protojson"
 
-	opensrev1 "github.com/openstatushq/opensre/gen/opensre/v1"
-	"github.com/openstatushq/opensre/internal/catalog"
-	"github.com/openstatushq/opensre/internal/config"
-	"github.com/openstatushq/opensre/internal/connector"
-	"github.com/openstatushq/opensre/internal/llm"
-	"github.com/openstatushq/opensre/internal/secrets"
-	"github.com/openstatushq/opensre/internal/store"
-	"github.com/openstatushq/opensre/internal/store/db"
+	stromboliv1 "github.com/openstatushq/stromboli/gen/stromboli/v1"
+	"github.com/openstatushq/stromboli/internal/catalog"
+	"github.com/openstatushq/stromboli/internal/config"
+	"github.com/openstatushq/stromboli/internal/connector"
+	"github.com/openstatushq/stromboli/internal/llm"
+	"github.com/openstatushq/stromboli/internal/secrets"
+	"github.com/openstatushq/stromboli/internal/store"
+	"github.com/openstatushq/stromboli/internal/store/db"
 )
 
 // scripted replays canned model responses and records the requests.
@@ -215,9 +215,9 @@ func fakeFlyMetrics(t *testing.T) *httptest.Server {
 }
 
 func TestInvestigationEndToEnd(t *testing.T) {
-	dbURL := os.Getenv("OPENSRE_TEST_DB_URL")
+	dbURL := os.Getenv("STROMBOLI_TEST_DB_URL")
 	if dbURL == "" {
-		t.Skip("set OPENSRE_TEST_DB_URL to run (e.g. postgres://opensre:opensre@localhost:55432/opensre?sslmode=disable)")
+		t.Skip("set STROMBOLI_TEST_DB_URL to run (e.g. postgres://stromboli:stromboli@localhost:55432/stromboli?sslmode=disable)")
 	}
 	ctx := context.Background()
 	st, err := store.Open(ctx, dbURL)
@@ -271,9 +271,9 @@ func runInvestigation(t *testing.T, st *store.Store, b logBackend) {
 		t.Fatal(err)
 	}
 	svcName := fmt.Sprintf("api-test-%d", time.Now().UnixNano())
-	spec, _ := catalog.MarshalSpec(&opensrev1.Service{
-		Name: svcName, Logs: &opensrev1.LogsConfig{Source: connName, Selector: b.selector},
-		Metrics: &opensrev1.MetricsConfig{Source: "test-fly", Selectors: []string{`app="api"`}},
+	spec, _ := catalog.MarshalSpec(&stromboliv1.Service{
+		Name: svcName, Logs: &stromboliv1.LogsConfig{Source: connName, Selector: b.selector},
+		Metrics: &stromboliv1.MetricsConfig{Source: "test-fly", Selectors: []string{`app="api"`}},
 	})
 	if err := st.UpsertService(ctx, db.UpsertServiceParams{Name: svcName, Spec: spec}); err != nil {
 		t.Fatal(err)
@@ -315,7 +315,7 @@ func runInvestigation(t *testing.T, st *store.Store, b logBackend) {
 	if got.Status != StatusCompleted {
 		t.Fatalf("status = %s, error = %s", got.Status, got.Error.String)
 	}
-	rep := &opensrev1.Report{}
+	rep := &stromboliv1.Report{}
 	if err := protojson.Unmarshal(got.Report, rep); err != nil {
 		t.Fatal(err)
 	}
@@ -336,7 +336,7 @@ func runInvestigation(t *testing.T, st *store.Store, b logBackend) {
 	}
 
 	// Mitigate first: the mitigation is stored and published before the report.
-	mit := &opensrev1.Mitigation{}
+	mit := &stromboliv1.Mitigation{}
 	if err := protojson.Unmarshal(got.Mitigation, mit); err != nil {
 		t.Fatalf("mitigation not stored: %v", err)
 	}
@@ -423,7 +423,7 @@ func runInvestigation(t *testing.T, st *store.Store, b logBackend) {
 		t.Errorf("brief should show machine metrics against the baseline, got: %s", first[strings.Index(first, "## Metrics"):])
 	}
 
-	// A per-request dedupe window outlasts OPENSRE_DEDUPE_WINDOW (1m here):
+	// A per-request dedupe window outlasts STROMBOLI_DEDUPE_WINDOW (1m here):
 	// an investigation finished 10 minutes ago is reused, without a new run.
 	if _, err := st.Pool.Exec(ctx, `UPDATE investigations SET fingerprint = 'healthcheck:x', finished_at = now() - interval '10 minutes' WHERE id = $1`, inv.ID); err != nil {
 		t.Fatal(err)
@@ -484,7 +484,7 @@ func lastUser(t *testing.T, p anthropic.BetaMessageNewParams) *anthropic.BetaUse
 
 type recordingNotifier struct {
 	mu                       sync.Mutex
-	mitigations              []*opensrev1.Mitigation
+	mitigations              []*stromboliv1.Mitigation
 	finished                 bool
 	finishedBeforeMitigation bool
 }
@@ -493,14 +493,14 @@ func (n *recordingNotifier) Started(context.Context, db.Investigation) (string, 
 	return "", "", nil
 }
 
-func (n *recordingNotifier) Mitigated(_ context.Context, _ db.Investigation, m *opensrev1.Mitigation) error {
+func (n *recordingNotifier) Mitigated(_ context.Context, _ db.Investigation, m *stromboliv1.Mitigation) error {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 	n.mitigations = append(n.mitigations, m)
 	return nil
 }
 
-func (n *recordingNotifier) Finished(context.Context, db.Investigation, *opensrev1.Report) error {
+func (n *recordingNotifier) Finished(context.Context, db.Investigation, *stromboliv1.Report) error {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 	n.finished = true

@@ -9,9 +9,9 @@ Self-hosters bring their own LLM key ([0002](0002-self-hosted-one-instance-per-o
 
 ## Decision
 
-- Models are named `provider:model`, as in the [AI SDK provider registry](https://ai-sdk.dev/docs/reference/ai-sdk-core/provider-registry). Supported: Anthropic, OpenAI, Google Gemini, OpenRouter, DeepSeek, Ollama, and any OpenAI-compatible API via `OPENSRE_PROVIDER_<NAME>_BASE_URL`. An id with a slash and no prefix (`openai/gpt-5`) goes through Vercel AI Gateway.
+- Models are named `provider:model`, as in the [AI SDK provider registry](https://ai-sdk.dev/docs/reference/ai-sdk-core/provider-registry). Supported: Anthropic, OpenAI, Google Gemini, OpenRouter, DeepSeek, Ollama, and any OpenAI-compatible API via `STROMBOLI_PROVIDER_<NAME>_BASE_URL`. An id with a slash and no prefix (`openai/gpt-5`) goes through Vercel AI Gateway.
 - Claude is the default (`anthropic:claude-opus-5-5`).
-- Each task picks its own model and effort: `OPENSRE_TRIAGE_MODEL` until the mitigation is published, `OPENSRE_INVESTIGATE_MODEL` for the root cause and report, both defaulting to `OPENSRE_MODEL`. The investigate model takes over the triage conversation, so it sees everything triage saw.
+- Each task picks its own model and effort: `STROMBOLI_TRIAGE_MODEL` until the mitigation is published, `STROMBOLI_INVESTIGATE_MODEL` for the root cause and report, both defaulting to `STROMBOLI_MODEL`. The investigate model takes over the triage conversation, so it sees everything triage saw.
 - Two adapters: Anthropic Messages (prompt caching, effort, refusal fallbacks) and OpenAI Chat Completions for everything else (effort as `reasoning_effort`). Reasoning a provider returns is sent back to it on later turns.
 - The model must support tool calling. Stable prompt parts come first so caching applies.
 

@@ -19,7 +19,7 @@ import (
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 
-	"github.com/openstatushq/opensre/internal/connector/mcpconn"
+	"github.com/openstatushq/stromboli/internal/connector/mcpconn"
 )
 
 // Scope is the OAuth scope the MCP servers accept.

@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/openstatushq/opensre/internal/connector/mcpconn/mcptest"
+	"github.com/openstatushq/stromboli/internal/connector/mcpconn/mcptest"
 )
 
 func TestGitHubMCP(t *testing.T) {

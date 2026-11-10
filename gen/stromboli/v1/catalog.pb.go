@@ -2,9 +2,9 @@
 // versions:
 // 	protoc-gen-go v1.36.11
 // 	protoc        (unknown)
-// source: opensre/v1/catalog.proto
+// source: stromboli/v1/catalog.proto
 
-package opensrev1
+package stromboliv1
 
 import (
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
@@ -48,7 +48,7 @@ type Service struct {
 
 func (x *Service) Reset() {
 	*x = Service{}
-	mi := &file_opensre_v1_catalog_proto_msgTypes[0]
+	mi := &file_stromboli_v1_catalog_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -60,7 +60,7 @@ func (x *Service) String() string {
 func (*Service) ProtoMessage() {}
 
 func (x *Service) ProtoReflect() protoreflect.Message {
-	mi := &file_opensre_v1_catalog_proto_msgTypes[0]
+	mi := &file_stromboli_v1_catalog_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -73,7 +73,7 @@ func (x *Service) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Service.ProtoReflect.Descriptor instead.
 func (*Service) Descriptor() ([]byte, []int) {
-	return file_opensre_v1_catalog_proto_rawDescGZIP(), []int{0}
+	return file_stromboli_v1_catalog_proto_rawDescGZIP(), []int{0}
 }
 
 func (x *Service) GetName() string {
@@ -189,11 +189,11 @@ type FlyConfig struct {
 	// service name.
 	App string `protobuf:"bytes,1,opt,name=app,proto3" json:"app,omitempty"`
 	// Name of a fly_machines connector whose token can act on this app's
-	// machines. When set (and OPENSRE_ACTIONS_ENABLED=true), opensre can run a
+	// machines. When set (and STROMBOLI_ACTIONS_ENABLED=true), stromboli can run a
 	// machine action after a human approves it; otherwise Fly mitigations stay
 	// suggestions.
 	Actions string `protobuf:"bytes,2,opt,name=actions,proto3" json:"actions,omitempty"`
-	// Machine actions opensre may run for this service: "restart", "clone",
+	// Machine actions stromboli may run for this service: "restart", "clone",
 	// "cordon", "uncordon", "stop", "start". Defaults to restart, clone, cordon
 	// and uncordon.
 	Allow         []string `protobuf:"bytes,3,rep,name=allow,proto3" json:"allow,omitempty"`
@@ -203,7 +203,7 @@ type FlyConfig struct {
 
 func (x *FlyConfig) Reset() {
 	*x = FlyConfig{}
-	mi := &file_opensre_v1_catalog_proto_msgTypes[1]
+	mi := &file_stromboli_v1_catalog_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -215,7 +215,7 @@ func (x *FlyConfig) String() string {
 func (*FlyConfig) ProtoMessage() {}
 
 func (x *FlyConfig) ProtoReflect() protoreflect.Message {
-	mi := &file_opensre_v1_catalog_proto_msgTypes[1]
+	mi := &file_stromboli_v1_catalog_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -228,7 +228,7 @@ func (x *FlyConfig) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FlyConfig.ProtoReflect.Descriptor instead.
 func (*FlyConfig) Descriptor() ([]byte, []int) {
-	return file_opensre_v1_catalog_proto_rawDescGZIP(), []int{1}
+	return file_stromboli_v1_catalog_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *FlyConfig) GetApp() string {
@@ -257,10 +257,9 @@ type LogsConfig struct {
 	// Name of a configured log connector.
 	Source string `protobuf:"bytes,1,opt,name=source,proto3" json:"source,omitempty"`
 	// Backend-specific selector:
-	//
-	//	loki:       `{service_name="api"}` (LogQL stream selector)
-	//	axiom:      `['logs'] | where ['service.name'] == "api"` (APL)
-	//	cloudwatch: `/ecs/api` or `/ecs/prod | filter service = "api"` (log groups + Insights)
+	//   loki:       `{service_name="api"}` (LogQL stream selector)
+	//   axiom:      `['logs'] | where ['service.name'] == "api"` (APL)
+	//   cloudwatch: `/ecs/api` or `/ecs/prod | filter service = "api"` (log groups + Insights)
 	Selector      string `protobuf:"bytes,2,opt,name=selector,proto3" json:"selector,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -268,7 +267,7 @@ type LogsConfig struct {
 
 func (x *LogsConfig) Reset() {
 	*x = LogsConfig{}
-	mi := &file_opensre_v1_catalog_proto_msgTypes[2]
+	mi := &file_stromboli_v1_catalog_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -280,7 +279,7 @@ func (x *LogsConfig) String() string {
 func (*LogsConfig) ProtoMessage() {}
 
 func (x *LogsConfig) ProtoReflect() protoreflect.Message {
-	mi := &file_opensre_v1_catalog_proto_msgTypes[2]
+	mi := &file_stromboli_v1_catalog_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -293,7 +292,7 @@ func (x *LogsConfig) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LogsConfig.ProtoReflect.Descriptor instead.
 func (*LogsConfig) Descriptor() ([]byte, []int) {
-	return file_opensre_v1_catalog_proto_rawDescGZIP(), []int{2}
+	return file_stromboli_v1_catalog_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *LogsConfig) GetSource() string {
@@ -328,7 +327,7 @@ type DeploysConfig struct {
 
 func (x *DeploysConfig) Reset() {
 	*x = DeploysConfig{}
-	mi := &file_opensre_v1_catalog_proto_msgTypes[3]
+	mi := &file_stromboli_v1_catalog_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -340,7 +339,7 @@ func (x *DeploysConfig) String() string {
 func (*DeploysConfig) ProtoMessage() {}
 
 func (x *DeploysConfig) ProtoReflect() protoreflect.Message {
-	mi := &file_opensre_v1_catalog_proto_msgTypes[3]
+	mi := &file_stromboli_v1_catalog_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -353,7 +352,7 @@ func (x *DeploysConfig) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeploysConfig.ProtoReflect.Descriptor instead.
 func (*DeploysConfig) Descriptor() ([]byte, []int) {
-	return file_opensre_v1_catalog_proto_rawDescGZIP(), []int{3}
+	return file_stromboli_v1_catalog_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *DeploysConfig) GetSource() string {
@@ -404,7 +403,7 @@ type MetricsConfig struct {
 
 func (x *MetricsConfig) Reset() {
 	*x = MetricsConfig{}
-	mi := &file_opensre_v1_catalog_proto_msgTypes[4]
+	mi := &file_stromboli_v1_catalog_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -416,7 +415,7 @@ func (x *MetricsConfig) String() string {
 func (*MetricsConfig) ProtoMessage() {}
 
 func (x *MetricsConfig) ProtoReflect() protoreflect.Message {
-	mi := &file_opensre_v1_catalog_proto_msgTypes[4]
+	mi := &file_stromboli_v1_catalog_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -429,7 +428,7 @@ func (x *MetricsConfig) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MetricsConfig.ProtoReflect.Descriptor instead.
 func (*MetricsConfig) Descriptor() ([]byte, []int) {
-	return file_opensre_v1_catalog_proto_rawDescGZIP(), []int{4}
+	return file_stromboli_v1_catalog_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *MetricsConfig) GetSource() string {
@@ -456,7 +455,7 @@ type SLO struct {
 
 func (x *SLO) Reset() {
 	*x = SLO{}
-	mi := &file_opensre_v1_catalog_proto_msgTypes[5]
+	mi := &file_stromboli_v1_catalog_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -468,7 +467,7 @@ func (x *SLO) String() string {
 func (*SLO) ProtoMessage() {}
 
 func (x *SLO) ProtoReflect() protoreflect.Message {
-	mi := &file_opensre_v1_catalog_proto_msgTypes[5]
+	mi := &file_stromboli_v1_catalog_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -481,7 +480,7 @@ func (x *SLO) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SLO.ProtoReflect.Descriptor instead.
 func (*SLO) Descriptor() ([]byte, []int) {
-	return file_opensre_v1_catalog_proto_rawDescGZIP(), []int{5}
+	return file_stromboli_v1_catalog_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *SLO) GetName() string {
@@ -509,7 +508,7 @@ type Runbook struct {
 
 func (x *Runbook) Reset() {
 	*x = Runbook{}
-	mi := &file_opensre_v1_catalog_proto_msgTypes[6]
+	mi := &file_stromboli_v1_catalog_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -521,7 +520,7 @@ func (x *Runbook) String() string {
 func (*Runbook) ProtoMessage() {}
 
 func (x *Runbook) ProtoReflect() protoreflect.Message {
-	mi := &file_opensre_v1_catalog_proto_msgTypes[6]
+	mi := &file_stromboli_v1_catalog_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -534,7 +533,7 @@ func (x *Runbook) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Runbook.ProtoReflect.Descriptor instead.
 func (*Runbook) Descriptor() ([]byte, []int) {
-	return file_opensre_v1_catalog_proto_rawDescGZIP(), []int{6}
+	return file_stromboli_v1_catalog_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *Runbook) GetPath() string {
@@ -563,7 +562,7 @@ type ValidationIssue struct {
 
 func (x *ValidationIssue) Reset() {
 	*x = ValidationIssue{}
-	mi := &file_opensre_v1_catalog_proto_msgTypes[7]
+	mi := &file_stromboli_v1_catalog_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -575,7 +574,7 @@ func (x *ValidationIssue) String() string {
 func (*ValidationIssue) ProtoMessage() {}
 
 func (x *ValidationIssue) ProtoReflect() protoreflect.Message {
-	mi := &file_opensre_v1_catalog_proto_msgTypes[7]
+	mi := &file_stromboli_v1_catalog_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -588,7 +587,7 @@ func (x *ValidationIssue) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ValidationIssue.ProtoReflect.Descriptor instead.
 func (*ValidationIssue) Descriptor() ([]byte, []int) {
-	return file_opensre_v1_catalog_proto_rawDescGZIP(), []int{7}
+	return file_stromboli_v1_catalog_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *ValidationIssue) GetService() string {
@@ -627,7 +626,7 @@ type ListServicesRequest struct {
 
 func (x *ListServicesRequest) Reset() {
 	*x = ListServicesRequest{}
-	mi := &file_opensre_v1_catalog_proto_msgTypes[8]
+	mi := &file_stromboli_v1_catalog_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -639,7 +638,7 @@ func (x *ListServicesRequest) String() string {
 func (*ListServicesRequest) ProtoMessage() {}
 
 func (x *ListServicesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_opensre_v1_catalog_proto_msgTypes[8]
+	mi := &file_stromboli_v1_catalog_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -652,7 +651,7 @@ func (x *ListServicesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListServicesRequest.ProtoReflect.Descriptor instead.
 func (*ListServicesRequest) Descriptor() ([]byte, []int) {
-	return file_opensre_v1_catalog_proto_rawDescGZIP(), []int{8}
+	return file_stromboli_v1_catalog_proto_rawDescGZIP(), []int{8}
 }
 
 type ListServicesResponse struct {
@@ -664,7 +663,7 @@ type ListServicesResponse struct {
 
 func (x *ListServicesResponse) Reset() {
 	*x = ListServicesResponse{}
-	mi := &file_opensre_v1_catalog_proto_msgTypes[9]
+	mi := &file_stromboli_v1_catalog_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -676,7 +675,7 @@ func (x *ListServicesResponse) String() string {
 func (*ListServicesResponse) ProtoMessage() {}
 
 func (x *ListServicesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_opensre_v1_catalog_proto_msgTypes[9]
+	mi := &file_stromboli_v1_catalog_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -689,7 +688,7 @@ func (x *ListServicesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListServicesResponse.ProtoReflect.Descriptor instead.
 func (*ListServicesResponse) Descriptor() ([]byte, []int) {
-	return file_opensre_v1_catalog_proto_rawDescGZIP(), []int{9}
+	return file_stromboli_v1_catalog_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *ListServicesResponse) GetServices() []*Service {
@@ -708,7 +707,7 @@ type GetServiceRequest struct {
 
 func (x *GetServiceRequest) Reset() {
 	*x = GetServiceRequest{}
-	mi := &file_opensre_v1_catalog_proto_msgTypes[10]
+	mi := &file_stromboli_v1_catalog_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -720,7 +719,7 @@ func (x *GetServiceRequest) String() string {
 func (*GetServiceRequest) ProtoMessage() {}
 
 func (x *GetServiceRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_opensre_v1_catalog_proto_msgTypes[10]
+	mi := &file_stromboli_v1_catalog_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -733,7 +732,7 @@ func (x *GetServiceRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetServiceRequest.ProtoReflect.Descriptor instead.
 func (*GetServiceRequest) Descriptor() ([]byte, []int) {
-	return file_opensre_v1_catalog_proto_rawDescGZIP(), []int{10}
+	return file_stromboli_v1_catalog_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *GetServiceRequest) GetName() string {
@@ -754,7 +753,7 @@ type GetServiceResponse struct {
 
 func (x *GetServiceResponse) Reset() {
 	*x = GetServiceResponse{}
-	mi := &file_opensre_v1_catalog_proto_msgTypes[11]
+	mi := &file_stromboli_v1_catalog_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -766,7 +765,7 @@ func (x *GetServiceResponse) String() string {
 func (*GetServiceResponse) ProtoMessage() {}
 
 func (x *GetServiceResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_opensre_v1_catalog_proto_msgTypes[11]
+	mi := &file_stromboli_v1_catalog_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -779,7 +778,7 @@ func (x *GetServiceResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetServiceResponse.ProtoReflect.Descriptor instead.
 func (*GetServiceResponse) Descriptor() ([]byte, []int) {
-	return file_opensre_v1_catalog_proto_rawDescGZIP(), []int{11}
+	return file_stromboli_v1_catalog_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *GetServiceResponse) GetService() *Service {
@@ -812,7 +811,7 @@ type UpsertServiceRequest struct {
 
 func (x *UpsertServiceRequest) Reset() {
 	*x = UpsertServiceRequest{}
-	mi := &file_opensre_v1_catalog_proto_msgTypes[12]
+	mi := &file_stromboli_v1_catalog_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -824,7 +823,7 @@ func (x *UpsertServiceRequest) String() string {
 func (*UpsertServiceRequest) ProtoMessage() {}
 
 func (x *UpsertServiceRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_opensre_v1_catalog_proto_msgTypes[12]
+	mi := &file_stromboli_v1_catalog_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -837,7 +836,7 @@ func (x *UpsertServiceRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpsertServiceRequest.ProtoReflect.Descriptor instead.
 func (*UpsertServiceRequest) Descriptor() ([]byte, []int) {
-	return file_opensre_v1_catalog_proto_rawDescGZIP(), []int{12}
+	return file_stromboli_v1_catalog_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *UpsertServiceRequest) GetService() *Service {
@@ -857,7 +856,7 @@ type UpsertServiceResponse struct {
 
 func (x *UpsertServiceResponse) Reset() {
 	*x = UpsertServiceResponse{}
-	mi := &file_opensre_v1_catalog_proto_msgTypes[13]
+	mi := &file_stromboli_v1_catalog_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -869,7 +868,7 @@ func (x *UpsertServiceResponse) String() string {
 func (*UpsertServiceResponse) ProtoMessage() {}
 
 func (x *UpsertServiceResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_opensre_v1_catalog_proto_msgTypes[13]
+	mi := &file_stromboli_v1_catalog_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -882,7 +881,7 @@ func (x *UpsertServiceResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpsertServiceResponse.ProtoReflect.Descriptor instead.
 func (*UpsertServiceResponse) Descriptor() ([]byte, []int) {
-	return file_opensre_v1_catalog_proto_rawDescGZIP(), []int{13}
+	return file_stromboli_v1_catalog_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *UpsertServiceResponse) GetService() *Service {
@@ -908,7 +907,7 @@ type DeleteServiceRequest struct {
 
 func (x *DeleteServiceRequest) Reset() {
 	*x = DeleteServiceRequest{}
-	mi := &file_opensre_v1_catalog_proto_msgTypes[14]
+	mi := &file_stromboli_v1_catalog_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -920,7 +919,7 @@ func (x *DeleteServiceRequest) String() string {
 func (*DeleteServiceRequest) ProtoMessage() {}
 
 func (x *DeleteServiceRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_opensre_v1_catalog_proto_msgTypes[14]
+	mi := &file_stromboli_v1_catalog_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -933,7 +932,7 @@ func (x *DeleteServiceRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteServiceRequest.ProtoReflect.Descriptor instead.
 func (*DeleteServiceRequest) Descriptor() ([]byte, []int) {
-	return file_opensre_v1_catalog_proto_rawDescGZIP(), []int{14}
+	return file_stromboli_v1_catalog_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *DeleteServiceRequest) GetName() string {
@@ -951,7 +950,7 @@ type DeleteServiceResponse struct {
 
 func (x *DeleteServiceResponse) Reset() {
 	*x = DeleteServiceResponse{}
-	mi := &file_opensre_v1_catalog_proto_msgTypes[15]
+	mi := &file_stromboli_v1_catalog_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -963,7 +962,7 @@ func (x *DeleteServiceResponse) String() string {
 func (*DeleteServiceResponse) ProtoMessage() {}
 
 func (x *DeleteServiceResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_opensre_v1_catalog_proto_msgTypes[15]
+	mi := &file_stromboli_v1_catalog_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -976,7 +975,7 @@ func (x *DeleteServiceResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteServiceResponse.ProtoReflect.Descriptor instead.
 func (*DeleteServiceResponse) Descriptor() ([]byte, []int) {
-	return file_opensre_v1_catalog_proto_rawDescGZIP(), []int{15}
+	return file_stromboli_v1_catalog_proto_rawDescGZIP(), []int{15}
 }
 
 type ImportCatalogRequest struct {
@@ -994,7 +993,7 @@ type ImportCatalogRequest struct {
 
 func (x *ImportCatalogRequest) Reset() {
 	*x = ImportCatalogRequest{}
-	mi := &file_opensre_v1_catalog_proto_msgTypes[16]
+	mi := &file_stromboli_v1_catalog_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1006,7 +1005,7 @@ func (x *ImportCatalogRequest) String() string {
 func (*ImportCatalogRequest) ProtoMessage() {}
 
 func (x *ImportCatalogRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_opensre_v1_catalog_proto_msgTypes[16]
+	mi := &file_stromboli_v1_catalog_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1019,7 +1018,7 @@ func (x *ImportCatalogRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ImportCatalogRequest.ProtoReflect.Descriptor instead.
 func (*ImportCatalogRequest) Descriptor() ([]byte, []int) {
-	return file_opensre_v1_catalog_proto_rawDescGZIP(), []int{16}
+	return file_stromboli_v1_catalog_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *ImportCatalogRequest) GetServicesYaml() []byte {
@@ -1062,7 +1061,7 @@ type ImportCatalogResponse struct {
 
 func (x *ImportCatalogResponse) Reset() {
 	*x = ImportCatalogResponse{}
-	mi := &file_opensre_v1_catalog_proto_msgTypes[17]
+	mi := &file_stromboli_v1_catalog_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1074,7 +1073,7 @@ func (x *ImportCatalogResponse) String() string {
 func (*ImportCatalogResponse) ProtoMessage() {}
 
 func (x *ImportCatalogResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_opensre_v1_catalog_proto_msgTypes[17]
+	mi := &file_stromboli_v1_catalog_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1087,7 +1086,7 @@ func (x *ImportCatalogResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ImportCatalogResponse.ProtoReflect.Descriptor instead.
 func (*ImportCatalogResponse) Descriptor() ([]byte, []int) {
-	return file_opensre_v1_catalog_proto_rawDescGZIP(), []int{17}
+	return file_stromboli_v1_catalog_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *ImportCatalogResponse) GetServicesUpserted() int32 {
@@ -1126,7 +1125,7 @@ type ExportCatalogRequest struct {
 
 func (x *ExportCatalogRequest) Reset() {
 	*x = ExportCatalogRequest{}
-	mi := &file_opensre_v1_catalog_proto_msgTypes[18]
+	mi := &file_stromboli_v1_catalog_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1138,7 +1137,7 @@ func (x *ExportCatalogRequest) String() string {
 func (*ExportCatalogRequest) ProtoMessage() {}
 
 func (x *ExportCatalogRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_opensre_v1_catalog_proto_msgTypes[18]
+	mi := &file_stromboli_v1_catalog_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1151,7 +1150,7 @@ func (x *ExportCatalogRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ExportCatalogRequest.ProtoReflect.Descriptor instead.
 func (*ExportCatalogRequest) Descriptor() ([]byte, []int) {
-	return file_opensre_v1_catalog_proto_rawDescGZIP(), []int{18}
+	return file_stromboli_v1_catalog_proto_rawDescGZIP(), []int{18}
 }
 
 type ExportCatalogResponse struct {
@@ -1164,7 +1163,7 @@ type ExportCatalogResponse struct {
 
 func (x *ExportCatalogResponse) Reset() {
 	*x = ExportCatalogResponse{}
-	mi := &file_opensre_v1_catalog_proto_msgTypes[19]
+	mi := &file_stromboli_v1_catalog_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1176,7 +1175,7 @@ func (x *ExportCatalogResponse) String() string {
 func (*ExportCatalogResponse) ProtoMessage() {}
 
 func (x *ExportCatalogResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_opensre_v1_catalog_proto_msgTypes[19]
+	mi := &file_stromboli_v1_catalog_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1189,7 +1188,7 @@ func (x *ExportCatalogResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ExportCatalogResponse.ProtoReflect.Descriptor instead.
 func (*ExportCatalogResponse) Descriptor() ([]byte, []int) {
-	return file_opensre_v1_catalog_proto_rawDescGZIP(), []int{19}
+	return file_stromboli_v1_catalog_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *ExportCatalogResponse) GetServicesYaml() []byte {
@@ -1216,7 +1215,7 @@ type ValidateCatalogRequest struct {
 
 func (x *ValidateCatalogRequest) Reset() {
 	*x = ValidateCatalogRequest{}
-	mi := &file_opensre_v1_catalog_proto_msgTypes[20]
+	mi := &file_stromboli_v1_catalog_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1228,7 +1227,7 @@ func (x *ValidateCatalogRequest) String() string {
 func (*ValidateCatalogRequest) ProtoMessage() {}
 
 func (x *ValidateCatalogRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_opensre_v1_catalog_proto_msgTypes[20]
+	mi := &file_stromboli_v1_catalog_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1241,7 +1240,7 @@ func (x *ValidateCatalogRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ValidateCatalogRequest.ProtoReflect.Descriptor instead.
 func (*ValidateCatalogRequest) Descriptor() ([]byte, []int) {
-	return file_opensre_v1_catalog_proto_rawDescGZIP(), []int{20}
+	return file_stromboli_v1_catalog_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *ValidateCatalogRequest) GetCheckConnectors() bool {
@@ -1260,7 +1259,7 @@ type ValidateCatalogResponse struct {
 
 func (x *ValidateCatalogResponse) Reset() {
 	*x = ValidateCatalogResponse{}
-	mi := &file_opensre_v1_catalog_proto_msgTypes[21]
+	mi := &file_stromboli_v1_catalog_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1272,7 +1271,7 @@ func (x *ValidateCatalogResponse) String() string {
 func (*ValidateCatalogResponse) ProtoMessage() {}
 
 func (x *ValidateCatalogResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_opensre_v1_catalog_proto_msgTypes[21]
+	mi := &file_stromboli_v1_catalog_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1285,7 +1284,7 @@ func (x *ValidateCatalogResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ValidateCatalogResponse.ProtoReflect.Descriptor instead.
 func (*ValidateCatalogResponse) Descriptor() ([]byte, []int) {
-	return file_opensre_v1_catalog_proto_rawDescGZIP(), []int{21}
+	return file_stromboli_v1_catalog_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *ValidateCatalogResponse) GetIssues() []*ValidationIssue {
@@ -1305,7 +1304,7 @@ type DiscoverServicesRequest struct {
 
 func (x *DiscoverServicesRequest) Reset() {
 	*x = DiscoverServicesRequest{}
-	mi := &file_opensre_v1_catalog_proto_msgTypes[22]
+	mi := &file_stromboli_v1_catalog_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1317,7 +1316,7 @@ func (x *DiscoverServicesRequest) String() string {
 func (*DiscoverServicesRequest) ProtoMessage() {}
 
 func (x *DiscoverServicesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_opensre_v1_catalog_proto_msgTypes[22]
+	mi := &file_stromboli_v1_catalog_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1330,7 +1329,7 @@ func (x *DiscoverServicesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DiscoverServicesRequest.ProtoReflect.Descriptor instead.
 func (*DiscoverServicesRequest) Descriptor() ([]byte, []int) {
-	return file_opensre_v1_catalog_proto_rawDescGZIP(), []int{22}
+	return file_stromboli_v1_catalog_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *DiscoverServicesRequest) GetConnector() string {
@@ -1351,7 +1350,7 @@ type DiscoverServicesResponse struct {
 
 func (x *DiscoverServicesResponse) Reset() {
 	*x = DiscoverServicesResponse{}
-	mi := &file_opensre_v1_catalog_proto_msgTypes[23]
+	mi := &file_stromboli_v1_catalog_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1363,7 +1362,7 @@ func (x *DiscoverServicesResponse) String() string {
 func (*DiscoverServicesResponse) ProtoMessage() {}
 
 func (x *DiscoverServicesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_opensre_v1_catalog_proto_msgTypes[23]
+	mi := &file_stromboli_v1_catalog_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1376,7 +1375,7 @@ func (x *DiscoverServicesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DiscoverServicesResponse.ProtoReflect.Descriptor instead.
 func (*DiscoverServicesResponse) Descriptor() ([]byte, []int) {
-	return file_opensre_v1_catalog_proto_rawDescGZIP(), []int{23}
+	return file_stromboli_v1_catalog_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *DiscoverServicesResponse) GetCandidates() []*Service {
@@ -1386,12 +1385,11 @@ func (x *DiscoverServicesResponse) GetCandidates() []*Service {
 	return nil
 }
 
-var File_opensre_v1_catalog_proto protoreflect.FileDescriptor
+var File_stromboli_v1_catalog_proto protoreflect.FileDescriptor
 
-const file_opensre_v1_catalog_proto_rawDesc = "" +
+const file_stromboli_v1_catalog_proto_rawDesc = "" +
 	"\n" +
-	"\x18opensre/v1/catalog.proto\x12\n" +
-	"opensre.v1\"\xe8\x03\n" +
+	"\x1astromboli/v1/catalog.proto\x12\fstromboli.v1\"\xf2\x03\n" +
 	"\aService\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12 \n" +
 	"\vdescription\x18\x02 \x01(\tR\vdescription\x12\x16\n" +
@@ -1401,15 +1399,15 @@ const file_opensre_v1_catalog_proto_rawDesc = "" +
 	"\aruntime\x18\x06 \x01(\tR\aruntime\x12\x12\n" +
 	"\x04tier\x18\a \x01(\x05R\x04tier\x12\x1d\n" +
 	"\n" +
-	"depends_on\x18\b \x03(\tR\tdependsOn\x12*\n" +
-	"\x04logs\x18\t \x01(\v2\x16.opensre.v1.LogsConfigR\x04logs\x123\n" +
+	"depends_on\x18\b \x03(\tR\tdependsOn\x12,\n" +
+	"\x04logs\x18\t \x01(\v2\x18.stromboli.v1.LogsConfigR\x04logs\x125\n" +
 	"\adeploys\x18\n" +
-	" \x01(\v2\x19.opensre.v1.DeploysConfigR\adeploys\x123\n" +
-	"\ametrics\x18\v \x01(\v2\x19.opensre.v1.MetricsConfigR\ametrics\x12\x1a\n" +
+	" \x01(\v2\x1b.stromboli.v1.DeploysConfigR\adeploys\x125\n" +
+	"\ametrics\x18\v \x01(\v2\x1b.stromboli.v1.MetricsConfigR\ametrics\x12\x1a\n" +
 	"\brunbooks\x18\f \x03(\tR\brunbooks\x12\x1a\n" +
-	"\bmonitors\x18\r \x03(\tR\bmonitors\x12#\n" +
-	"\x04slos\x18\x0e \x03(\v2\x0f.opensre.v1.SLOR\x04slos\x12'\n" +
-	"\x03fly\x18\x0f \x01(\v2\x15.opensre.v1.FlyConfigR\x03fly\"M\n" +
+	"\bmonitors\x18\r \x03(\tR\bmonitors\x12%\n" +
+	"\x04slos\x18\x0e \x03(\v2\x11.stromboli.v1.SLOR\x04slos\x12)\n" +
+	"\x03fly\x18\x0f \x01(\v2\x17.stromboli.v1.FlyConfigR\x03fly\"M\n" +
 	"\tFlyConfig\x12\x10\n" +
 	"\x03app\x18\x01 \x01(\tR\x03app\x12\x18\n" +
 	"\aactions\x18\x02 \x01(\tR\aactions\x12\x14\n" +
@@ -1438,134 +1436,132 @@ const file_opensre_v1_catalog_proto_rawDesc = "" +
 	"\x05field\x18\x02 \x01(\tR\x05field\x12\x18\n" +
 	"\amessage\x18\x03 \x01(\tR\amessage\x12\x18\n" +
 	"\awarning\x18\x04 \x01(\bR\awarning\"\x15\n" +
-	"\x13ListServicesRequest\"G\n" +
-	"\x14ListServicesResponse\x12/\n" +
-	"\bservices\x18\x01 \x03(\v2\x13.opensre.v1.ServiceR\bservices\"'\n" +
+	"\x13ListServicesRequest\"I\n" +
+	"\x14ListServicesResponse\x121\n" +
+	"\bservices\x18\x01 \x03(\v2\x15.stromboli.v1.ServiceR\bservices\"'\n" +
 	"\x11GetServiceRequest\x12\x12\n" +
-	"\x04name\x18\x01 \x01(\tR\x04name\"\x7f\n" +
-	"\x12GetServiceResponse\x12-\n" +
-	"\aservice\x18\x01 \x01(\v2\x13.opensre.v1.ServiceR\aservice\x12\x1a\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\"\x81\x01\n" +
+	"\x12GetServiceResponse\x12/\n" +
+	"\aservice\x18\x01 \x01(\v2\x15.stromboli.v1.ServiceR\aservice\x12\x1a\n" +
 	"\bupstream\x18\x02 \x03(\tR\bupstream\x12\x1e\n" +
 	"\n" +
 	"downstream\x18\x03 \x03(\tR\n" +
-	"downstream\"E\n" +
-	"\x14UpsertServiceRequest\x12-\n" +
-	"\aservice\x18\x01 \x01(\v2\x13.opensre.v1.ServiceR\aservice\"{\n" +
-	"\x15UpsertServiceResponse\x12-\n" +
-	"\aservice\x18\x01 \x01(\v2\x13.opensre.v1.ServiceR\aservice\x123\n" +
-	"\x06issues\x18\x02 \x03(\v2\x1b.opensre.v1.ValidationIssueR\x06issues\"*\n" +
+	"downstream\"G\n" +
+	"\x14UpsertServiceRequest\x12/\n" +
+	"\aservice\x18\x01 \x01(\v2\x15.stromboli.v1.ServiceR\aservice\"\x7f\n" +
+	"\x15UpsertServiceResponse\x12/\n" +
+	"\aservice\x18\x01 \x01(\v2\x15.stromboli.v1.ServiceR\aservice\x125\n" +
+	"\x06issues\x18\x02 \x03(\v2\x1d.stromboli.v1.ValidationIssueR\x06issues\"*\n" +
 	"\x14DeleteServiceRequest\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\"\x17\n" +
-	"\x15DeleteServiceResponse\"\x9b\x01\n" +
+	"\x15DeleteServiceResponse\"\x9d\x01\n" +
 	"\x14ImportCatalogRequest\x12#\n" +
-	"\rservices_yaml\x18\x01 \x01(\fR\fservicesYaml\x12/\n" +
-	"\brunbooks\x18\x02 \x03(\v2\x13.opensre.v1.RunbookR\brunbooks\x12\x14\n" +
+	"\rservices_yaml\x18\x01 \x01(\fR\fservicesYaml\x121\n" +
+	"\brunbooks\x18\x02 \x03(\v2\x15.stromboli.v1.RunbookR\brunbooks\x12\x14\n" +
 	"\x05prune\x18\x03 \x01(\bR\x05prune\x12\x17\n" +
-	"\adry_run\x18\x04 \x01(\bR\x06dryRun\"\xd1\x01\n" +
+	"\adry_run\x18\x04 \x01(\bR\x06dryRun\"\xd3\x01\n" +
 	"\x15ImportCatalogResponse\x12+\n" +
 	"\x11services_upserted\x18\x01 \x01(\x05R\x10servicesUpserted\x12)\n" +
 	"\x10services_deleted\x18\x02 \x01(\x05R\x0fservicesDeleted\x12+\n" +
-	"\x11runbooks_upserted\x18\x03 \x01(\x05R\x10runbooksUpserted\x123\n" +
-	"\x06issues\x18\x04 \x03(\v2\x1b.opensre.v1.ValidationIssueR\x06issues\"\x16\n" +
-	"\x14ExportCatalogRequest\"m\n" +
+	"\x11runbooks_upserted\x18\x03 \x01(\x05R\x10runbooksUpserted\x125\n" +
+	"\x06issues\x18\x04 \x03(\v2\x1d.stromboli.v1.ValidationIssueR\x06issues\"\x16\n" +
+	"\x14ExportCatalogRequest\"o\n" +
 	"\x15ExportCatalogResponse\x12#\n" +
-	"\rservices_yaml\x18\x01 \x01(\fR\fservicesYaml\x12/\n" +
-	"\brunbooks\x18\x02 \x03(\v2\x13.opensre.v1.RunbookR\brunbooks\"C\n" +
+	"\rservices_yaml\x18\x01 \x01(\fR\fservicesYaml\x121\n" +
+	"\brunbooks\x18\x02 \x03(\v2\x15.stromboli.v1.RunbookR\brunbooks\"C\n" +
 	"\x16ValidateCatalogRequest\x12)\n" +
-	"\x10check_connectors\x18\x01 \x01(\bR\x0fcheckConnectors\"N\n" +
-	"\x17ValidateCatalogResponse\x123\n" +
-	"\x06issues\x18\x01 \x03(\v2\x1b.opensre.v1.ValidationIssueR\x06issues\"7\n" +
+	"\x10check_connectors\x18\x01 \x01(\bR\x0fcheckConnectors\"P\n" +
+	"\x17ValidateCatalogResponse\x125\n" +
+	"\x06issues\x18\x01 \x03(\v2\x1d.stromboli.v1.ValidationIssueR\x06issues\"7\n" +
 	"\x17DiscoverServicesRequest\x12\x1c\n" +
-	"\tconnector\x18\x01 \x01(\tR\tconnector\"O\n" +
-	"\x18DiscoverServicesResponse\x123\n" +
+	"\tconnector\x18\x01 \x01(\tR\tconnector\"Q\n" +
+	"\x18DiscoverServicesResponse\x125\n" +
 	"\n" +
-	"candidates\x18\x01 \x03(\v2\x13.opensre.v1.ServiceR\n" +
-	"candidates2\xdc\x05\n" +
-	"\x0eCatalogService\x12V\n" +
-	"\fListServices\x12\x1f.opensre.v1.ListServicesRequest\x1a .opensre.v1.ListServicesResponse\"\x03\x90\x02\x01\x12P\n" +
+	"candidates\x18\x01 \x03(\v2\x15.stromboli.v1.ServiceR\n" +
+	"candidates2\xfc\x05\n" +
+	"\x0eCatalogService\x12Z\n" +
+	"\fListServices\x12!.stromboli.v1.ListServicesRequest\x1a\".stromboli.v1.ListServicesResponse\"\x03\x90\x02\x01\x12T\n" +
 	"\n" +
-	"GetService\x12\x1d.opensre.v1.GetServiceRequest\x1a\x1e.opensre.v1.GetServiceResponse\"\x03\x90\x02\x01\x12T\n" +
-	"\rUpsertService\x12 .opensre.v1.UpsertServiceRequest\x1a!.opensre.v1.UpsertServiceResponse\x12T\n" +
-	"\rDeleteService\x12 .opensre.v1.DeleteServiceRequest\x1a!.opensre.v1.DeleteServiceResponse\x12T\n" +
-	"\rImportCatalog\x12 .opensre.v1.ImportCatalogRequest\x1a!.opensre.v1.ImportCatalogResponse\x12Y\n" +
-	"\rExportCatalog\x12 .opensre.v1.ExportCatalogRequest\x1a!.opensre.v1.ExportCatalogResponse\"\x03\x90\x02\x01\x12_\n" +
-	"\x0fValidateCatalog\x12\".opensre.v1.ValidateCatalogRequest\x1a#.opensre.v1.ValidateCatalogResponse\"\x03\x90\x02\x01\x12b\n" +
-	"\x10DiscoverServices\x12#.opensre.v1.DiscoverServicesRequest\x1a$.opensre.v1.DiscoverServicesResponse\"\x03\x90\x02\x01B\xa1\x01\n" +
-	"\x0ecom.opensre.v1B\fCatalogProtoP\x01Z8github.com/openstatushq/opensre/gen/opensre/v1;opensrev1\xa2\x02\x03OXX\xaa\x02\n" +
-	"Opensre.V1\xca\x02\n" +
-	"Opensre\\V1\xe2\x02\x16Opensre\\V1\\GPBMetadata\xea\x02\vOpensre::V1b\x06proto3"
+	"GetService\x12\x1f.stromboli.v1.GetServiceRequest\x1a .stromboli.v1.GetServiceResponse\"\x03\x90\x02\x01\x12X\n" +
+	"\rUpsertService\x12\".stromboli.v1.UpsertServiceRequest\x1a#.stromboli.v1.UpsertServiceResponse\x12X\n" +
+	"\rDeleteService\x12\".stromboli.v1.DeleteServiceRequest\x1a#.stromboli.v1.DeleteServiceResponse\x12X\n" +
+	"\rImportCatalog\x12\".stromboli.v1.ImportCatalogRequest\x1a#.stromboli.v1.ImportCatalogResponse\x12]\n" +
+	"\rExportCatalog\x12\".stromboli.v1.ExportCatalogRequest\x1a#.stromboli.v1.ExportCatalogResponse\"\x03\x90\x02\x01\x12c\n" +
+	"\x0fValidateCatalog\x12$.stromboli.v1.ValidateCatalogRequest\x1a%.stromboli.v1.ValidateCatalogResponse\"\x03\x90\x02\x01\x12f\n" +
+	"\x10DiscoverServices\x12%.stromboli.v1.DiscoverServicesRequest\x1a&.stromboli.v1.DiscoverServicesResponse\"\x03\x90\x02\x01B\xb1\x01\n" +
+	"\x10com.stromboli.v1B\fCatalogProtoP\x01Z>github.com/openstatushq/stromboli/gen/stromboli/v1;stromboliv1\xa2\x02\x03SXX\xaa\x02\fStromboli.V1\xca\x02\fStromboli\\V1\xe2\x02\x18Stromboli\\V1\\GPBMetadata\xea\x02\rStromboli::V1b\x06proto3"
 
 var (
-	file_opensre_v1_catalog_proto_rawDescOnce sync.Once
-	file_opensre_v1_catalog_proto_rawDescData []byte
+	file_stromboli_v1_catalog_proto_rawDescOnce sync.Once
+	file_stromboli_v1_catalog_proto_rawDescData []byte
 )
 
-func file_opensre_v1_catalog_proto_rawDescGZIP() []byte {
-	file_opensre_v1_catalog_proto_rawDescOnce.Do(func() {
-		file_opensre_v1_catalog_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_opensre_v1_catalog_proto_rawDesc), len(file_opensre_v1_catalog_proto_rawDesc)))
+func file_stromboli_v1_catalog_proto_rawDescGZIP() []byte {
+	file_stromboli_v1_catalog_proto_rawDescOnce.Do(func() {
+		file_stromboli_v1_catalog_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_stromboli_v1_catalog_proto_rawDesc), len(file_stromboli_v1_catalog_proto_rawDesc)))
 	})
-	return file_opensre_v1_catalog_proto_rawDescData
+	return file_stromboli_v1_catalog_proto_rawDescData
 }
 
-var file_opensre_v1_catalog_proto_msgTypes = make([]protoimpl.MessageInfo, 24)
-var file_opensre_v1_catalog_proto_goTypes = []any{
-	(*Service)(nil),                  // 0: opensre.v1.Service
-	(*FlyConfig)(nil),                // 1: opensre.v1.FlyConfig
-	(*LogsConfig)(nil),               // 2: opensre.v1.LogsConfig
-	(*DeploysConfig)(nil),            // 3: opensre.v1.DeploysConfig
-	(*MetricsConfig)(nil),            // 4: opensre.v1.MetricsConfig
-	(*SLO)(nil),                      // 5: opensre.v1.SLO
-	(*Runbook)(nil),                  // 6: opensre.v1.Runbook
-	(*ValidationIssue)(nil),          // 7: opensre.v1.ValidationIssue
-	(*ListServicesRequest)(nil),      // 8: opensre.v1.ListServicesRequest
-	(*ListServicesResponse)(nil),     // 9: opensre.v1.ListServicesResponse
-	(*GetServiceRequest)(nil),        // 10: opensre.v1.GetServiceRequest
-	(*GetServiceResponse)(nil),       // 11: opensre.v1.GetServiceResponse
-	(*UpsertServiceRequest)(nil),     // 12: opensre.v1.UpsertServiceRequest
-	(*UpsertServiceResponse)(nil),    // 13: opensre.v1.UpsertServiceResponse
-	(*DeleteServiceRequest)(nil),     // 14: opensre.v1.DeleteServiceRequest
-	(*DeleteServiceResponse)(nil),    // 15: opensre.v1.DeleteServiceResponse
-	(*ImportCatalogRequest)(nil),     // 16: opensre.v1.ImportCatalogRequest
-	(*ImportCatalogResponse)(nil),    // 17: opensre.v1.ImportCatalogResponse
-	(*ExportCatalogRequest)(nil),     // 18: opensre.v1.ExportCatalogRequest
-	(*ExportCatalogResponse)(nil),    // 19: opensre.v1.ExportCatalogResponse
-	(*ValidateCatalogRequest)(nil),   // 20: opensre.v1.ValidateCatalogRequest
-	(*ValidateCatalogResponse)(nil),  // 21: opensre.v1.ValidateCatalogResponse
-	(*DiscoverServicesRequest)(nil),  // 22: opensre.v1.DiscoverServicesRequest
-	(*DiscoverServicesResponse)(nil), // 23: opensre.v1.DiscoverServicesResponse
+var file_stromboli_v1_catalog_proto_msgTypes = make([]protoimpl.MessageInfo, 24)
+var file_stromboli_v1_catalog_proto_goTypes = []any{
+	(*Service)(nil),                  // 0: stromboli.v1.Service
+	(*FlyConfig)(nil),                // 1: stromboli.v1.FlyConfig
+	(*LogsConfig)(nil),               // 2: stromboli.v1.LogsConfig
+	(*DeploysConfig)(nil),            // 3: stromboli.v1.DeploysConfig
+	(*MetricsConfig)(nil),            // 4: stromboli.v1.MetricsConfig
+	(*SLO)(nil),                      // 5: stromboli.v1.SLO
+	(*Runbook)(nil),                  // 6: stromboli.v1.Runbook
+	(*ValidationIssue)(nil),          // 7: stromboli.v1.ValidationIssue
+	(*ListServicesRequest)(nil),      // 8: stromboli.v1.ListServicesRequest
+	(*ListServicesResponse)(nil),     // 9: stromboli.v1.ListServicesResponse
+	(*GetServiceRequest)(nil),        // 10: stromboli.v1.GetServiceRequest
+	(*GetServiceResponse)(nil),       // 11: stromboli.v1.GetServiceResponse
+	(*UpsertServiceRequest)(nil),     // 12: stromboli.v1.UpsertServiceRequest
+	(*UpsertServiceResponse)(nil),    // 13: stromboli.v1.UpsertServiceResponse
+	(*DeleteServiceRequest)(nil),     // 14: stromboli.v1.DeleteServiceRequest
+	(*DeleteServiceResponse)(nil),    // 15: stromboli.v1.DeleteServiceResponse
+	(*ImportCatalogRequest)(nil),     // 16: stromboli.v1.ImportCatalogRequest
+	(*ImportCatalogResponse)(nil),    // 17: stromboli.v1.ImportCatalogResponse
+	(*ExportCatalogRequest)(nil),     // 18: stromboli.v1.ExportCatalogRequest
+	(*ExportCatalogResponse)(nil),    // 19: stromboli.v1.ExportCatalogResponse
+	(*ValidateCatalogRequest)(nil),   // 20: stromboli.v1.ValidateCatalogRequest
+	(*ValidateCatalogResponse)(nil),  // 21: stromboli.v1.ValidateCatalogResponse
+	(*DiscoverServicesRequest)(nil),  // 22: stromboli.v1.DiscoverServicesRequest
+	(*DiscoverServicesResponse)(nil), // 23: stromboli.v1.DiscoverServicesResponse
 }
-var file_opensre_v1_catalog_proto_depIdxs = []int32{
-	2,  // 0: opensre.v1.Service.logs:type_name -> opensre.v1.LogsConfig
-	3,  // 1: opensre.v1.Service.deploys:type_name -> opensre.v1.DeploysConfig
-	4,  // 2: opensre.v1.Service.metrics:type_name -> opensre.v1.MetricsConfig
-	5,  // 3: opensre.v1.Service.slos:type_name -> opensre.v1.SLO
-	1,  // 4: opensre.v1.Service.fly:type_name -> opensre.v1.FlyConfig
-	0,  // 5: opensre.v1.ListServicesResponse.services:type_name -> opensre.v1.Service
-	0,  // 6: opensre.v1.GetServiceResponse.service:type_name -> opensre.v1.Service
-	0,  // 7: opensre.v1.UpsertServiceRequest.service:type_name -> opensre.v1.Service
-	0,  // 8: opensre.v1.UpsertServiceResponse.service:type_name -> opensre.v1.Service
-	7,  // 9: opensre.v1.UpsertServiceResponse.issues:type_name -> opensre.v1.ValidationIssue
-	6,  // 10: opensre.v1.ImportCatalogRequest.runbooks:type_name -> opensre.v1.Runbook
-	7,  // 11: opensre.v1.ImportCatalogResponse.issues:type_name -> opensre.v1.ValidationIssue
-	6,  // 12: opensre.v1.ExportCatalogResponse.runbooks:type_name -> opensre.v1.Runbook
-	7,  // 13: opensre.v1.ValidateCatalogResponse.issues:type_name -> opensre.v1.ValidationIssue
-	0,  // 14: opensre.v1.DiscoverServicesResponse.candidates:type_name -> opensre.v1.Service
-	8,  // 15: opensre.v1.CatalogService.ListServices:input_type -> opensre.v1.ListServicesRequest
-	10, // 16: opensre.v1.CatalogService.GetService:input_type -> opensre.v1.GetServiceRequest
-	12, // 17: opensre.v1.CatalogService.UpsertService:input_type -> opensre.v1.UpsertServiceRequest
-	14, // 18: opensre.v1.CatalogService.DeleteService:input_type -> opensre.v1.DeleteServiceRequest
-	16, // 19: opensre.v1.CatalogService.ImportCatalog:input_type -> opensre.v1.ImportCatalogRequest
-	18, // 20: opensre.v1.CatalogService.ExportCatalog:input_type -> opensre.v1.ExportCatalogRequest
-	20, // 21: opensre.v1.CatalogService.ValidateCatalog:input_type -> opensre.v1.ValidateCatalogRequest
-	22, // 22: opensre.v1.CatalogService.DiscoverServices:input_type -> opensre.v1.DiscoverServicesRequest
-	9,  // 23: opensre.v1.CatalogService.ListServices:output_type -> opensre.v1.ListServicesResponse
-	11, // 24: opensre.v1.CatalogService.GetService:output_type -> opensre.v1.GetServiceResponse
-	13, // 25: opensre.v1.CatalogService.UpsertService:output_type -> opensre.v1.UpsertServiceResponse
-	15, // 26: opensre.v1.CatalogService.DeleteService:output_type -> opensre.v1.DeleteServiceResponse
-	17, // 27: opensre.v1.CatalogService.ImportCatalog:output_type -> opensre.v1.ImportCatalogResponse
-	19, // 28: opensre.v1.CatalogService.ExportCatalog:output_type -> opensre.v1.ExportCatalogResponse
-	21, // 29: opensre.v1.CatalogService.ValidateCatalog:output_type -> opensre.v1.ValidateCatalogResponse
-	23, // 30: opensre.v1.CatalogService.DiscoverServices:output_type -> opensre.v1.DiscoverServicesResponse
+var file_stromboli_v1_catalog_proto_depIdxs = []int32{
+	2,  // 0: stromboli.v1.Service.logs:type_name -> stromboli.v1.LogsConfig
+	3,  // 1: stromboli.v1.Service.deploys:type_name -> stromboli.v1.DeploysConfig
+	4,  // 2: stromboli.v1.Service.metrics:type_name -> stromboli.v1.MetricsConfig
+	5,  // 3: stromboli.v1.Service.slos:type_name -> stromboli.v1.SLO
+	1,  // 4: stromboli.v1.Service.fly:type_name -> stromboli.v1.FlyConfig
+	0,  // 5: stromboli.v1.ListServicesResponse.services:type_name -> stromboli.v1.Service
+	0,  // 6: stromboli.v1.GetServiceResponse.service:type_name -> stromboli.v1.Service
+	0,  // 7: stromboli.v1.UpsertServiceRequest.service:type_name -> stromboli.v1.Service
+	0,  // 8: stromboli.v1.UpsertServiceResponse.service:type_name -> stromboli.v1.Service
+	7,  // 9: stromboli.v1.UpsertServiceResponse.issues:type_name -> stromboli.v1.ValidationIssue
+	6,  // 10: stromboli.v1.ImportCatalogRequest.runbooks:type_name -> stromboli.v1.Runbook
+	7,  // 11: stromboli.v1.ImportCatalogResponse.issues:type_name -> stromboli.v1.ValidationIssue
+	6,  // 12: stromboli.v1.ExportCatalogResponse.runbooks:type_name -> stromboli.v1.Runbook
+	7,  // 13: stromboli.v1.ValidateCatalogResponse.issues:type_name -> stromboli.v1.ValidationIssue
+	0,  // 14: stromboli.v1.DiscoverServicesResponse.candidates:type_name -> stromboli.v1.Service
+	8,  // 15: stromboli.v1.CatalogService.ListServices:input_type -> stromboli.v1.ListServicesRequest
+	10, // 16: stromboli.v1.CatalogService.GetService:input_type -> stromboli.v1.GetServiceRequest
+	12, // 17: stromboli.v1.CatalogService.UpsertService:input_type -> stromboli.v1.UpsertServiceRequest
+	14, // 18: stromboli.v1.CatalogService.DeleteService:input_type -> stromboli.v1.DeleteServiceRequest
+	16, // 19: stromboli.v1.CatalogService.ImportCatalog:input_type -> stromboli.v1.ImportCatalogRequest
+	18, // 20: stromboli.v1.CatalogService.ExportCatalog:input_type -> stromboli.v1.ExportCatalogRequest
+	20, // 21: stromboli.v1.CatalogService.ValidateCatalog:input_type -> stromboli.v1.ValidateCatalogRequest
+	22, // 22: stromboli.v1.CatalogService.DiscoverServices:input_type -> stromboli.v1.DiscoverServicesRequest
+	9,  // 23: stromboli.v1.CatalogService.ListServices:output_type -> stromboli.v1.ListServicesResponse
+	11, // 24: stromboli.v1.CatalogService.GetService:output_type -> stromboli.v1.GetServiceResponse
+	13, // 25: stromboli.v1.CatalogService.UpsertService:output_type -> stromboli.v1.UpsertServiceResponse
+	15, // 26: stromboli.v1.CatalogService.DeleteService:output_type -> stromboli.v1.DeleteServiceResponse
+	17, // 27: stromboli.v1.CatalogService.ImportCatalog:output_type -> stromboli.v1.ImportCatalogResponse
+	19, // 28: stromboli.v1.CatalogService.ExportCatalog:output_type -> stromboli.v1.ExportCatalogResponse
+	21, // 29: stromboli.v1.CatalogService.ValidateCatalog:output_type -> stromboli.v1.ValidateCatalogResponse
+	23, // 30: stromboli.v1.CatalogService.DiscoverServices:output_type -> stromboli.v1.DiscoverServicesResponse
 	23, // [23:31] is the sub-list for method output_type
 	15, // [15:23] is the sub-list for method input_type
 	15, // [15:15] is the sub-list for extension type_name
@@ -1573,26 +1569,26 @@ var file_opensre_v1_catalog_proto_depIdxs = []int32{
 	0,  // [0:15] is the sub-list for field type_name
 }
 
-func init() { file_opensre_v1_catalog_proto_init() }
-func file_opensre_v1_catalog_proto_init() {
-	if File_opensre_v1_catalog_proto != nil {
+func init() { file_stromboli_v1_catalog_proto_init() }
+func file_stromboli_v1_catalog_proto_init() {
+	if File_stromboli_v1_catalog_proto != nil {
 		return
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
-			RawDescriptor: unsafe.Slice(unsafe.StringData(file_opensre_v1_catalog_proto_rawDesc), len(file_opensre_v1_catalog_proto_rawDesc)),
+			RawDescriptor: unsafe.Slice(unsafe.StringData(file_stromboli_v1_catalog_proto_rawDesc), len(file_stromboli_v1_catalog_proto_rawDesc)),
 			NumEnums:      0,
 			NumMessages:   24,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
-		GoTypes:           file_opensre_v1_catalog_proto_goTypes,
-		DependencyIndexes: file_opensre_v1_catalog_proto_depIdxs,
-		MessageInfos:      file_opensre_v1_catalog_proto_msgTypes,
+		GoTypes:           file_stromboli_v1_catalog_proto_goTypes,
+		DependencyIndexes: file_stromboli_v1_catalog_proto_depIdxs,
+		MessageInfos:      file_stromboli_v1_catalog_proto_msgTypes,
 	}.Build()
-	File_opensre_v1_catalog_proto = out.File
-	file_opensre_v1_catalog_proto_goTypes = nil
-	file_opensre_v1_catalog_proto_depIdxs = nil
+	File_stromboli_v1_catalog_proto = out.File
+	file_stromboli_v1_catalog_proto_goTypes = nil
+	file_stromboli_v1_catalog_proto_depIdxs = nil
 }

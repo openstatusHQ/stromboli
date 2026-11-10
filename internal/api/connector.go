@@ -10,12 +10,12 @@ import (
 	"connectrpc.com/connect"
 	"github.com/jackc/pgx/v5/pgconn"
 
-	opensrev1 "github.com/openstatushq/opensre/gen/opensre/v1"
-	"github.com/openstatushq/opensre/internal/connector"
-	"github.com/openstatushq/opensre/internal/connector/logs"
-	"github.com/openstatushq/opensre/internal/secrets"
-	"github.com/openstatushq/opensre/internal/store"
-	"github.com/openstatushq/opensre/internal/store/db"
+	stromboliv1 "github.com/openstatushq/stromboli/gen/stromboli/v1"
+	"github.com/openstatushq/stromboli/internal/connector"
+	"github.com/openstatushq/stromboli/internal/connector/logs"
+	"github.com/openstatushq/stromboli/internal/secrets"
+	"github.com/openstatushq/stromboli/internal/store"
+	"github.com/openstatushq/stromboli/internal/store/db"
 )
 
 type ConnectorService struct {
@@ -28,7 +28,7 @@ func NewConnectorService(s *store.Store, box *secrets.Box, reg *connector.Regist
 	return &ConnectorService{store: s, box: box, connectors: reg}
 }
 
-func (c *ConnectorService) CreateConnector(ctx context.Context, req *connect.Request[opensrev1.CreateConnectorRequest]) (*connect.Response[opensrev1.CreateConnectorResponse], error) {
+func (c *ConnectorService) CreateConnector(ctx context.Context, req *connect.Request[stromboliv1.CreateConnectorRequest]) (*connect.Response[stromboliv1.CreateConnectorResponse], error) {
 	m := req.Msg
 	if m.Name == "" {
 		return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("name is required"))
@@ -56,22 +56,22 @@ func (c *ConnectorService) CreateConnector(ctx context.Context, req *connect.Req
 	if err != nil {
 		return nil, internal(err)
 	}
-	return connect.NewResponse(&opensrev1.CreateConnectorResponse{Connector: toConnector(row)}), nil
+	return connect.NewResponse(&stromboliv1.CreateConnectorResponse{Connector: toConnector(row)}), nil
 }
 
-func (c *ConnectorService) ListConnectors(ctx context.Context, _ *connect.Request[opensrev1.ListConnectorsRequest]) (*connect.Response[opensrev1.ListConnectorsResponse], error) {
+func (c *ConnectorService) ListConnectors(ctx context.Context, _ *connect.Request[stromboliv1.ListConnectorsRequest]) (*connect.Response[stromboliv1.ListConnectorsResponse], error) {
 	rows, err := c.store.Queries.ListConnectors(ctx)
 	if err != nil {
 		return nil, internal(err)
 	}
-	resp := &opensrev1.ListConnectorsResponse{}
+	resp := &stromboliv1.ListConnectorsResponse{}
 	for _, r := range rows {
 		resp.Connectors = append(resp.Connectors, toConnector(r))
 	}
 	return connect.NewResponse(resp), nil
 }
 
-func (c *ConnectorService) DeleteConnector(ctx context.Context, req *connect.Request[opensrev1.DeleteConnectorRequest]) (*connect.Response[opensrev1.DeleteConnectorResponse], error) {
+func (c *ConnectorService) DeleteConnector(ctx context.Context, req *connect.Request[stromboliv1.DeleteConnectorRequest]) (*connect.Response[stromboliv1.DeleteConnectorResponse], error) {
 	n, err := c.store.Queries.DeleteConnector(ctx, req.Msg.Name)
 	if err != nil {
 		return nil, internal(err)
@@ -79,20 +79,20 @@ func (c *ConnectorService) DeleteConnector(ctx context.Context, req *connect.Req
 	if n == 0 {
 		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("connector %q not found", req.Msg.Name))
 	}
-	return connect.NewResponse(&opensrev1.DeleteConnectorResponse{}), nil
+	return connect.NewResponse(&stromboliv1.DeleteConnectorResponse{}), nil
 }
 
-func (c *ConnectorService) TestConnector(ctx context.Context, req *connect.Request[opensrev1.TestConnectorRequest]) (*connect.Response[opensrev1.TestConnectorResponse], error) {
+func (c *ConnectorService) TestConnector(ctx context.Context, req *connect.Request[stromboliv1.TestConnectorRequest]) (*connect.Response[stromboliv1.TestConnectorResponse], error) {
 	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 	if err := c.connectors.Check(ctx, req.Msg.Name); err != nil {
-		return connect.NewResponse(&opensrev1.TestConnectorResponse{Ok: false, Message: err.Error()}), nil
+		return connect.NewResponse(&stromboliv1.TestConnectorResponse{Ok: false, Message: err.Error()}), nil
 	}
-	return connect.NewResponse(&opensrev1.TestConnectorResponse{Ok: true, Message: "ok"}), nil
+	return connect.NewResponse(&stromboliv1.TestConnectorResponse{Ok: true, Message: "ok"}), nil
 }
 
 // toConnector returns public settings and lists secret keys with empty values.
-func toConnector(r db.Connector) *opensrev1.Connector {
+func toConnector(r db.Connector) *stromboliv1.Connector {
 	cfg := map[string]string{}
 	_ = json.Unmarshal(r.Config, &cfg)
 	if len(r.Secrets) > 0 {
@@ -102,11 +102,11 @@ func toConnector(r db.Connector) *opensrev1.Connector {
 			}
 		}
 	}
-	return &opensrev1.Connector{Name: r.Name, Kind: r.Kind, Config: cfg}
+	return &stromboliv1.Connector{Name: r.Name, Kind: r.Kind, Config: cfg}
 }
 
 // checkSelector runs a cheap count query to verify a service's log selector.
-func checkSelector(ctx context.Context, reg *connector.Registry, s *opensrev1.Service) error {
+func checkSelector(ctx context.Context, reg *connector.Registry, s *stromboliv1.Service) error {
 	src, err := reg.Logs(ctx, s.Logs.Source)
 	if err != nil {
 		return err

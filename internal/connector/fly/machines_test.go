@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/openstatushq/opensre/internal/connector/fly"
-	"github.com/openstatushq/opensre/internal/connector/fly/flytest"
+	"github.com/openstatushq/stromboli/internal/connector/fly"
+	"github.com/openstatushq/stromboli/internal/connector/fly/flytest"
 )
 
 func TestAuthorization(t *testing.T) {

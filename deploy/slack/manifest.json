@@ -1,12 +1,12 @@
 {
   "display_information": {
-    "name": "opensre",
+    "name": "stromboli",
     "description": "AI SRE agent: posts the mitigation and root cause of your alerts.",
     "background_color": "#1f2937"
   },
   "features": {
     "bot_user": {
-      "display_name": "opensre",
+      "display_name": "stromboli",
       "always_online": true
     }
   },
@@ -18,7 +18,7 @@
   "settings": {
     "interactivity": {
       "is_enabled": true,
-      "request_url": "https://opensre.example.com/slack/interactions"
+      "request_url": "https://stromboli.example.com/slack/interactions"
     },
     "org_deploy_enabled": false,
     "socket_mode_enabled": false,

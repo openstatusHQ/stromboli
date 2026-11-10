@@ -14,7 +14,7 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 
-	opensrev1 "github.com/openstatushq/opensre/gen/opensre/v1"
+	stromboliv1 "github.com/openstatushq/stromboli/gen/stromboli/v1"
 )
 
 type tools struct {
@@ -46,7 +46,7 @@ func (t *tools) register(s *mcp.Server) {
 	add(t, s, &mcp.Tool{
 		Name:        "list_services",
 		Title:       "List services",
-		Description: "List every service in opensre's catalog with its tier, owners and direct dependencies.",
+		Description: "List every service in stromboli's catalog with its tier, owners and direct dependencies.",
 		Annotations: readOnly,
 	}, t.listServices)
 	add(t, s, &mcp.Tool{
@@ -82,13 +82,13 @@ func (t *tools) register(s *mcp.Server) {
 	add(t, s, &mcp.Tool{
 		Name:        "start_investigation",
 		Title:       "Start an investigation",
-		Description: "Start an investigation of a catalog service: opensre proposes a mitigation within a few tool calls, then looks for the root cause. It spends LLM tokens and posts to Slack, but only reads from production. Returns the investigation ID right away; follow it with wait_investigation.",
+		Description: "Start an investigation of a catalog service: stromboli proposes a mitigation within a few tool calls, then looks for the root cause. It spends LLM tokens and posts to Slack, but only reads from production. Returns the investigation ID right away; follow it with wait_investigation.",
 		Annotations: startsWork,
 	}, t.startInvestigation)
 	add(t, s, &mcp.Tool{
 		Name:        "list_actions",
 		Title:       "List machine actions",
-		Description: "List machine actions opensre proposed (restart, clone, cordon... on Fly.io), with their status and who approved them. Approving one needs a named human, with the opensre CLI or in Slack.",
+		Description: "List machine actions stromboli proposed (restart, clone, cordon... on Fly.io), with their status and who approved them. Approving one needs a named human, with the stromboli CLI or in Slack.",
 		Annotations: readOnly,
 	}, t.listActions)
 	add(t, s, &mcp.Tool{
@@ -159,7 +159,7 @@ func clientName(req *mcp.CallToolRequest) string {
 type noInput struct{}
 
 func (t *tools) listServices(ctx context.Context, _ *mcp.CallToolRequest, _ noInput) (result, error) {
-	resp, err := t.api.Catalog.ListServices(ctx, connect.NewRequest(&opensrev1.ListServicesRequest{}))
+	resp, err := t.api.Catalog.ListServices(ctx, connect.NewRequest(&stromboliv1.ListServicesRequest{}))
 	if err != nil {
 		return result{}, err
 	}
@@ -174,7 +174,7 @@ func (t *tools) getService(ctx context.Context, _ *mcp.CallToolRequest, in servi
 	if in.Name == "" {
 		return result{}, errors.New("name is required")
 	}
-	resp, err := t.api.Catalog.GetService(ctx, connect.NewRequest(&opensrev1.GetServiceRequest{Name: in.Name}))
+	resp, err := t.api.Catalog.GetService(ctx, connect.NewRequest(&stromboliv1.GetServiceRequest{Name: in.Name}))
 	if err != nil {
 		return result{}, err
 	}
@@ -192,7 +192,7 @@ func (t *tools) getBrief(ctx context.Context, _ *mcp.CallToolRequest, in briefIn
 	if in.Service == "" {
 		return result{}, errors.New("service is required")
 	}
-	resp, err := t.api.Investigations.GetBrief(ctx, connect.NewRequest(&opensrev1.GetBriefRequest{Service: in.Service, Since: in.Since}))
+	resp, err := t.api.Investigations.GetBrief(ctx, connect.NewRequest(&stromboliv1.GetBriefRequest{Service: in.Service, Since: in.Since}))
 	if err != nil {
 		return result{}, err
 	}
@@ -205,15 +205,15 @@ type listInvestigationsInput struct {
 	Status  string `json:"status,omitempty" jsonschema:"only investigations with this status: running, completed or failed"`
 }
 
-var investigationStatuses = map[string]opensrev1.InvestigationStatus{
-	"running":   opensrev1.InvestigationStatus_INVESTIGATION_STATUS_RUNNING,
-	"completed": opensrev1.InvestigationStatus_INVESTIGATION_STATUS_COMPLETED,
-	"failed":    opensrev1.InvestigationStatus_INVESTIGATION_STATUS_FAILED,
+var investigationStatuses = map[string]stromboliv1.InvestigationStatus{
+	"running":   stromboliv1.InvestigationStatus_INVESTIGATION_STATUS_RUNNING,
+	"completed": stromboliv1.InvestigationStatus_INVESTIGATION_STATUS_COMPLETED,
+	"failed":    stromboliv1.InvestigationStatus_INVESTIGATION_STATUS_FAILED,
 }
 
 func (t *tools) listInvestigations(ctx context.Context, _ *mcp.CallToolRequest, in listInvestigationsInput) (result, error) {
 	limit := clampInt(in.Limit, 10, 50)
-	var status opensrev1.InvestigationStatus
+	var status stromboliv1.InvestigationStatus
 	if in.Status != "" {
 		s, ok := investigationStatuses[strings.ToLower(in.Status)]
 		if !ok {
@@ -225,11 +225,11 @@ func (t *tools) listInvestigations(ctx context.Context, _ *mcp.CallToolRequest, 
 	if in.Service != "" || status != 0 {
 		fetch = 200 // filtered here: the API has no filters
 	}
-	resp, err := t.api.Investigations.ListInvestigations(ctx, connect.NewRequest(&opensrev1.ListInvestigationsRequest{Limit: fetch}))
+	resp, err := t.api.Investigations.ListInvestigations(ctx, connect.NewRequest(&stromboliv1.ListInvestigationsRequest{Limit: fetch}))
 	if err != nil {
 		return result{}, err
 	}
-	out := &opensrev1.ListInvestigationsResponse{}
+	out := &stromboliv1.ListInvestigationsResponse{}
 	for _, inv := range resp.Msg.Investigations {
 		if len(out.Investigations) == limit {
 			break
@@ -255,7 +255,7 @@ func (t *tools) getInvestigation(ctx context.Context, _ *mcp.CallToolRequest, in
 	if in.ID == "" {
 		return result{}, errors.New("id is required")
 	}
-	resp, err := t.api.Investigations.GetInvestigation(ctx, connect.NewRequest(&opensrev1.GetInvestigationRequest{Id: in.ID}))
+	resp, err := t.api.Investigations.GetInvestigation(ctx, connect.NewRequest(&stromboliv1.GetInvestigationRequest{Id: in.ID}))
 	if err != nil {
 		return result{}, err
 	}
@@ -264,8 +264,8 @@ func (t *tools) getInvestigation(ctx context.Context, _ *mcp.CallToolRequest, in
 
 // investigationResult renders an investigation, with its steps after
 // afterSeq when asked, at most maxStepsPerGet of them.
-func investigationResult(msg *opensrev1.GetInvestigationResponse, includeSteps bool, afterSeq int64) result {
-	out := &opensrev1.GetInvestigationResponse{Investigation: msg.Investigation}
+func investigationResult(msg *stromboliv1.GetInvestigationResponse, includeSteps bool, afterSeq int64) result {
+	out := &stromboliv1.GetInvestigationResponse{Investigation: msg.Investigation}
 	var more int64
 	if includeSteps {
 		for _, s := range msg.Steps {
@@ -315,7 +315,7 @@ func (t *tools) waitInvestigation(ctx context.Context, req *mcp.CallToolRequest,
 	ticker := time.NewTicker(t.poll)
 	defer ticker.Stop()
 	for {
-		resp, err := t.api.Investigations.GetInvestigation(ctx, connect.NewRequest(&opensrev1.GetInvestigationRequest{Id: in.ID}))
+		resp, err := t.api.Investigations.GetInvestigation(ctx, connect.NewRequest(&stromboliv1.GetInvestigationRequest{Id: in.ID}))
 		if err != nil {
 			return result{}, err
 		}
@@ -333,7 +333,7 @@ func (t *tools) waitInvestigation(ctx context.Context, req *mcp.CallToolRequest,
 				})
 			}
 		}
-		running := inv.Status == opensrev1.InvestigationStatus_INVESTIGATION_STATUS_RUNNING
+		running := inv.Status == stromboliv1.InvestigationStatus_INVESTIGATION_STATUS_RUNNING
 		done := !running || (!untilFinished && inv.Mitigation != nil)
 		if done || !time.Now().Before(deadline) {
 			r := investigationResult(resp.Msg, false, 0)
@@ -364,7 +364,7 @@ func (t *tools) startInvestigation(ctx context.Context, req *mcp.CallToolRequest
 	if title == "" {
 		title = "Investigation of " + in.Service
 	}
-	r := connect.NewRequest(&opensrev1.StartInvestigationRequest{Service: in.Service, Title: title, Description: in.Description})
+	r := connect.NewRequest(&stromboliv1.StartInvestigationRequest{Service: in.Service, Title: title, Description: in.Description})
 	r.Header().Set(SourceHeader, "mcp")
 	if c := clientName(req); c != "" {
 		r.Header().Set(ClientHeader, c)
@@ -387,13 +387,13 @@ type listActionsInput struct {
 }
 
 func (t *tools) listActions(ctx context.Context, _ *mcp.CallToolRequest, in listActionsInput) (result, error) {
-	m := &opensrev1.ListActionsRequest{InvestigationId: in.InvestigationID, Limit: int32(clampInt(in.Limit, 20, 50))}
+	m := &stromboliv1.ListActionsRequest{InvestigationId: in.InvestigationID, Limit: int32(clampInt(in.Limit, 20, 50))}
 	if in.Status != "" {
-		v, ok := opensrev1.ActionStatus_value["ACTION_STATUS_"+strings.ToUpper(in.Status)]
+		v, ok := stromboliv1.ActionStatus_value["ACTION_STATUS_"+strings.ToUpper(in.Status)]
 		if !ok || v == 0 {
 			return result{}, fmt.Errorf("invalid status %q: use proposed, running, succeeded, failed, rejected, expired or superseded", in.Status)
 		}
-		m.Status = opensrev1.ActionStatus(v)
+		m.Status = stromboliv1.ActionStatus(v)
 	}
 	resp, err := t.api.Actions.ListActions(ctx, connect.NewRequest(m))
 	if err != nil {
@@ -410,7 +410,7 @@ func (t *tools) getAction(ctx context.Context, _ *mcp.CallToolRequest, in getAct
 	if in.ID == "" {
 		return result{}, errors.New("id is required")
 	}
-	resp, err := t.api.Actions.GetAction(ctx, connect.NewRequest(&opensrev1.GetActionRequest{Id: in.ID}))
+	resp, err := t.api.Actions.GetAction(ctx, connect.NewRequest(&stromboliv1.GetActionRequest{Id: in.ID}))
 	if err != nil {
 		return result{}, err
 	}

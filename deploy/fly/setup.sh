@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# Deploy opensre to Fly.io from fly.toml, with a Fly Managed Postgres database.
+# Deploy stromboli to Fly.io from fly.toml, with a Fly Managed Postgres database.
 #
 #   FLY_MPG_CLUSTER=<cluster-id> ANTHROPIC_API_KEY=sk-... deploy/fly/setup.sh <app-name> [org]
-#   OPENSRE_DB_URL=postgres://...  ANTHROPIC_API_KEY=sk-... deploy/fly/setup.sh <app-name> [org]
+#   STROMBOLI_DB_URL=postgres://...  ANTHROPIC_API_KEY=sk-... deploy/fly/setup.sh <app-name> [org]
 #
-# The database is needed once: on later runs OPENSRE_DB_URL is already a secret.
+# The database is needed once: on later runs STROMBOLI_DB_URL is already a secret.
 # Safe to re-run: it never replaces a secret that is already set (changing
-# OPENSRE_SECRET_KEY would make stored connector credentials unreadable).
+# STROMBOLI_SECRET_KEY would make stored connector credentials unreadable).
 set -euo pipefail
 
 cd "$(dirname "$0")/../.."
@@ -30,14 +30,14 @@ set_secret() { # set_secret KEY VALUE, only if KEY is unset; the value goes thro
 	fi
 }
 
-if ! has_secret OPENSRE_DB_URL; then
+if ! has_secret STROMBOLI_DB_URL; then
 	if [[ -n ${FLY_MPG_CLUSTER:-} ]]; then
-		fly mpg attach "$FLY_MPG_CLUSTER" --app "$app" --variable-name OPENSRE_DB_URL
-	elif [[ -n ${OPENSRE_DB_URL:-} ]]; then
-		set_secret OPENSRE_DB_URL "$OPENSRE_DB_URL"
+		fly mpg attach "$FLY_MPG_CLUSTER" --app "$app" --variable-name STROMBOLI_DB_URL
+	elif [[ -n ${STROMBOLI_DB_URL:-} ]]; then
+		set_secret STROMBOLI_DB_URL "$STROMBOLI_DB_URL"
 	else
 		cat >&2 <<EOF
-No database: set FLY_MPG_CLUSTER or OPENSRE_DB_URL. To create a Managed Postgres cluster:
+No database: set FLY_MPG_CLUSTER or STROMBOLI_DB_URL. To create a Managed Postgres cluster:
 
   fly mpg create --name $app-db --region ams --plan Basic ${org:+--org $org}
   fly mpg list ${org:+--org $org}     # the cluster ID
@@ -48,7 +48,7 @@ fi
 
 # Fly secrets can't be read back: print new ones once so they can be stored.
 new=()
-for spec in "OPENSRE_SECRET_KEY:-base64 32" "OPENSRE_API_TOKEN:-hex 32"; do
+for spec in "STROMBOLI_SECRET_KEY:-base64 32" "STROMBOLI_API_TOKEN:-hex 32"; do
 	name=${spec%%:*}
 	if ! has_secret "$name"; then
 		# shellcheck disable=SC2086
@@ -74,6 +74,6 @@ echo "URL: https://$app.fly.dev"
 if ((${#new[@]})); then
 	echo
 	echo "Store these in your secret manager now, Fly can't show them again."
-	echo "Never change OPENSRE_SECRET_KEY: it decrypts the stored connector credentials."
+	echo "Never change STROMBOLI_SECRET_KEY: it decrypts the stored connector credentials."
 	printf '  %s\n' "${new[@]}"
 fi

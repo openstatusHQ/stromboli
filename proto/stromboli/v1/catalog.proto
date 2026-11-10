@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-package opensre.v1;
+package stromboli.v1;
 
 // Service is one entry of the service catalog. The same shape is used for the
 // YAML import/export format (snake_case field names).
@@ -31,11 +31,11 @@ message FlyConfig {
   // service name.
   string app = 1;
   // Name of a fly_machines connector whose token can act on this app's
-  // machines. When set (and OPENSRE_ACTIONS_ENABLED=true), opensre can run a
+  // machines. When set (and STROMBOLI_ACTIONS_ENABLED=true), stromboli can run a
   // machine action after a human approves it; otherwise Fly mitigations stay
   // suggestions.
   string actions = 2;
-  // Machine actions opensre may run for this service: "restart", "clone",
+  // Machine actions stromboli may run for this service: "restart", "clone",
   // "cordon", "uncordon", "stop", "start". Defaults to restart, clone, cordon
   // and uncordon.
   repeated string allow = 3;

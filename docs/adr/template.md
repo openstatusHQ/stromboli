@@ -9,7 +9,7 @@ What problem are we facing, and what forces (constraints, trade-offs, prior art)
 
 ## Decision
 
-What we decided, stated plainly ("opensre does X").
+What we decided, stated plainly ("stromboli does X").
 
 ## Consequences
 

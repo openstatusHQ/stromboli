@@ -9,15 +9,15 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/openstatushq/opensre/internal/connector/deploys"
-	"github.com/openstatushq/opensre/internal/connector/fly"
-	"github.com/openstatushq/opensre/internal/connector/gcp"
-	"github.com/openstatushq/opensre/internal/connector/logs"
-	"github.com/openstatushq/opensre/internal/connector/mcpconn"
-	"github.com/openstatushq/opensre/internal/connector/metrics"
-	"github.com/openstatushq/opensre/internal/secrets"
-	"github.com/openstatushq/opensre/internal/store"
-	"github.com/openstatushq/opensre/internal/store/db"
+	"github.com/openstatushq/stromboli/internal/connector/deploys"
+	"github.com/openstatushq/stromboli/internal/connector/fly"
+	"github.com/openstatushq/stromboli/internal/connector/gcp"
+	"github.com/openstatushq/stromboli/internal/connector/logs"
+	"github.com/openstatushq/stromboli/internal/connector/mcpconn"
+	"github.com/openstatushq/stromboli/internal/connector/metrics"
+	"github.com/openstatushq/stromboli/internal/secrets"
+	"github.com/openstatushq/stromboli/internal/store"
+	"github.com/openstatushq/stromboli/internal/store/db"
 )
 
 type kindSpec struct {

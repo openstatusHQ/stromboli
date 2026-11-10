@@ -13,53 +13,53 @@ import (
 
 	"connectrpc.com/connect"
 
-	opensrev1 "github.com/openstatushq/opensre/gen/opensre/v1"
-	"github.com/openstatushq/opensre/gen/opensre/v1/opensrev1connect"
+	stromboliv1 "github.com/openstatushq/stromboli/gen/stromboli/v1"
+	"github.com/openstatushq/stromboli/gen/stromboli/v1/stromboliv1connect"
 )
 
 // fake implements the parts of the API the tests exercise.
 type fake struct {
-	opensrev1connect.UnimplementedConnectorServiceHandler
-	opensrev1connect.UnimplementedCatalogServiceHandler
-	opensrev1connect.UnimplementedInvestigationServiceHandler
+	stromboliv1connect.UnimplementedConnectorServiceHandler
+	stromboliv1connect.UnimplementedCatalogServiceHandler
+	stromboliv1connect.UnimplementedInvestigationServiceHandler
 
-	created  *opensrev1.CreateConnectorRequest
+	created  *stromboliv1.CreateConnectorRequest
 	deleted  []string
-	imported *opensrev1.ImportCatalogRequest
+	imported *stromboliv1.ImportCatalogRequest
 	existing string // services YAML returned by ExportCatalog
 }
 
-func (f *fake) ListConnectors(context.Context, *connect.Request[opensrev1.ListConnectorsRequest]) (*connect.Response[opensrev1.ListConnectorsResponse], error) {
-	return connect.NewResponse(&opensrev1.ListConnectorsResponse{Connectors: []*opensrev1.Connector{
+func (f *fake) ListConnectors(context.Context, *connect.Request[stromboliv1.ListConnectorsRequest]) (*connect.Response[stromboliv1.ListConnectorsResponse], error) {
+	return connect.NewResponse(&stromboliv1.ListConnectorsResponse{Connectors: []*stromboliv1.Connector{
 		{Name: "loki", Kind: "loki", Config: map[string]string{"url": "http://loki:3100", "password": ""}},
 	}}), nil
 }
 
-func (f *fake) CreateConnector(_ context.Context, req *connect.Request[opensrev1.CreateConnectorRequest]) (*connect.Response[opensrev1.CreateConnectorResponse], error) {
+func (f *fake) CreateConnector(_ context.Context, req *connect.Request[stromboliv1.CreateConnectorRequest]) (*connect.Response[stromboliv1.CreateConnectorResponse], error) {
 	f.created = req.Msg
-	return connect.NewResponse(&opensrev1.CreateConnectorResponse{}), nil
+	return connect.NewResponse(&stromboliv1.CreateConnectorResponse{}), nil
 }
 
-func (f *fake) TestConnector(context.Context, *connect.Request[opensrev1.TestConnectorRequest]) (*connect.Response[opensrev1.TestConnectorResponse], error) {
-	return connect.NewResponse(&opensrev1.TestConnectorResponse{Ok: true}), nil
+func (f *fake) TestConnector(context.Context, *connect.Request[stromboliv1.TestConnectorRequest]) (*connect.Response[stromboliv1.TestConnectorResponse], error) {
+	return connect.NewResponse(&stromboliv1.TestConnectorResponse{Ok: true}), nil
 }
 
-func (f *fake) DeleteConnector(_ context.Context, req *connect.Request[opensrev1.DeleteConnectorRequest]) (*connect.Response[opensrev1.DeleteConnectorResponse], error) {
+func (f *fake) DeleteConnector(_ context.Context, req *connect.Request[stromboliv1.DeleteConnectorRequest]) (*connect.Response[stromboliv1.DeleteConnectorResponse], error) {
 	f.deleted = append(f.deleted, req.Msg.Name)
-	return connect.NewResponse(&opensrev1.DeleteConnectorResponse{}), nil
+	return connect.NewResponse(&stromboliv1.DeleteConnectorResponse{}), nil
 }
 
-func (f *fake) ExportCatalog(context.Context, *connect.Request[opensrev1.ExportCatalogRequest]) (*connect.Response[opensrev1.ExportCatalogResponse], error) {
-	return connect.NewResponse(&opensrev1.ExportCatalogResponse{ServicesYaml: []byte(f.existing)}), nil
+func (f *fake) ExportCatalog(context.Context, *connect.Request[stromboliv1.ExportCatalogRequest]) (*connect.Response[stromboliv1.ExportCatalogResponse], error) {
+	return connect.NewResponse(&stromboliv1.ExportCatalogResponse{ServicesYaml: []byte(f.existing)}), nil
 }
 
-func (f *fake) ImportCatalog(_ context.Context, req *connect.Request[opensrev1.ImportCatalogRequest]) (*connect.Response[opensrev1.ImportCatalogResponse], error) {
+func (f *fake) ImportCatalog(_ context.Context, req *connect.Request[stromboliv1.ImportCatalogRequest]) (*connect.Response[stromboliv1.ImportCatalogResponse], error) {
 	f.imported = req.Msg
-	return connect.NewResponse(&opensrev1.ImportCatalogResponse{ServicesUpserted: 1}), nil
+	return connect.NewResponse(&stromboliv1.ImportCatalogResponse{ServicesUpserted: 1}), nil
 }
 
-func (f *fake) StartInvestigation(context.Context, *connect.Request[opensrev1.StartInvestigationRequest]) (*connect.Response[opensrev1.StartInvestigationResponse], error) {
-	return connect.NewResponse(&opensrev1.StartInvestigationResponse{Investigation: &opensrev1.Investigation{Id: "inv-1"}}), nil
+func (f *fake) StartInvestigation(context.Context, *connect.Request[stromboliv1.StartInvestigationRequest]) (*connect.Response[stromboliv1.StartInvestigationResponse], error) {
+	return connect.NewResponse(&stromboliv1.StartInvestigationResponse{Investigation: &stromboliv1.Investigation{Id: "inv-1"}}), nil
 }
 
 type result struct {
@@ -71,9 +71,9 @@ type result struct {
 func run(t *testing.T, f *fake, stdin string, interactive bool, args ...string) result {
 	t.Helper()
 	mux := http.NewServeMux()
-	mux.Handle(opensrev1connect.NewConnectorServiceHandler(f))
-	mux.Handle(opensrev1connect.NewCatalogServiceHandler(f))
-	mux.Handle(opensrev1connect.NewInvestigationServiceHandler(f))
+	mux.Handle(stromboliv1connect.NewConnectorServiceHandler(f))
+	mux.Handle(stromboliv1connect.NewCatalogServiceHandler(f))
+	mux.Handle(stromboliv1connect.NewInvestigationServiceHandler(f))
 	srv := httptest.NewServer(mux)
 	t.Cleanup(srv.Close)
 
@@ -97,7 +97,7 @@ func TestUsageErrors(t *testing.T) {
 		{[]string{"investigations", "--limit", "x"}, `invalid argument "x"`},
 		{[]string{"connector", "add", "x", "nope"}, `unknown connector kind "nope"`},
 		{[]string{"actions", "list", "--status", "nope"}, "valid: proposed, running, succeeded"},
-		{[]string{"actions", "approve", "x"}, "OPENSRE_USER"},
+		{[]string{"actions", "approve", "x"}, "STROMBOLI_USER"},
 	} {
 		r := run(t, &fake{}, "", false, tc.args...)
 		if r.code != exitUsage || !strings.Contains(r.stderr, tc.want) || !strings.Contains(r.stderr, "--help' for usage") {
@@ -203,7 +203,7 @@ func TestCatalogImportPrune(t *testing.T) {
 
 func TestInvestigateNoWatchPrintsID(t *testing.T) {
 	r := run(t, &fake{}, "", false, "investigate", "api", "--no-watch")
-	if r.code != 0 || r.stdout != "inv-1\n" || !strings.Contains(r.stderr, "opensre show inv-1 --follow") {
+	if r.code != 0 || r.stdout != "inv-1\n" || !strings.Contains(r.stderr, "stromboli show inv-1 --follow") {
 		t.Fatalf("exit %d, stdout %q, stderr %q", r.code, r.stdout, r.stderr)
 	}
 }
@@ -214,8 +214,8 @@ func TestExplain(t *testing.T) {
 		err  error
 		want string
 	}{
-		{connect.NewError(connect.CodeUnavailable, errors.New("refused")), "cannot reach the opensre server at http://x"},
-		{connect.NewError(connect.CodeUnauthenticated, errors.New("bad")), "OPENSRE_API_TOKEN"},
+		{connect.NewError(connect.CodeUnavailable, errors.New("refused")), "cannot reach the stromboli server at http://x"},
+		{connect.NewError(connect.CodeUnauthenticated, errors.New("bad")), "STROMBOLI_API_TOKEN"},
 		{withHint(connect.NewError(connect.CodeAlreadyExists, errors.New("exists")), "Use --replace."), "exists\nUse --replace."},
 	} {
 		if got := a.explain(tc.err); !strings.Contains(got, tc.want) {
@@ -235,8 +235,8 @@ func TestInvalidURL(t *testing.T) {
 
 func TestEnvBool(t *testing.T) {
 	for v, want := range map[string]bool{"": false, "0": false, "false": false, "off": false, "1": true, "true": true, "yes": true} {
-		t.Setenv("OPENSRE_TEST_BOOL", v)
-		if got := envBool("OPENSRE_TEST_BOOL"); got != want {
+		t.Setenv("STROMBOLI_TEST_BOOL", v)
+		if got := envBool("STROMBOLI_TEST_BOOL"); got != want {
 			t.Errorf("envBool(%q) = %v, want %v", v, got, want)
 		}
 	}

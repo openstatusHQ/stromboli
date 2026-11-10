@@ -15,11 +15,11 @@ jobs:
       postgres:
         image: pgvector/pgvector:pg17
         env:
-          POSTGRES_USER: opensre
-          POSTGRES_PASSWORD: opensre
-          POSTGRES_DB: opensre
+          POSTGRES_USER: stromboli
+          POSTGRES_PASSWORD: stromboli
+          POSTGRES_DB: stromboli
         ports: ["5432:5432"]
-        options: --health-cmd "pg_isready -U opensre" --health-interval 2s --health-retries 30
+        options: --health-cmd "pg_isready -U stromboli" --health-interval 2s --health-retries 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -30,7 +30,7 @@ jobs:
       - run: go vet ./...
       - run: go test ./...
         env:
-          OPENSRE_TEST_DB_URL: postgres://opensre:opensre@localhost:5432/opensre?sslmode=disable
+          STROMBOLI_TEST_DB_URL: postgres://stromboli:stromboli@localhost:5432/stromboli?sslmode=disable
 
   docker:
     runs-on: ubuntu-latest

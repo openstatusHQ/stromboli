@@ -9,14 +9,14 @@ An agent that can change production can make an incident worse, and teams will n
 
 ## Decision
 
-- opensre **suggests and never acts on its own**. Every connector uses read-only credentials, and every tool exposed to the model is read-only.
+- stromboli **suggests and never acts on its own**. Every connector uses read-only credentials, and every tool exposed to the model is read-only.
 - Mitigations are text: the exact command, how to verify it, how to undo it and its risk. A human applies them.
 - The only exception is opt-in, allow-listed machine actions that a named human approves ([0013](0013-approved-fly-machine-actions.md)).
 - Redaction (tokens, passwords, emails) runs before anything reaches the model.
 - Every brief, tool call and model turn is stored, so an investigation can be audited and replayed.
-- opensre does not write code or open PRs. It hands context to an engineer or a coding agent.
+- stromboli does not write code or open PRs. It hands context to an engineer or a coding agent.
 
 ## Consequences
 
-- Users can connect opensre with the same read-only tokens they would give a new on-call engineer.
+- Users can connect stromboli with the same read-only tokens they would give a new on-call engineer.
 - Time to mitigation still depends on a human applying the fix; [0013](0013-approved-fly-machine-actions.md) narrows that gap without removing the human.

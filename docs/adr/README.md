@@ -1,6 +1,6 @@
 # Architecture decisions
 
-Why opensre is built the way it is. Each record explains one decision: its context, what we decided and the consequences ([0001](0001-record-architecture-decisions.md)).
+Why stromboli is built the way it is. Each record explains one decision: its context, what we decided and the consequences ([0001](0001-record-architecture-decisions.md)).
 
 To record a new decision, copy [`template.md`](template.md) to the next number, open it as **Proposed** in a PR, and add it to the list below. Don't rewrite an accepted record: supersede it with a new one.
 
@@ -8,7 +8,7 @@ To record a new decision, copy [`template.md`](template.md) to the next number, 
 |---|---|---|
 | [0001](0001-record-architecture-decisions.md) | Record architecture decisions | Accepted |
 | [0002](0002-self-hosted-one-instance-per-organisation.md) | Self-hosted, one instance per organisation | Accepted |
-| [0003](0003-service-catalog-owned-by-opensre.md) | The service catalog is owned by opensre | Accepted |
+| [0003](0003-service-catalog-owned-by-stromboli.md) | The service catalog is owned by stromboli | Accepted |
 | [0004](0004-postgres-only-storage.md) | Postgres as the only storage | Accepted |
 | [0005](0005-go-binary-api-first-connectrpc.md) | A single Go binary, API first with ConnectRPC | Accepted |
 | [0006](0006-suggest-dont-execute.md) | Suggest, don't execute | Accepted |
@@ -26,7 +26,7 @@ To record a new decision, copy [`template.md`](template.md) to the next number, 
 | [0018](0018-memory-notes.md) | Memory notes with a lifecycle | Proposed |
 | [0019](0019-evaluation-harness.md) | Evaluation by replaying recorded incidents | Proposed |
 | [0020](0020-mit-license.md) | MIT license | Accepted |
-| [0021](0021-mcp-server.md) | opensre as an MCP server | Proposed |
+| [0021](0021-mcp-server.md) | stromboli as an MCP server | Proposed |
 
 ## Open questions
 

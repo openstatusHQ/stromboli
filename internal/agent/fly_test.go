@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/openstatushq/opensre/internal/connector/fly"
-	"github.com/openstatushq/opensre/internal/connector/fly/flytest"
+	"github.com/openstatushq/stromboli/internal/connector/fly"
+	"github.com/openstatushq/stromboli/internal/connector/fly/flytest"
 )
 
 func TestRenderFly(t *testing.T) {
@@ -33,7 +33,7 @@ func TestRenderFly(t *testing.T) {
 		"`fly machine clone <id> -a checker --region <region>` · undo: fly machine destroy <new-id> -a checker --force",
 		"`fly machine cordon <id> -a checker` · undo: fly machine uncordon <id> -a checker",
 		"`fly apps restart checker`",
-		"opensre can run these machine actions for this service after a human approves them: restart, cordon.",
+		"stromboli can run these machine actions for this service after a human approves them: restart, cordon.",
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("missing %q in:\n%s", want, out)

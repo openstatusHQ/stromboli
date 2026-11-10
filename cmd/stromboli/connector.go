@@ -12,13 +12,13 @@ import (
 	"connectrpc.com/connect"
 	"github.com/spf13/cobra"
 
-	opensrev1 "github.com/openstatushq/opensre/gen/opensre/v1"
-	"github.com/openstatushq/opensre/internal/connector"
+	stromboliv1 "github.com/openstatushq/stromboli/gen/stromboli/v1"
+	"github.com/openstatushq/stromboli/internal/connector"
 )
 
 func (a *app) connectorCmd() *cobra.Command {
 	cmd := group("connector", "Manage connectors to logs, metrics, deploys and machines",
-		"Connectors give opensre read access to your logs (Loki, Axiom, CloudWatch),\nmetrics (Prometheus, Fly.io), deploys (GitHub) and Fly.io machines (fly_machines). Secrets are encrypted on the server and never printed back.")
+		"Connectors give stromboli read access to your logs (Loki, Axiom, CloudWatch),\nmetrics (Prometheus, Fly.io), deploys (GitHub) and Fly.io machines (fly_machines). Secrets are encrypted on the server and never printed back.")
 	cmd.Aliases = []string{"connectors"}
 	cmd.AddCommand(a.connectorAddCmd(), a.connectorListCmd(), a.connectorTestCmd(), a.connectorRmCmd())
 	return cmd
@@ -61,11 +61,11 @@ history and the process list. Instead pass:
   key           to be prompted for the value (input is hidden)
   key=@path     to read the value from a file
   key=-         to read the value from stdin`,
-		Example: `  opensre connector add loki loki url=http://loki:3100
-  opensre connector add github github token          # prompts for the token
-  opensre connector add axiom axiom token=@axiom.token
-  echo "$GITHUB_TOKEN" | opensre connector add github github token=-
-  opensre connector add cw cloudwatch region=eu-west-1 --replace`,
+		Example: `  stromboli connector add loki loki url=http://loki:3100
+  stromboli connector add github github token          # prompts for the token
+  stromboli connector add axiom axiom token=@axiom.token
+  echo "$GITHUB_TOKEN" | stromboli connector add github github token=-
+  stromboli connector add cw cloudwatch region=eu-west-1 --replace`,
 		Args: args(2, -1, "<name> and <kind>"),
 		RunE: func(cmd *cobra.Command, pos []string) error {
 			name, kind := pos[0], pos[1]
@@ -80,7 +80,7 @@ history and the process list. Instead pass:
 			if err != nil {
 				return err
 			}
-			if _, err := c.connectors.CreateConnector(cmd.Context(), connect.NewRequest(&opensrev1.CreateConnectorRequest{
+			if _, err := c.connectors.CreateConnector(cmd.Context(), connect.NewRequest(&stromboliv1.CreateConnectorRequest{
 				Name: name, Kind: kind, Config: cfg, Replace: replace,
 			})); err != nil {
 				if connect.CodeOf(err) == connect.CodeAlreadyExists && !replace {
@@ -94,7 +94,7 @@ history and the process list. Instead pass:
 			}
 			if !a.json {
 				if slices.Contains([]string{"loki", "axiom", "cloudwatch", "gcp_logging", "prometheus", "fly", "gcp_monitoring"}, kind) {
-					a.info("Next: propose catalog entries from it with `opensre catalog discover %s > services.yaml`", name)
+					a.info("Next: propose catalog entries from it with `stromboli catalog discover %s > services.yaml`", name)
 				}
 			}
 			return nil
@@ -167,15 +167,15 @@ func (a *app) connectorListCmd() *cobra.Command {
 		Aliases: []string{"ls"},
 		Short:   "List connectors",
 		Long:    "List connectors with their public config. Secret values are shown as ••••.",
-		Example: `  opensre connector list
-  opensre connector list --json`,
+		Example: `  stromboli connector list
+  stromboli connector list --json`,
 		Args: noArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			c, err := a.api()
 			if err != nil {
 				return err
 			}
-			resp, err := c.connectors.ListConnectors(cmd.Context(), connect.NewRequest(&opensrev1.ListConnectorsRequest{}))
+			resp, err := c.connectors.ListConnectors(cmd.Context(), connect.NewRequest(&stromboliv1.ListConnectorsRequest{}))
 			if err != nil {
 				return err
 			}
@@ -183,7 +183,7 @@ func (a *app) connectorListCmd() *cobra.Command {
 				return a.printJSON(resp.Msg)
 			}
 			if len(resp.Msg.Connectors) == 0 {
-				a.info("No connectors yet. Add one with `opensre connector add <name> <kind> key=value...`")
+				a.info("No connectors yet. Add one with `stromboli connector add <name> <kind> key=value...`")
 				return nil
 			}
 			tw := tabwriter.NewWriter(a.stdout, 0, 4, 2, ' ', 0)
@@ -213,7 +213,7 @@ func (a *app) connectorTestCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:     "test <name>",
 		Short:   "Check that the server can reach a connector",
-		Example: `  opensre connector test loki`,
+		Example: `  stromboli connector test loki`,
 		Args:    exactArgs(1, "<name>"),
 		RunE: func(cmd *cobra.Command, pos []string) error {
 			c, err := a.api()
@@ -226,7 +226,7 @@ func (a *app) connectorTestCmd() *cobra.Command {
 }
 
 func (a *app) testConnector(cmd *cobra.Command, c *clients, name string) error {
-	resp, err := c.connectors.TestConnector(cmd.Context(), connect.NewRequest(&opensrev1.TestConnectorRequest{Name: name}))
+	resp, err := c.connectors.TestConnector(cmd.Context(), connect.NewRequest(&stromboliv1.TestConnectorRequest{Name: name}))
 	if err != nil {
 		return err
 	}
@@ -236,7 +236,7 @@ func (a *app) testConnector(cmd *cobra.Command, c *clients, name string) error {
 		}
 	}
 	if !resp.Msg.Ok {
-		return fmt.Errorf("connector %q test failed: %s\nFix the config with `opensre connector add %s ... --replace`", name, resp.Msg.Message, name)
+		return fmt.Errorf("connector %q test failed: %s\nFix the config with `stromboli connector add %s ... --replace`", name, resp.Msg.Message, name)
 	}
 	if !a.json {
 		a.out("Connector %q is reachable.", name)
@@ -251,8 +251,8 @@ func (a *app) connectorRmCmd() *cobra.Command {
 		Aliases: []string{"remove", "delete"},
 		Short:   "Delete a connector",
 		Long:    "Delete a connector and its stored secrets. Services whose logs or deploys use it\nlose that data source. Asks for confirmation unless --yes is given.",
-		Example: `  opensre connector rm loki
-  opensre connector rm loki --yes`,
+		Example: `  stromboli connector rm loki
+  stromboli connector rm loki --yes`,
 		Args: exactArgs(1, "<name>"),
 		RunE: func(cmd *cobra.Command, pos []string) error {
 			name := pos[0]
@@ -263,7 +263,7 @@ func (a *app) connectorRmCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if _, err := c.connectors.DeleteConnector(cmd.Context(), connect.NewRequest(&opensrev1.DeleteConnectorRequest{Name: name})); err != nil {
+			if _, err := c.connectors.DeleteConnector(cmd.Context(), connect.NewRequest(&stromboliv1.DeleteConnectorRequest{Name: name})); err != nil {
 				return err
 			}
 			a.out("Connector %q deleted.", name)

@@ -1,5 +1,5 @@
 # Catalog for the demo stack (docker-compose.dev.yml).
-# Import with: opensre catalog import examples/catalog/services.yaml --runbooks examples/catalog/runbooks
+# Import with: stromboli catalog import examples/catalog/services.yaml --runbooks examples/catalog/runbooks
 - name: web
   description: Public dashboard, server-rendered, calls api.
   owners: ["@team-frontend"]

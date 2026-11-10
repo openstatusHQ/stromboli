@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/openstatushq/opensre/internal/connector/fly"
+	"github.com/openstatushq/stromboli/internal/connector/fly"
 )
 
 // PrometheusConfig configures a Prometheus HTTP API client.

@@ -19,14 +19,14 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"google.golang.org/protobuf/encoding/protojson"
 
-	opensrev1 "github.com/openstatushq/opensre/gen/opensre/v1"
-	"github.com/openstatushq/opensre/internal/action"
-	"github.com/openstatushq/opensre/internal/catalog"
-	"github.com/openstatushq/opensre/internal/config"
-	"github.com/openstatushq/opensre/internal/connector"
-	"github.com/openstatushq/opensre/internal/llm"
-	"github.com/openstatushq/opensre/internal/store"
-	"github.com/openstatushq/opensre/internal/store/db"
+	stromboliv1 "github.com/openstatushq/stromboli/gen/stromboli/v1"
+	"github.com/openstatushq/stromboli/internal/action"
+	"github.com/openstatushq/stromboli/internal/catalog"
+	"github.com/openstatushq/stromboli/internal/config"
+	"github.com/openstatushq/stromboli/internal/connector"
+	"github.com/openstatushq/stromboli/internal/llm"
+	"github.com/openstatushq/stromboli/internal/store"
+	"github.com/openstatushq/stromboli/internal/store/db"
 )
 
 const (
@@ -50,8 +50,8 @@ type Notifier interface {
 	Started(ctx context.Context, inv db.Investigation) (channel, ts string, err error)
 	// Mitigated is called as soon as a mitigation is proposed, before the
 	// root cause is known. It may be called again if the mitigation is revised.
-	Mitigated(ctx context.Context, inv db.Investigation, m *opensrev1.Mitigation) error
-	Finished(ctx context.Context, inv db.Investigation, report *opensrev1.Report) error
+	Mitigated(ctx context.Context, inv db.Investigation, m *stromboliv1.Mitigation) error
+	Finished(ctx context.Context, inv db.Investigation, report *stromboliv1.Report) error
 }
 
 type Engine struct {
@@ -83,7 +83,7 @@ type StartRequest struct {
 	Alert       map[string]any
 	// Fingerprint dedupes repeated alerts; empty disables dedupe.
 	Fingerprint string
-	// DedupeWindow overrides OPENSRE_DEDUPE_WINDOW for this fingerprint.
+	// DedupeWindow overrides STROMBOLI_DEDUPE_WINDOW for this fingerprint.
 	DedupeWindow time.Duration
 	// At is when the problem was observed; defaults to now.
 	At time.Time
@@ -94,7 +94,7 @@ type StartRequest struct {
 // it is returned instead and reused is true.
 func (e *Engine) Start(ctx context.Context, req StartRequest) (inv db.Investigation, reused bool, err error) {
 	if !e.models.ok() {
-		return inv, false, errors.New("no LLM is configured (OPENSRE_MODEL and the provider's API key)")
+		return inv, false, errors.New("no LLM is configured (STROMBOLI_MODEL and the provider's API key)")
 	}
 	if len(req.Services) == 0 {
 		return inv, false, errors.New("no service to investigate")
@@ -206,7 +206,7 @@ func (e *Engine) run(inv db.Investigation, req StartRequest) {
 	}
 }
 
-func (e *Engine) investigate(ctx context.Context, rec *recorder, inv *db.Investigation, req StartRequest) (*opensrev1.Report, error) {
+func (e *Engine) investigate(ctx context.Context, rec *recorder, inv *db.Investigation, req StartRequest) (*stromboliv1.Report, error) {
 	_, graph, err := catalog.Load(ctx, e.store.Queries)
 	if err != nil {
 		return nil, err
@@ -317,7 +317,7 @@ func (e *Engine) investigate(ctx context.Context, rec *recorder, inv *db.Investi
 		if reportIdx >= 0 {
 			u := uses[reportIdx]
 			if mitigated {
-				report := &opensrev1.Report{}
+				report := &stromboliv1.Report{}
 				if err := (protojson.UnmarshalOptions{DiscardUnknown: true}).Unmarshal(u.Input, report); err != nil {
 					return nil, fmt.Errorf("invalid report: %w", err)
 				}
@@ -331,7 +331,7 @@ func (e *Engine) investigate(ctx context.Context, rec *recorder, inv *db.Investi
 		if len(uses) == 0 {
 			if nudged {
 				// The model answered in prose twice; keep its text as the summary.
-				return &opensrev1.Report{Summary: resp.Text(), LikelyCause: "unknown", Confidence: "low"}, nil
+				return &stromboliv1.Report{Summary: resp.Text(), LikelyCause: "unknown", Confidence: "low"}, nil
 			}
 			nudged = true
 			nudge := "Call submit_report now with your findings."
@@ -370,14 +370,14 @@ func (e *Engine) investigate(ctx context.Context, rec *recorder, inv *db.Investi
 // mitigate validates, stores and publishes a proposed mitigation. It returns
 // the tool result for the model.
 func (e *Engine) mitigate(ctx context.Context, rec *recorder, tc *toolContext, inv *db.Investigation, u llm.ToolCall) (string, bool) {
-	m := &opensrev1.Mitigation{}
+	m := &stromboliv1.Mitigation{}
 	if err := (protojson.UnmarshalOptions{DiscardUnknown: true}).Unmarshal(u.Input, m); err != nil {
 		return "invalid mitigation: " + err.Error(), true
 	}
 	if !slices.Contains(mitigationKinds, m.Kind) {
 		return fmt.Sprintf("invalid kind %q: use one of %s", m.Kind, strings.Join(mitigationKinds, ", ")), true
 	}
-	m.ActionId = "" // set by opensre only
+	m.ActionId = "" // set by stromboli only
 	actionNote := e.proposeAction(ctx, tc, inv, m)
 	raw, _ := protojson.MarshalOptions{UseProtoNames: true}.Marshal(m)
 	revised := len(inv.Mitigation) > 0
@@ -406,7 +406,7 @@ func (e *Engine) mitigate(ctx context.Context, rec *recorder, tc *toolContext, i
 // for approval. A revised mitigation supersedes the previous pending action.
 // When the action is not accepted it is dropped and the mitigation stays a
 // suggestion; the returned note tells the model why.
-func (e *Engine) proposeAction(ctx context.Context, tc *toolContext, inv *db.Investigation, m *opensrev1.Mitigation) string {
+func (e *Engine) proposeAction(ctx context.Context, tc *toolContext, inv *db.Investigation, m *stromboliv1.Mitigation) string {
 	if e.actions != nil {
 		if err := e.actions.Supersede(ctx, inv.ID); err != nil {
 			slog.Warn("supersede actions", "investigation", inv.ID, "err", err)
@@ -416,7 +416,7 @@ func (e *Engine) proposeAction(ctx context.Context, tc *toolContext, inv *db.Inv
 	derived := false
 	if (ma == nil || ma.Action == "") && m.Kind != "none" && e.actions != nil {
 		// The model sometimes writes the fly machine command but forgets
-		// machine_action: offer it anyway when the command is one opensre can run.
+		// machine_action: offer it anyway when the command is one stromboli can run.
 		if ma = machineActionFromCommands(m.Action); ma != nil {
 			derived = true
 			m.MachineAction = ma
@@ -432,7 +432,7 @@ func (e *Engine) proposeAction(ctx context.Context, tc *toolContext, inv *db.Inv
 	}
 	if e.actions == nil {
 		m.MachineAction = nil
-		return " machine_action was ignored: this opensre instance cannot run actions, the mitigation is a suggestion."
+		return " machine_action was ignored: this stromboli instance cannot run actions, the mitigation is a suggestion."
 	}
 	a, err := e.actions.Propose(ctx, *inv, tc.graph, ma)
 	if err != nil {
@@ -449,7 +449,7 @@ func (e *Engine) proposeAction(ctx context.Context, tc *toolContext, inv *db.Inv
 	if derived {
 		from = " (machine_action was filled in from your command)"
 	}
-	return fmt.Sprintf(" opensre will %s %s of app %s once a human approves action %s%s; you cannot run it yourself.",
+	return fmt.Sprintf(" stromboli will %s %s of app %s once a human approves action %s%s; you cannot run it yourself.",
 		ma.Action, strings.Join(ma.MachineIds, ", "), ma.App, a.ID, from)
 }
 

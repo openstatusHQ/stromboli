@@ -18,9 +18,9 @@ import (
 //	ollama      OLLAMA_BASE_URL (default http://localhost:11434/v1)
 //
 // Any other provider name is an OpenAI-compatible endpoint configured with
-// OPENSRE_PROVIDER_<NAME>_BASE_URL and, if needed, OPENSRE_PROVIDER_<NAME>_API_KEY
+// STROMBOLI_PROVIDER_<NAME>_BASE_URL and, if needed, STROMBOLI_PROVIDER_<NAME>_API_KEY
 // (NAME upper-cased, "-" as "_"), so "groq:llama-3.3-70b" works once
-// OPENSRE_PROVIDER_GROQ_BASE_URL is set.
+// STROMBOLI_PROVIDER_GROQ_BASE_URL is set.
 func FromEnv(getenv func(string) string) *Registry {
 	if getenv == nil {
 		getenv = os.Getenv
@@ -58,7 +58,7 @@ func FromEnv(getenv func(string) string) *Registry {
 		Name: "ollama", BaseURL: env("OLLAMA_BASE_URL", "http://localhost:11434/v1"), LegacyMaxTokens: true,
 	}))
 	r.fallback = func(name string) (Provider, bool) {
-		prefix := "OPENSRE_PROVIDER_" + strings.ToUpper(strings.ReplaceAll(name, "-", "_")) + "_"
+		prefix := "STROMBOLI_PROVIDER_" + strings.ToUpper(strings.ReplaceAll(name, "-", "_")) + "_"
 		base := getenv(prefix + "BASE_URL")
 		if base == "" {
 			return nil, false

@@ -19,7 +19,7 @@ func TestMachineActionFromCommands(t *testing.T) {
 		{"fly machine clone 148e -a acme-api --region fra", "clone", "fra", []string{"148e"}},
 		{"fly machine clone 148e -a acme-api --region=fra", "clone", "fra", []string{"148e"}},
 
-		// Not something opensre can run: stays a suggestion.
+		// Not something stromboli can run: stays a suggestion.
 		{"fly machine restart <id> -a acme-api", "", "", nil},
 		{"fly machine start 148e -a acme-api\nfly machine restart 2a7c -a acme-api", "", "", nil},
 		{"fly machine stop 148e -a acme-api; fly machine destroy 2a7c -a acme-api --force", "", "", nil},
