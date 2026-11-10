@@ -43,3 +43,12 @@ func TestShortenKeepsRunes(t *testing.T) {
 		t.Fatalf("shorten = %q", got)
 	}
 }
+
+func TestHealthyText(t *testing.T) {
+	if got, want := HealthyText([]string{"api", "web"}), "✅ Health check: all 2 services operational (api, web)"; got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+	if got, want := HealthyText([]string{"api"}), "✅ Health check: all 1 service operational (api)"; got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}

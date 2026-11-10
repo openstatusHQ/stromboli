@@ -84,16 +84,30 @@ type MetricsFunc func(ctx context.Context, name string) (metrics.Source, string,
 // CatalogFunc returns the catalog's services.
 type CatalogFunc func(ctx context.Context) ([]*opensrev1.Service, error)
 
+// Summarizer is told when a run found every checked service healthy;
+// *report.Slack implements it.
+type Summarizer interface {
+	Healthy(ctx context.Context, services []string) error
+}
+
 type Checker struct {
 	interval time.Duration
 	catalog  CatalogFunc
 	metrics  MetricsFunc
 	starter  Starter
+	summary  Summarizer
 	now      func() time.Time
 }
 
 func New(interval time.Duration, catalog CatalogFunc, m MetricsFunc, s Starter) *Checker {
 	return &Checker{interval: interval, catalog: catalog, metrics: m, starter: s, now: time.Now}
+}
+
+// WithSummary posts a summary after each run where every checked service is
+// healthy. Without it, a healthy run is only logged.
+func (c *Checker) WithSummary(s Summarizer) *Checker {
+	c.summary = s
+	return c
 }
 
 // Run checks every service once per interval until ctx is cancelled.
@@ -149,6 +163,17 @@ func (c *Checker) RunOnce(ctx context.Context) []Result {
 		results = append(results, r)
 	}
 	slog.Info("health check done", "services", len(results), "healthy", len(results)-unhealthy-failed, "unhealthy", unhealthy, "failed", failed)
+	// Only an all-clear: a run with findings or failed checks is not one, and
+	// a run that checked nothing proves nothing.
+	if c.summary != nil && len(results) > 0 && unhealthy == 0 && failed == 0 {
+		names := make([]string, len(results))
+		for i, r := range results {
+			names[i] = r.Service
+		}
+		if err := c.summary.Healthy(ctx, names); err != nil {
+			slog.Error("health check: post summary", "err", err)
+		}
+	}
 	return results
 }
 
