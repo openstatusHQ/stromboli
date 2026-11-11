@@ -177,6 +177,21 @@ func TestRunOnceSeveralChecksAndErrors(t *testing.T) {
 	}
 }
 
+func TestRunOnceNoData(t *testing.T) {
+	// A stopped machine reports no series at all: not healthy.
+	src := &fakeSource{series: map[string][]metrics.Series{
+		"memory_used_percent": {series(map[string]string{"instance": "148e"}, math.NaN())},
+	}}
+	st := &fakeStarter{}
+	r := newChecker(src, st, flySvc("api")).RunOnce(context.Background())[0]
+	if len(r.Findings) != 0 || len(r.Errors) != 1 || !strings.Contains(r.Errors[0], "no metrics in the last 15m0s") {
+		t.Fatalf("result = %+v, want a no-metrics error", r)
+	}
+	if len(st.reqs) != 0 {
+		t.Errorf("started %d investigations for a service without data", len(st.reqs))
+	}
+}
+
 func TestRunOnceStartError(t *testing.T) {
 	src := &fakeSource{series: map[string][]metrics.Series{
 		"disk_used_percent": {series(map[string]string{"instance": "148e"}, 99)},
@@ -210,6 +225,7 @@ func TestRunOnceSummary(t *testing.T) {
 		{"unhealthy", &fakeSource{series: map[string][]metrics.Series{"volume_used_percent": {series(nil, 99)}}}, []*stromboliv1.Service{flySvc("api")}, nil},
 		{"check failed", &fakeSource{series: healthy, fail: "cpu_percent"}, []*stromboliv1.Service{flySvc("api")}, nil},
 		{"nothing checked", &fakeSource{}, []*stromboliv1.Service{{Name: "worker"}}, nil},
+		{"no data", &fakeSource{}, []*stromboliv1.Service{flySvc("api")}, nil},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
