@@ -34,7 +34,7 @@ By default a healthy run only logs a line. To also post `✅ Health check: all N
 STROMBOLI_HEALTHCHECK_SUMMARY=true
 ```
 
-It needs [Slack](set-up-slack.md), and is only posted when every checked service is under its thresholds and no check failed.
+It needs [Slack](set-up-slack.md), and is only posted when every checked service is under its thresholds and no check failed. A service that reported no metrics at all in the last 15 minutes (its machines are stopped, or its selectors match nothing) counts as a failed check, so it blocks the all-clear without starting an investigation.
 
 ## Run a single instance
 

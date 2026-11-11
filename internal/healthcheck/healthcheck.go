@@ -191,6 +191,10 @@ func (c *Checker) checkService(ctx context.Context, svc *stromboliv1.Service) Re
 		return r
 	}
 	end := c.now()
+	// queried counts the checks that ran; hasData is set when any of them
+	// returned a sample. A stopped machine or selectors that match nothing
+	// return no series at all, which is not the same as healthy.
+	queried, hasData := 0, false
 	for _, chk := range Checks {
 		p, ok := metrics.FindPreset(kind, chk.Preset)
 		if !ok || !p.Applies(matchers) {
@@ -202,8 +206,12 @@ func (c *Checker) checkService(ctx context.Context, svc *stromboliv1.Service) Re
 			log.Warn("health check: query failed", "check", chk.Preset, "err", err)
 			continue
 		}
+		queried++
 		for _, s := range series {
 			v, ok := value(s.Samples, chk.Avg)
+			if ok {
+				hasData = true
+			}
 			if !ok || v < chk.Threshold {
 				continue
 			}
@@ -212,6 +220,10 @@ func (c *Checker) checkService(ctx context.Context, svc *stromboliv1.Service) Re
 				Threshold: chk.Threshold, Unit: p.Unit, Hint: chk.Hint,
 			})
 		}
+	}
+	if queried > 0 && !hasData {
+		r.Errors = append(r.Errors, fmt.Sprintf("no metrics in the last %s: the machines are stopped or the selectors match nothing", window))
+		log.Warn("health check: no metrics", "window", window)
 	}
 	// Worst first within each check, checks in the order of Checks.
 	order := func(name string) int {
