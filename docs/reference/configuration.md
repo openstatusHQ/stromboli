@@ -68,7 +68,7 @@ Provider behaviour: Anthropic models (direct or through the gateway's Anthropic 
 | Variable | Default | |
 |---|---|---|
 | `STROMBOLI_HEALTHCHECK_INTERVAL` | empty = off | how often to check Fly metrics against thresholds, at least `5m`. `0` disables |
-| `STROMBOLI_HEALTHCHECK_SUMMARY` | `false` | post an all-clear to Slack after each run where every service is healthy. Needs Slack and health checks |
+| `STROMBOLI_HEALTHCHECK_SUMMARY` | `false` | post an all-clear to Slack after each run where every service is healthy, and a warning listing the services that could not be checked. Needs Slack and health checks |
 
 ## Slack
 

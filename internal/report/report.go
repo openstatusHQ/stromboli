@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"sort"
 	"strings"
 	"time"
 	"unicode"
@@ -121,20 +122,40 @@ func (s *Slack) Started(ctx context.Context, inv db.Investigation) (string, stri
 	return ch, ts, err
 }
 
+// HealthyText is the health check all-clear message.
+const HealthyText = "✅ All services operational"
+
 // Healthy posts the all-clear of a health check run that found every checked
 // service under its thresholds.
-func (s *Slack) Healthy(ctx context.Context, services []string) error {
-	_, _, err := s.client.PostMessageContext(ctx, s.channel, slack.MsgOptionText(HealthyText(services), false))
+func (s *Slack) Healthy(ctx context.Context, _ []string) error {
+	_, _, err := s.client.PostMessageContext(ctx, s.channel, slack.MsgOptionText(HealthyText, false))
 	return err
 }
 
-// HealthyText is the health check all-clear message.
-func HealthyText(services []string) string {
+// Failed posts the services a health check run could not check, with why.
+func (s *Slack) Failed(ctx context.Context, failures map[string]string) error {
+	_, _, err := s.client.PostMessageContext(ctx, s.channel, slack.MsgOptionText(FailedText(failures), false))
+	return err
+}
+
+// FailedText lists the services a health check run could not check, sorted
+// by name, each with its reason.
+func FailedText(failures map[string]string) string {
+	names := make([]string, 0, len(failures))
+	for name := range failures {
+		names = append(names, name)
+	}
+	sort.Strings(names)
 	noun := "services"
-	if len(services) == 1 {
+	if len(names) == 1 {
 		noun = "service"
 	}
-	return fmt.Sprintf("✅ Health check: all %d %s operational (%s)", len(services), noun, shorten(strings.Join(services, ", "), 2000))
+	var b strings.Builder
+	fmt.Fprintf(&b, "⚠️ Health check: could not check %d %s", len(names), noun)
+	for _, name := range names {
+		fmt.Fprintf(&b, "\n• *%s*: %s", name, failures[name])
+	}
+	return clip(b.String())
 }
 
 // Mitigated edits the message to lead with the mitigation while the root-cause
