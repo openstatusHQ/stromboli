@@ -184,11 +184,16 @@ func TestRunOnceNoData(t *testing.T) {
 	}}
 	st := &fakeStarter{}
 	r := newChecker(src, st, flySvc("api")).RunOnce(context.Background())[0]
-	if len(r.Findings) != 0 || len(r.Errors) != 1 || !strings.Contains(r.Errors[0], "no metrics in the last 15m0s") {
+	if !r.NoData || len(r.Findings) != 0 || len(r.Errors) != 1 || !strings.Contains(r.Errors[0], "no metrics in the last 15m0s") {
 		t.Fatalf("result = %+v, want a no-metrics error", r)
 	}
-	if len(st.reqs) != 0 {
-		t.Errorf("started %d investigations for a service without data", len(st.reqs))
+	// It is investigated, so a stopped machine gets a mitigation, under its
+	// own fingerprint so it is deduplicated apart from threshold findings.
+	if len(st.reqs) != 1 || r.InvestigationID == "" {
+		t.Fatalf("started %d investigations, want 1 (result %+v)", len(st.reqs), r)
+	}
+	if req := st.reqs[0]; req.Fingerprint != "healthcheck:api:no_metrics" || req.DedupeWindow != Renotify || !strings.Contains(req.Description, "stopped") {
+		t.Errorf("request = %+v", req)
 	}
 }
 
@@ -206,10 +211,18 @@ func TestRunOnceStartError(t *testing.T) {
 	}
 }
 
-type fakeSummary struct{ calls [][]string }
+type fakeSummary struct {
+	calls    [][]string
+	failures []map[string]string
+}
 
 func (f *fakeSummary) Healthy(_ context.Context, services []string) error {
 	f.calls = append(f.calls, services)
+	return nil
+}
+
+func (f *fakeSummary) Failed(_ context.Context, failures map[string]string) error {
+	f.failures = append(f.failures, failures)
 	return nil
 }
 
@@ -239,6 +252,43 @@ func TestRunOnceSummary(t *testing.T) {
 			}
 			if len(sum.calls) != 1 || strings.Join(sum.calls[0], ",") != strings.Join(tt.want, ",") {
 				t.Errorf("summary calls = %v, want one with %v", sum.calls, tt.want)
+			}
+		})
+	}
+}
+
+func TestRunOnceFailedSummary(t *testing.T) {
+	healthy := map[string][]metrics.Series{"volume_used_percent": {series(nil, 50)}}
+	tests := []struct {
+		name     string
+		src      *fakeSource
+		services []*stromboliv1.Service
+		want     string // substring of the api failure; empty means no post
+	}{
+		{"all healthy", &fakeSource{series: healthy}, []*stromboliv1.Service{flySvc("api")}, ""},
+		{"unhealthy", &fakeSource{series: map[string][]metrics.Series{"volume_used_percent": {series(nil, 99)}}}, []*stromboliv1.Service{flySvc("api")}, ""},
+		{"check failed", &fakeSource{series: healthy, fail: "cpu_percent"}, []*stromboliv1.Service{flySvc("api")}, "cpu_percent"},
+		// Investigated, so not repeated in the warning.
+		{"no data, investigated", &fakeSource{}, []*stromboliv1.Service{flySvc("api")}, ""},
+		// The investigation did not start: nothing else reports it.
+		{"no data, start failed", &fakeSource{}, []*stromboliv1.Service{flySvc("api")}, "no metrics in the last 15m0s"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sum := &fakeSummary{}
+			st := &fakeStarter{}
+			if strings.Contains(tt.name, "start failed") {
+				st.err = errors.New("no LLM is configured")
+			}
+			newChecker(tt.src, st, tt.services...).WithSummary(sum).RunOnce(context.Background())
+			if tt.want == "" {
+				if len(sum.failures) != 0 {
+					t.Errorf("failures posted: %v", sum.failures)
+				}
+				return
+			}
+			if len(sum.failures) != 1 || len(sum.failures[0]) != 1 || !strings.Contains(sum.failures[0]["api"], tt.want) {
+				t.Errorf("failures = %v, want one for api containing %q", sum.failures, tt.want)
 			}
 		})
 	}

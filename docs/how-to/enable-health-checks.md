@@ -26,15 +26,26 @@ Each run reads the last 15 minutes of every service and checks:
 
 An unhealthy service gets one investigation, with source `healthcheck` and the findings in its alert, posted to Slack like any other. While the same checks keep failing, it is not investigated again for 6 hours.
 
-## Post an all-clear to Slack
+A service that reported no metrics at all in the last 15 minutes is investigated too: its machines are stopped, or its selectors match nothing. The investigation checks the machines' state and, if they are stopped and the service should be running, proposes starting them for a human to approve ([machine actions](enable-machine-actions.md)). It is deduplicated apart from threshold breaches, so a service that stays silent is investigated once every 6 hours. An app that scales to zero on purpose will be investigated too; remove its `fly` metrics source from the catalog to skip it.
 
-By default a healthy run only logs a line. To also post `✅ Health check: all N services operational` to Slack:
+## Post a summary to Slack
+
+By default a healthy run only logs a line. To also post `✅ All services operational` to Slack, and a warning listing the services that could not be checked:
 
 ```sh
 STROMBOLI_HEALTHCHECK_SUMMARY=true
 ```
 
-It needs [Slack](set-up-slack.md), and is only posted when every checked service is under its thresholds and no check failed. A service that reported no metrics at all in the last 15 minutes (its machines are stopped, or its selectors match nothing) counts as a failed check, so it blocks the all-clear without starting an investigation.
+It needs [Slack](set-up-slack.md). The all-clear is only posted when every checked service is under its thresholds, reported metrics, and no check failed.
+
+When some services could not be checked and nothing else reports them (a metrics query failed, or a service had no metrics and its investigation could not start, for example without an LLM), the run posts one warning instead, with the reason for each:
+
+```
+⚠️ Health check: could not check 1 service
+• api: cpu_percent: context deadline exceeded
+```
+
+The warning is posted on every run until the service can be checked again, so a short interval means one message per run.
 
 ## Run a single instance
 

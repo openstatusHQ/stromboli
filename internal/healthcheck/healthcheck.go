@@ -84,10 +84,12 @@ type MetricsFunc func(ctx context.Context, name string) (metrics.Source, string,
 // CatalogFunc returns the catalog's services.
 type CatalogFunc func(ctx context.Context) ([]*stromboliv1.Service, error)
 
-// Summarizer is told when a run found every checked service healthy;
-// *report.Slack implements it.
+// Summarizer is told when a run found every checked service healthy, and when
+// some services could not be checked; *report.Slack implements it.
 type Summarizer interface {
 	Healthy(ctx context.Context, services []string) error
+	// Failed gets the reason each service could not be checked, by name.
+	Failed(ctx context.Context, failures map[string]string) error
 }
 
 type Checker struct {
@@ -103,8 +105,9 @@ func New(interval time.Duration, catalog CatalogFunc, m MetricsFunc, s Starter) 
 	return &Checker{interval: interval, catalog: catalog, metrics: m, starter: s, now: time.Now}
 }
 
-// WithSummary posts a summary after each run where every checked service is
-// healthy. Without it, a healthy run is only logged.
+// WithSummary posts an all-clear after each run where every checked service is
+// healthy, and a warning after each run where some could not be checked.
+// Without it, both are only logged.
 func (c *Checker) WithSummary(s Summarizer) *Checker {
 	c.summary = s
 	return c
@@ -132,13 +135,18 @@ type Result struct {
 	Findings []Finding
 	// Errors are the checks that could not run.
 	Errors []string
-	// InvestigationID is set when findings started (or matched) an investigation.
+	// NoData is set when the checks ran but none returned a sample: the
+	// machines are stopped or the selectors match nothing. It is investigated
+	// like findings, and its reason is also in Errors.
+	NoData bool
+	// InvestigationID is set when findings or NoData started (or matched) an
+	// investigation.
 	InvestigationID string
 	Deduplicated    bool
 }
 
 // RunOnce checks every service and starts an investigation per unhealthy
-// service.
+// service, or per service that reported no metrics at all.
 func (c *Checker) RunOnce(ctx context.Context) []Result {
 	services, err := c.catalog(ctx)
 	if err != nil {
@@ -147,17 +155,30 @@ func (c *Checker) RunOnce(ctx context.Context) []Result {
 	}
 	var results []Result
 	unhealthy, failed := 0, 0
+	// failures are the services nothing else reports: their checks could not
+	// run, or they had no data and no investigation started.
+	failures := map[string]string{}
 	for _, svc := range services {
 		if svc.Metrics == nil || svc.Metrics.Source == "" {
 			continue
 		}
 		svcCtx, cancel := context.WithTimeout(ctx, serviceTimeout)
 		r := c.checkService(svcCtx, svc)
-		if len(r.Findings) > 0 {
+		switch {
+		case len(r.Findings) > 0:
 			unhealthy++
 			c.investigate(svcCtx, svc, &r)
-		} else if len(r.Errors) > 0 {
+		case r.NoData:
+			c.investigateNoData(svcCtx, svc, &r)
+			if r.InvestigationID != "" {
+				unhealthy++
+			} else {
+				failed++
+				failures[r.Service] = strings.Join(r.Errors, "; ")
+			}
+		case len(r.Errors) > 0:
 			failed++
+			failures[r.Service] = strings.Join(r.Errors, "; ")
 		}
 		cancel()
 		results = append(results, r)
@@ -172,6 +193,13 @@ func (c *Checker) RunOnce(ctx context.Context) []Result {
 		}
 		if err := c.summary.Healthy(ctx, names); err != nil {
 			slog.Error("health check: post summary", "err", err)
+		}
+	}
+	// Unhealthy services are reported by their investigation; failed ones
+	// would otherwise only be in the logs.
+	if c.summary != nil && len(failures) > 0 {
+		if err := c.summary.Failed(ctx, failures); err != nil {
+			slog.Error("health check: post failures", "err", err)
 		}
 	}
 	return results
@@ -222,6 +250,7 @@ func (c *Checker) checkService(ctx context.Context, svc *stromboliv1.Service) Re
 		}
 	}
 	if queried > 0 && !hasData {
+		r.NoData = true
 		r.Errors = append(r.Errors, fmt.Sprintf("no metrics in the last %s: the machines are stopped or the selectors match nothing", window))
 		log.Warn("health check: no metrics", "window", window)
 	}
@@ -290,8 +319,34 @@ func (c *Checker) investigate(ctx context.Context, svc *stromboliv1.Service, r *
 		At:           c.now(),
 	}
 	log := slog.With("service", svc.Name, "findings", len(r.Findings), "first", r.Findings[0].String())
+	c.start(ctx, req, r, log, strings.Join(lines, "; "))
+}
+
+// investigateNoData starts an investigation for a service whose checks ran
+// but returned no sample, so a stopped machine gets a mitigation (start it)
+// a human can approve. Its fingerprint differs from the findings', so it is
+// deduplicated on its own: one per Renotify while the service stays silent.
+func (c *Checker) investigateNoData(ctx context.Context, svc *stromboliv1.Service, r *Result) {
+	req := agent.StartRequest{
+		Title:    fmt.Sprintf("Health check: no metrics from %s in the last %s", svc.Name, window),
+		Source:   Source,
+		Services: []string{svc.Name},
+		Description: fmt.Sprintf("The scheduled health check got no machine metrics for this service in the last %s, so it could not be checked. "+
+			"No alert has fired yet. Either its machines are stopped, or its metrics selectors match nothing. "+
+			"Check the machines' state: if they are stopped and the service should be running, propose starting them; "+
+			"if the selectors match nothing, say so; if the app scales to zero on purpose, say no action is needed.", window),
+		Alert:        map[string]any{"no_metrics": true, "window_minutes": int(window.Minutes())},
+		Fingerprint:  Source + ":" + svc.Name + ":no_metrics",
+		DedupeWindow: Renotify,
+		At:           c.now(),
+	}
+	c.start(ctx, req, r, slog.With("service", svc.Name, "no_metrics", true), "no metrics")
+}
+
+// start starts (or matches) the investigation for r, or logs why it did not.
+func (c *Checker) start(ctx context.Context, req agent.StartRequest, r *Result, log *slog.Logger, details string) {
 	if c.starter == nil {
-		log.Warn("health check: unhealthy (no LLM is configured, so it is not investigated)", "details", strings.Join(lines, "; "))
+		log.Warn("health check: unhealthy (no LLM is configured, so it is not investigated)", "details", details)
 		return
 	}
 	inv, reused, err := c.starter.Start(ctx, req)
