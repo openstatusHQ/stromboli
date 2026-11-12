@@ -11,7 +11,7 @@ Create one with `stromboli connector add <name> <kind> key=value...` or `Connect
 | Kind | Role | Keys | Through |
 |---|---|---|---|
 | `loki` | logs | **`url`**, `tenant_id`, `username`, `password` 🔒, `bearer_token` 🔒 | Loki HTTP API |
-| `axiom` | logs | **`token`** 🔒, `url`, `org_id`, `message_field` | Axiom REST API |
+| `axiom` | logs | `token` 🔒, `url`, `org_id`, `message_field`; without `token`: `mcp_url`, `client_metadata_url`, logs in with OAuth | Axiom REST API with a token; Axiom's remote MCP server without |
 | `cloudwatch` | logs | `region`, `access_key_id`, `secret_access_key` 🔒, `session_token` 🔒, `endpoint`, `log_group_prefix`, `service_field` | AWS SDK |
 | `gcp_logging` | logs | **`project`**, `credentials_json` 🔒 | Google's remote MCP server `logging.googleapis.com/mcp` |
 | `prometheus` | metrics | **`url`**, `tenant_id`, `username`, `password` 🔒, `bearer_token` 🔒, `service_label` | Prometheus HTTP API |
@@ -49,7 +49,12 @@ JSON log lines (Fly's log shipper, Vector, most structured loggers) are reduced 
 
 ### axiom
 
-`url` defaults to Axiom's API (`https://api.axiom.co`). Queries go to the edge deployment that stores each dataset (for example `https://eu-central-1.aws.edge.axiom.co`), as listed by the API, so datasets in any region work without changing `url`. `org_id` is needed with a personal token.
+Two modes:
+
+- **With `token`** (an API token, or a personal token with `org_id`): the REST API.
+- **Without `token`**: Axiom's MCP server, logging in with OAuth in a browser (see [MCP connections](#mcp-connections)). `mcp_url` defaults to `https://mcp.axiom.co/mcp`; set `https://mcp.eu.axiom.co/mcp` to keep query results in the EU. The login can reach every organization of your Axiom user: `org_id` picks one, else the login's default is used. stromboli calls `listDatasets` and `queryDataset`; Axiom does not mark `queryDataset` read-only because it can save a result snapshot (`saveResults`), which stromboli never asks for, so it is allowed by name. The same queries, field detection and discovery run in both modes.
+
+In REST mode, `url` defaults to Axiom's API (`https://api.axiom.co`). Queries go to the edge deployment that stores each dataset (for example `https://eu-central-1.aws.edge.axiom.co`), as listed by the API, so datasets in any region work without changing `url`. `org_id` is needed with a personal token.
 
 ### cloudwatch
 
@@ -117,12 +122,12 @@ Holds a token that can act on machines, e.g. `fly tokens create deploy -a <app>`
 
 ## MCP connections
 
-For connectors that go through an MCP server (`gcp_logging`, `gcp_monitoring`, `github` with a token, `vercel`):
+For connectors that go through an MCP server (`gcp_logging`, `gcp_monitoring`, `github` with a token, `vercel`, `axiom` without a token):
 
 - each connector may call only an allow-listed set of tools; any other tool the server offers is refused;
-- for servers that annotate tools (Google Cloud, GitHub), connecting fails unless every allowed tool is marked `readOnlyHint`;
+- for servers that annotate tools (Google Cloud, GitHub, Vercel, Axiom), connecting fails unless every allowed tool is marked `readOnlyHint`, except a tool named as used read-only (Axiom's `queryDataset`, without `saveResults`);
 - sessions are reused per connector and closed on shutdown.
 
-`vercel` logs in with OAuth: `connector add` opens a browser once, and the server keeps the connector working with the refresh token, saving it when it rotates. When the login expires or is revoked, run `stromboli connector login <name>`. See [ADR 0022](../adr/0022-oauth-for-remote-mcp-servers.md).
+`vercel`, and `axiom` without a token, log in with OAuth: `connector add` opens a browser once, and the server keeps the connector working with the refresh token, saving it when it rotates. When the login expires or is revoked, run `stromboli connector login <name>`. See [ADR 0022](../adr/0022-oauth-for-remote-mcp-servers.md).
 
 See [Data access](../explanation/data-access.md) for why.

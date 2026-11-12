@@ -43,7 +43,8 @@ There are two ways to reach a provider: the provider's own MCP server, or its AP
 | Fly.io | Machines API and managed Prometheus | Fly's MCP is `flyctl mcp server`, a local process that serves every flyctl command (destroy, exec, secrets) and marks none read-only |
 | CloudWatch | AWS SDK | AWS's MCP server is a local Python process |
 | Loki, Prometheus | their HTTP APIs | no hosted MCP server; Grafana's needs a Grafana instance in front |
-| Axiom | REST API | its hosted MCP server's tools have not been checked yet |
+| Axiom | REST API with a token; its remote MCP server, logging in with OAuth, without one | an API token can be limited to some datasets, an OAuth login has the user's access: both are offered. `queryDataset` is not marked read-only (it can save a result snapshot, which stromboli never asks for), so it is allowed by name |
+| Vercel | its remote MCP server, logging in with OAuth | hosted by Vercel, tools annotated read-only; it accepts no access token |
 
 Two principles sit behind the table:
 

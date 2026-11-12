@@ -40,7 +40,11 @@ func kindsHelp() string {
 			}
 		}
 		if _, ok := connector.OAuthServer(kind, nil); ok {
-			keys = append(keys, "then logs in with OAuth in a browser")
+			if k := connector.OAuthUnless(kind); k != "" {
+				keys = append(keys, "without "+k+": logs in with OAuth in a browser")
+			} else {
+				keys = append(keys, "then logs in with OAuth in a browser")
+			}
 		}
 		fmt.Fprintf(&b, "  %-11s %s\n", kind, strings.Join(keys, ", "))
 	}

@@ -119,3 +119,35 @@ func TestOAuthConnectorRotation(t *testing.T) {
 		t.Error("the refresh token is stored in the public config")
 	}
 }
+
+func TestValidateOAuthModes(t *testing.T) {
+	grant := oauth.Grant{ClientID: "cid", TokenURL: "https://auth/token", RefreshToken: "rt", AuthorizedAt: "t"}.Config()
+	withGrant := func(m map[string]string) map[string]string {
+		for k, v := range grant {
+			m[k] = v
+		}
+		return m
+	}
+	for _, c := range []struct {
+		kind string
+		cfg  map[string]string
+		ok   bool
+	}{
+		{"axiom", map[string]string{"token": "xaat"}, true},                                     // REST
+		{"axiom", withGrant(map[string]string{"mcp_url": "https://mcp.eu.axiom.co/mcp"}), true}, // MCP
+		{"axiom", map[string]string{}, false},                                                   // neither
+		{"axiom", withGrant(map[string]string{"token": "xaat"}), false},                         // OAuth keys without OAuth
+		{"vercel", withGrant(map[string]string{"team_id": "acme"}), true},
+		{"vercel", map[string]string{"team_id": "acme"}, false},
+	} {
+		if err := Validate(c.kind, c.cfg); (err == nil) != c.ok {
+			t.Errorf("Validate(%s, %v) = %v, want ok=%v", c.kind, c.cfg, err, c.ok)
+		}
+	}
+	if !IsSecret("axiom", oauth.KeyRefreshToken) || IsSecret("axiom", oauth.KeyClientID) || !IsSecret("vercel", oauth.KeyRefreshToken) {
+		t.Error("OAuth secrets are not secret")
+	}
+	if _, ok := OAuthServer("axiom", map[string]string{"token": "x"}); ok {
+		t.Error("axiom with a token uses OAuth")
+	}
+}
