@@ -18,6 +18,7 @@ Create one with `stromboli connector add <name> <kind> key=value...` or `Connect
 | `fly` | metrics, Fly machine list | **`org`**, **`token`** 🔒, `url` | Fly managed Prometheus, Machines API |
 | `gcp_monitoring` | metrics | **`project`**, `credentials_json` 🔒 | Google's remote MCP server `monitoring.googleapis.com/mcp` |
 | `github` | deploys and commits | `token` 🔒, `base_url`, `mcp_url` | GitHub's remote MCP server; REST API for deployments and without a token |
+| `vercel` | logs, deploys | **`team_id`**, `mcp_url`, `client_metadata_url`; logs in with OAuth | Vercel's remote MCP server |
 | `fly_machines` | machine actions | **`org`**, **`token`** 🔒, `url` | Machines API |
 
 Common keys:
@@ -36,6 +37,7 @@ Common keys:
 | `axiom` | start of an APL query: `['logs']` or `['logs'] \| where ['service.name'] == "api"` | the message field (`message_field`, else detected: `message`, `msg`, `body`, `log`…) | one service per `service.name`, `service` or `app` value in each log dataset, or one per dataset |
 | `cloudwatch` | log group(s), optionally followed by Insights commands: `/ecs/api` or `/ecs/prod, /ecs/worker \| filter service = "api"` | `@message` | one service per log group, named after its last path segment; with `service_field`, one per value of that field (groups limited to `log_group_prefix`) |
 | `gcp_logging` | Logging query language filter: `resource.type="cloud_run_revision" AND resource.labels.service_name="api"` | `textPayload` and `jsonPayload.message`, plus `severity>=ERROR` and `httpRequest.status>=500` | one service per Cloud Run service or job, function, Cloud Scheduler job, Cloud Tasks queue, Pub/Sub subscription or topic seen in the last hour |
+| `vercel` | a project name or ID, optionally followed by `environment=production` or `environment=preview`: `web environment=production` | the message, prefixed with its level (`level=error …`). Counts with a filter stop at 500 lines | one service per project of the team |
 
 Filters are case-insensitive RE2 regular expressions on the message. The default error filter matches `error`, `err`, `fatal`, `panic`, `exception`, `level=error|fatal|crit`, `"level": "error|fatal|critical"`, `status=5xx`, `timeout` and `timed out`.
 
@@ -95,6 +97,18 @@ With a token, stromboli uses GitHub's remote MCP server with the `repos` and `ac
 
 What a deploy is depends on the service's [`deploys`](catalog.md#deploys): completed runs of `workflow`, deployments to `environment`, or commits on `branch`.
 
+### vercel
+
+| Key | |
+|---|---|
+| `team_id` | the team's slug (as in `vercel.com/<slug>`) or ID (`team_…`). `connector test` checks that the login can read its projects |
+| `mcp_url` | MCP server (default `https://mcp.vercel.com/`) |
+| `client_metadata_url` | stromboli's client ID metadata document, if you host one. Without it, stromboli registers itself with Vercel at login |
+
+There is no token to pass: `connector add` logs in to Vercel in a browser. The login has the access of your Vercel user; stromboli may only call `list_projects`, `list_deployments` and `get_runtime_logs`, all marked read-only by Vercel.
+
+Logs are the project's runtime logs (`get_runtime_logs`): 100 lines per call, as far back as your Vercel plan keeps them. Deploys are the deployments of the service's `deploys.project` to `deploys.environment` (`production` by default, or `preview`), optionally only of `deploys.branch`. The commit SHA, message and author come from the Git metadata Vercel records (GitHub, GitLab or Bitbucket). Vercel logs are read through a log store: see [Connect Vercel](../how-to/connect-vercel.md).
+
 ## Action connectors
 
 ### fly_machines
@@ -103,10 +117,12 @@ Holds a token that can act on machines, e.g. `fly tokens create deploy -a <app>`
 
 ## MCP connections
 
-For connectors that go through an MCP server (`gcp_logging`, `gcp_monitoring`, `github` with a token):
+For connectors that go through an MCP server (`gcp_logging`, `gcp_monitoring`, `github` with a token, `vercel`):
 
 - each connector may call only an allow-listed set of tools; any other tool the server offers is refused;
 - for servers that annotate tools (Google Cloud, GitHub), connecting fails unless every allowed tool is marked `readOnlyHint`;
 - sessions are reused per connector and closed on shutdown.
+
+`vercel` logs in with OAuth: `connector add` opens a browser once, and the server keeps the connector working with the refresh token, saving it when it rotates. When the login expires or is revoked, run `stromboli connector login <name>`. See [ADR 0022](../adr/0022-oauth-for-remote-mcp-servers.md).
 
 See [Data access](../explanation/data-access.md) for why.

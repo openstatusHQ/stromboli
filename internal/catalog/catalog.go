@@ -14,6 +14,7 @@ import (
 	"sigs.k8s.io/yaml"
 
 	stromboliv1 "github.com/openstatushq/stromboli/gen/stromboli/v1"
+	"github.com/openstatushq/stromboli/internal/connector/deploys"
 	"github.com/openstatushq/stromboli/internal/connector/logs"
 	"github.com/openstatushq/stromboli/internal/connector/metrics"
 )
@@ -146,13 +147,19 @@ func Validate(services []*stromboliv1.Service, opts ValidateOptions) []*strombol
 			}
 		}
 		if d := s.Deploys; d != nil && d.Source != "" {
-			if d.Repo == "" {
+			kind, known := opts.Connectors[d.Source]
+			switch {
+			case kind == "vercel":
+				if d.Project == "" {
+					add(s.Name, "deploys.project", "required when deploys.source is a vercel connector", false)
+				}
+			case d.Repo == "" && (kind == "github" || d.Project == ""):
 				add(s.Name, "deploys.repo", "required when deploys.source is set", false)
 			}
 			if opts.Connectors != nil {
-				if kind, ok := opts.Connectors[d.Source]; !ok {
+				if !known {
 					add(s.Name, "deploys.source", fmt.Sprintf("unknown connector %q", d.Source), true)
-				} else if kind != "github" {
+				} else if !slices.Contains(deploys.Kinds, kind) {
 					add(s.Name, "deploys.source", fmt.Sprintf("connector %q is a %s connector, not a deploy connector", d.Source, kind), false)
 				}
 			}

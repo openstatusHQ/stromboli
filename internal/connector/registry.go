@@ -5,7 +5,9 @@ package connector
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"maps"
 	"slices"
 	"strings"
 
@@ -15,6 +17,8 @@ import (
 	"github.com/openstatushq/stromboli/internal/connector/logs"
 	"github.com/openstatushq/stromboli/internal/connector/mcpconn"
 	"github.com/openstatushq/stromboli/internal/connector/metrics"
+	"github.com/openstatushq/stromboli/internal/connector/oauth"
+	"github.com/openstatushq/stromboli/internal/connector/vercel"
 	"github.com/openstatushq/stromboli/internal/secrets"
 	"github.com/openstatushq/stromboli/internal/store"
 	"github.com/openstatushq/stromboli/internal/store/db"
@@ -24,6 +28,9 @@ type kindSpec struct {
 	required []string
 	optional []string
 	secret   []string
+	// oauth is the MCP server of a connector that logs in with OAuth
+	// (mcp_url overrides it). The CLI fills the oauth.Keys.
+	oauth string
 }
 
 // Kinds lists the supported connector kinds and their config keys.
@@ -57,6 +64,13 @@ var Kinds = map[string]kindSpec{
 	"github": {
 		optional: []string{"token", "base_url", "mcp_url"},
 		secret:   []string{"token"},
+	},
+	// vercel goes through Vercel's MCP server, which requires OAuth.
+	"vercel": {
+		required: []string{"team_id", oauth.KeyClientID, oauth.KeyTokenURL, oauth.KeyRefreshToken, oauth.KeyAuthorizedAt},
+		optional: []string{"mcp_url", "client_metadata_url", oauth.KeyClientSecret, oauth.KeyAuthStyle},
+		secret:   oauth.SecretKeys,
+		oauth:    vercel.MCPURL,
 	},
 	// fly_machines holds a token that can act on machines (fly tokens create
 	// deploy), kept apart from the read-only fly metrics connector.
@@ -94,6 +108,23 @@ func KindNames() []string {
 func Keys(kind string) (required, optional []string) {
 	spec := Kinds[kind]
 	return slices.Clone(spec.required), slices.Clone(spec.optional)
+}
+
+// OAuthServer returns the MCP server a connector logs in to, if it uses OAuth.
+func OAuthServer(kind string, config map[string]string) (string, bool) {
+	spec := Kinds[kind]
+	if spec.oauth == "" {
+		return "", false
+	}
+	if u := config["mcp_url"]; u != "" {
+		return u, true
+	}
+	return spec.oauth, true
+}
+
+// IsOAuthKey reports whether key is filled by the OAuth login, not by the user.
+func IsOAuthKey(kind, key string) bool {
+	return Kinds[kind].oauth != "" && slices.Contains(oauth.Keys, key)
 }
 
 // IsSecret reports whether key holds a secret for the given kind.
@@ -166,6 +197,77 @@ func (r *Registry) gcpMCP(name string, cfg map[string]string, server gcp.Server,
 	})
 }
 
+// oauthMCP returns the pooled MCP client of an OAuth connector. Access tokens
+// come from its refresh token; a rotated refresh token is saved back.
+func (r *Registry) oauthMCP(name string, cfg map[string]string, build func(token func(context.Context) (string, error)) mcpconn.Config) (*mcpconn.Client, error) {
+	g, err := oauth.GrantFrom(cfg)
+	if err != nil {
+		return nil, loginHint(name, err)
+	}
+	// The refresh token rotates and is left out, so a refresh keeps the
+	// session; authorized_at changes with each login, which replaces it.
+	fp := maps.Clone(cfg)
+	delete(fp, oauth.KeyRefreshToken)
+	return r.mcp.Get(name, fp, func() (mcpconn.Config, error) {
+		src := oauth.NewSource(g, func(ctx context.Context, g oauth.Grant) error { return r.saveGrant(ctx, name, g) })
+		return build(func(ctx context.Context) (string, error) {
+			tok, err := src.Token(ctx)
+			return tok, loginHint(name, err)
+		}), nil
+	})
+}
+
+// vercelMCP returns the pooled MCP client of a vercel connector, shared by
+// its deploy and log sources.
+func (r *Registry) vercelMCP(name string, cfg map[string]string) (*mcpconn.Client, error) {
+	return r.oauthMCP(name, cfg, func(token func(context.Context) (string, error)) mcpconn.Config {
+		return vercel.MCP(cfg["mcp_url"], token)
+	})
+}
+
+func loginHint(name string, err error) error {
+	if errors.Is(err, oauth.ErrLoginRequired) {
+		return fmt.Errorf("%w: run `stromboli connector login %s`", err, name)
+	}
+	return err
+}
+
+// saveGrant stores a rotated refresh token, unless the connector was logged
+// in again or removed meanwhile.
+func (r *Registry) saveGrant(ctx context.Context, name string, g oauth.Grant) error {
+	c, err := r.store.GetConnector(ctx, name)
+	if err != nil {
+		return err
+	}
+	sec := map[string]string{}
+	if len(c.Secrets) > 0 {
+		raw, err := r.box.Open(c.Secrets)
+		if err != nil {
+			return err
+		}
+		if err := json.Unmarshal(raw, &sec); err != nil {
+			return err
+		}
+	}
+	sec[oauth.KeyRefreshToken] = g.RefreshToken
+	raw, err := json.Marshal(sec)
+	if err != nil {
+		return err
+	}
+	sealed, err := r.box.Seal(raw)
+	if err != nil {
+		return err
+	}
+	n, err := r.store.UpdateConnectorSecrets(ctx, db.UpdateConnectorSecretsParams{Name: name, Secrets: sealed, AuthorizedAt: g.AuthorizedAt})
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return fmt.Errorf("connector %q was logged in again or removed", name)
+	}
+	return nil
+}
+
 // Config returns a connector's full config, secrets included.
 func (r *Registry) Config(ctx context.Context, name string) (db.Connector, map[string]string, error) {
 	c, err := r.store.GetConnector(ctx, name)
@@ -223,6 +325,12 @@ func (r *Registry) Logs(ctx context.Context, name string) (logs.Source, error) {
 			return nil, err
 		}
 		return logs.NewGCPLogging(cfg["project"], c), nil
+	case "vercel":
+		m, err := r.vercelMCP(name, cfg)
+		if err != nil {
+			return nil, err
+		}
+		return &logs.Vercel{TeamID: cfg["team_id"], MCP: m}, nil
 	default:
 		return nil, fmt.Errorf("connector %q (%s) is not a log source", name, c.Kind)
 	}
@@ -283,6 +391,25 @@ func (r *Registry) GitHub(ctx context.Context, name string) (*deploys.GitHub, er
 	return deploys.NewGitHub(gc), nil
 }
 
+// Deploys returns the deploy source named name.
+func (r *Registry) Deploys(ctx context.Context, name string) (deploys.Source, error) {
+	c, cfg, err := r.Config(ctx, name)
+	if err != nil {
+		return nil, err
+	}
+	switch c.Kind {
+	case "github":
+		return r.GitHub(ctx, name)
+	case "vercel":
+		m, err := r.vercelMCP(name, cfg)
+		if err != nil {
+			return nil, err
+		}
+		return &deploys.Vercel{TeamID: cfg["team_id"], MCP: m}, nil
+	}
+	return nil, fmt.Errorf("connector %q (%s) is not a deploy connector", name, c.Kind)
+}
+
 // FlyMachines returns a Machines API client from a fly_machines connector,
 // or from a fly metrics connector's token (enough to list machines).
 func (r *Registry) FlyMachines(ctx context.Context, name string) (*fly.Machines, string, error) {
@@ -330,12 +457,12 @@ func (r *Registry) Check(ctx context.Context, name string) error {
 			return err
 		}
 		return m.Check(ctx)
-	case c.Kind == "github":
-		gh, err := r.GitHub(ctx, name)
+	case slices.Contains(deploys.Kinds, c.Kind):
+		src, err := r.Deploys(ctx, name)
 		if err != nil {
 			return err
 		}
-		return gh.Check(ctx)
+		return src.Check(ctx)
 	}
 	return fmt.Errorf("unknown connector kind %q", c.Kind)
 }

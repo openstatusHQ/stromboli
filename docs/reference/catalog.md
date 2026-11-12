@@ -70,11 +70,12 @@ The catalog is a list of services stored in stromboli's database. Its import and
 
 | Field | |
 |---|---|
-| `source` | name of a `github` connector |
-| `repo` | `owner/name`. Required when `source` is set |
-| `workflow` | workflow file name: deploys are its completed runs |
-| `environment` | GitHub deployment environment: deploys are its deployments |
-| `branch` | branch for the commit fallback (neither `workflow` nor `environment`). Default: the repository's default branch |
+| `source` | name of a `github` or `vercel` connector |
+| `repo` | `owner/name`. Required for `github` |
+| `workflow` | `github`: workflow file name: deploys are its completed runs |
+| `environment` | `github`: deployment environment: deploys are its deployments. `vercel`: deployment target, `production` (default) or `preview` |
+| `branch` | `github`: branch for the commit fallback (neither `workflow` nor `environment`). Default: the repository's default branch. `vercel`: only deploys of this branch |
+| `project` | `vercel`: project name or ID. Required for `vercel` |
 
 ### fly
 
@@ -105,9 +106,10 @@ Validation runs on import (`--dry-run` included), on `UpsertService` and with `c
 | `metrics.selectors` | empty while `metrics.source` is set | error |
 | `metrics.source` | unknown connector | warning |
 | `metrics.source` | connector is not a metrics connector | error |
-| `deploys.repo` | empty while `deploys.source` is set | error |
+| `deploys.repo` | empty while `deploys.source` is a `github` connector | error |
+| `deploys.project` | empty while `deploys.source` is a `vercel` connector | error |
 | `deploys.source` | unknown connector | warning |
-| `deploys.source` | connector is not `github` | error |
+| `deploys.source` | connector is not `github` or `vercel` | error |
 | `fly.allow` | unknown action | error |
 | `fly.actions` | unknown connector | warning |
 | `fly.actions` | connector is not `fly_machines` | error |

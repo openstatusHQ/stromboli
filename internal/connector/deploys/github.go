@@ -1,7 +1,7 @@
 // Package deploys lists recent changes to a service: deploy workflow runs,
-// GitHub deployments, or commits as a fallback.
+// GitHub deployments, or commits as a fallback; or Vercel deployments.
 //
-// With a token, it goes through GitHub's remote MCP server (read-only
+// With a token, GitHub goes through GitHub's remote MCP server (read-only
 // toolsets repos and actions). Deployments have no MCP tool and use the REST
 // API; without a token (public repositories only) everything does, since the
 // MCP server requires authentication.
@@ -26,6 +26,18 @@ type Target struct {
 	Workflow    string
 	Environment string
 	Branch      string
+	Project     string // Vercel project ID or name
+}
+
+// Kinds lists the connector kinds that are deploy sources.
+var Kinds = []string{"github", "vercel"}
+
+// Source lists a service's recent deploys.
+type Source interface {
+	// Recent lists changes to the target since the given time, newest first.
+	Recent(ctx context.Context, t Target, since time.Time) ([]Deploy, error)
+	// Check verifies connectivity and credentials.
+	Check(ctx context.Context) error
 }
 
 type Deploy struct {

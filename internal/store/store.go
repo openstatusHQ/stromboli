@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/pressly/goose/v3"
+	"github.com/pressly/goose/v3/lock"
 
 	"github.com/openstatushq/stromboli/internal/store/db"
 )
@@ -44,7 +45,13 @@ func (s *Store) Migrate(ctx context.Context) error {
 	sqlDB := stdlib.OpenDBFromPool(s.Pool)
 	defer sqlDB.Close()
 
-	provider, err := goose.NewProvider(goose.DialectPostgres, sqlDB, mustSub(migrations, "migrations"))
+	// An advisory lock serializes concurrent migrations (several processes
+	// starting at once, or test packages sharing a database).
+	locker, err := lock.NewPostgresSessionLocker()
+	if err != nil {
+		return fmt.Errorf("init migrations: %w", err)
+	}
+	provider, err := goose.NewProvider(goose.DialectPostgres, sqlDB, mustSub(migrations, "migrations"), goose.WithSessionLocker(locker))
 	if err != nil {
 		return fmt.Errorf("init migrations: %w", err)
 	}

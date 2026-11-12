@@ -82,7 +82,17 @@ Values are trimmed. An empty secret is an error, as is a key given twice.
 |---|---|
 | `--replace` | overwrite an existing connector with the same name. Without it, an existing name fails with a hint |
 
+For a kind that logs in with OAuth (`vercel`), opens the provider's consent page in a browser first and waits for its redirect to `127.0.0.1`. When the browser runs on another machine, paste the address it was redirected to. Needs a terminal.
+
 After a log or metrics connector is saved, suggests `stromboli catalog discover <name>`.
+
+#### connector login
+
+```text
+stromboli connector login <name>
+```
+
+Logs an OAuth connector in again, for example after `the OAuth login expired or was revoked`. Keeps its other settings, saves the new login, then tests the connector.
 
 #### connector list
 

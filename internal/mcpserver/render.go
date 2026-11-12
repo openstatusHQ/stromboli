@@ -71,6 +71,11 @@ func serviceMarkdown(r *stromboliv1.GetServiceResponse) string {
 	if d := s.Deploys; d != nil && d.Source != "" {
 		v := d.Source + " " + d.Repo
 		switch {
+		case d.Project != "":
+			v = d.Source + " project " + d.Project
+			if d.Environment != "" {
+				v += " (" + d.Environment + ")"
+			}
 		case d.Workflow != "":
 			v += " (workflow " + d.Workflow + ")"
 		case d.Environment != "":

@@ -19,6 +19,10 @@ import (
 // client sees as a tool error.
 type Handler func(args map[string]any) (any, error)
 
+// Text is a result sent as is, as text content: servers that answer in
+// Markdown.
+type Text string
+
 // Server records the calls it receives.
 type Server struct {
 	URL string
@@ -67,6 +71,9 @@ func New(t *testing.T, tools map[string]Handler, textOnly bool, writable ...stri
 			out, err := h(args)
 			if err != nil {
 				return &mcp.CallToolResult{IsError: true, Content: []mcp.Content{&mcp.TextContent{Text: err.Error()}}}, nil
+			}
+			if t, ok := out.(Text); ok {
+				return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: string(t)}}}, nil
 			}
 			b, _ := json.Marshal(out)
 			res := &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: string(b)}}}

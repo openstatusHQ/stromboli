@@ -18,9 +18,9 @@ import (
 
 func (a *app) connectorCmd() *cobra.Command {
 	cmd := group("connector", "Manage connectors to logs, metrics, deploys and machines",
-		"Connectors give stromboli read access to your logs (Loki, Axiom, CloudWatch),\nmetrics (Prometheus, Fly.io), deploys (GitHub) and Fly.io machines (fly_machines). Secrets are encrypted on the server and never printed back.")
+		"Connectors give stromboli read access to your logs (Loki, Axiom, CloudWatch),\nmetrics (Prometheus, Fly.io), deploys (GitHub, Vercel) and Fly.io machines (fly_machines). Secrets are encrypted on the server and never printed back.")
 	cmd.Aliases = []string{"connectors"}
-	cmd.AddCommand(a.connectorAddCmd(), a.connectorListCmd(), a.connectorTestCmd(), a.connectorRmCmd())
+	cmd.AddCommand(a.connectorAddCmd(), a.connectorLoginCmd(), a.connectorListCmd(), a.connectorTestCmd(), a.connectorRmCmd())
 	return cmd
 }
 
@@ -30,10 +30,17 @@ func kindsHelp() string {
 		req, opt := connector.Keys(kind)
 		var keys []string
 		for _, k := range req {
-			keys = append(keys, k+keyMark(kind, k)+" (required)")
+			if !connector.IsOAuthKey(kind, k) {
+				keys = append(keys, k+keyMark(kind, k)+" (required)")
+			}
 		}
 		for _, k := range opt {
-			keys = append(keys, k+keyMark(kind, k))
+			if !connector.IsOAuthKey(kind, k) {
+				keys = append(keys, k+keyMark(kind, k))
+			}
+		}
+		if _, ok := connector.OAuthServer(kind, nil); ok {
+			keys = append(keys, "then logs in with OAuth in a browser")
 		}
 		fmt.Fprintf(&b, "  %-11s %s\n", kind, strings.Join(keys, ", "))
 	}
@@ -64,6 +71,7 @@ history and the process list. Instead pass:
 		Example: `  stromboli connector add loki loki url=http://loki:3100
   stromboli connector add github github token          # prompts for the token
   stromboli connector add axiom axiom token=@axiom.token
+  stromboli connector add vercel vercel team_id=my-team   # logs in in a browser
   echo "$GITHUB_TOKEN" | stromboli connector add github github token=-
   stromboli connector add cw cloudwatch region=eu-west-1 --replace`,
 		Args: args(2, -1, "<name> and <kind>"),
@@ -75,6 +83,11 @@ history and the process list. Instead pass:
 			cfg, err := a.readConfig(cmd.Context(), kind, pos[2:])
 			if err != nil {
 				return usageError{cmd: cmd.CommandPath(), err: err}
+			}
+			if server, ok := connector.OAuthServer(kind, cfg); ok {
+				if err := a.oauthLogin(cmd.Context(), kind, server, cfg); err != nil {
+					return err
+				}
 			}
 			c, err := a.api()
 			if err != nil {
@@ -93,7 +106,7 @@ history and the process list. Instead pass:
 				return err
 			}
 			if !a.json {
-				if slices.Contains([]string{"loki", "axiom", "cloudwatch", "gcp_logging", "prometheus", "fly", "gcp_monitoring"}, kind) {
+				if slices.Contains([]string{"loki", "axiom", "cloudwatch", "gcp_logging", "vercel", "prometheus", "fly", "gcp_monitoring"}, kind) {
 					a.info("Next: propose catalog entries from it with `stromboli catalog discover %s > services.yaml`", name)
 				}
 			}

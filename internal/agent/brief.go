@@ -211,12 +211,13 @@ func (e *Engine) briefDeploys(ctx context.Context, graph *catalog.Graph, svc *st
 }
 
 func (e *Engine) recentDeploys(ctx context.Context, s *stromboliv1.Service, since time.Time) ([]deploys.Deploy, error) {
-	gh, err := e.connectors.GitHub(ctx, s.Deploys.Source)
+	src, err := e.connectors.Deploys(ctx, s.Deploys.Source)
 	if err != nil {
 		return nil, err
 	}
-	ds, err := gh.Recent(ctx, deploys.Target{
+	ds, err := src.Recent(ctx, deploys.Target{
 		Repo: s.Deploys.Repo, Workflow: s.Deploys.Workflow, Environment: s.Deploys.Environment, Branch: s.Deploys.Branch,
+		Project: s.Deploys.Project,
 	}, since)
 	if err != nil {
 		return nil, err

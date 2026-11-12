@@ -13,6 +13,7 @@ How-to guides are recipes for a specific job. They assume you know the basics (i
 - [Connect a log store](connect-logs.md): Loki, Axiom, CloudWatch, Google Cloud Logging
 - [Connect metrics](connect-metrics.md): Prometheus-compatible, Fly.io, Google Cloud Monitoring
 - [Connect deploys and commits from GitHub](connect-github.md)
+- [Connect Vercel](connect-vercel.md): logs and deploys, through Vercel's MCP server
 - [Ship Fly.io logs to a log store](ship-fly-logs.md)
 
 ## Describe your system
