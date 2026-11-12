@@ -105,38 +105,6 @@ func errorLines(start time.Time) []string {
 	return out
 }
 
-// fakeAxiom serves the same incident as fakeLoki through the APL API.
-func fakeAxiom(t *testing.T) *httptest.Server {
-	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var body struct{ APL, StartTime string }
-		if r.URL.Path != "/v1/datasets/_apl" || json.NewDecoder(r.Body).Decode(&body) != nil {
-			http.NotFound(w, r)
-			return
-		}
-		start, _ := time.Parse(time.RFC3339Nano, body.StartTime)
-		now := time.Now().UTC()
-		table := func(fields string, columns ...any) {
-			b, _ := json.Marshal(columns)
-			fmt.Fprintf(w, `{"tables":[{"fields":%s,"columns":%s}]}`, fields, b)
-		}
-		switch {
-		case strings.HasSuffix(body.APL, "| take 1"):
-			table(`[{"name":"_time"},{"name":"message"}]`, []string{now.Format(time.RFC3339)}, []string{"x"})
-		case strings.Contains(body.APL, "by t = bin(_time"):
-			table(`[{"name":"t"},{"name":"n"}]`, []string{now.Add(-2 * time.Minute).Format(time.RFC3339)}, []int{5})
-		case strings.Contains(body.APL, "summarize n = count()"):
-			table(`[{"name":"n"}]`, []int{len(errorLines(start))})
-		default:
-			lines := errorLines(start)
-			times := make([]string, len(lines))
-			for i := range lines {
-				times[i] = now.Add(-time.Duration(i) * time.Minute).Format(time.RFC3339Nano)
-			}
-			table(`[{"name":"_time"},{"name":"message"}]`, times, lines)
-		}
-	}))
-}
-
 // fakeCloudWatch serves the same incident through Logs Insights.
 func fakeCloudWatch(t *testing.T) *httptest.Server {
 	var mu sync.Mutex
@@ -231,8 +199,6 @@ func TestInvestigationEndToEnd(t *testing.T) {
 
 	loki := fakeLoki(t)
 	defer loki.Close()
-	axiom := fakeAxiom(t)
-	defer axiom.Close()
 	cloudwatch := fakeCloudWatch(t)
 	defer cloudwatch.Close()
 	fly := fakeFlyMetrics(t)
@@ -249,7 +215,6 @@ func TestInvestigationEndToEnd(t *testing.T) {
 	// The same investigation must work whatever the service's log backend is.
 	for _, b := range []logBackend{
 		{"loki", map[string]string{"url": loki.URL}, `{service_name="api"}`},
-		{"axiom", map[string]string{"url": axiom.URL, "token": "xaat-test"}, `['logs'] | where ['service.name'] == "api"`},
 		{"cloudwatch", map[string]string{"endpoint": cloudwatch.URL, "region": "eu-west-1", "access_key_id": "AKIATEST", "secret_access_key": "secret"}, "/ecs/api"},
 	} {
 		t.Run(b.kind, func(t *testing.T) { runInvestigation(t, st, b) })

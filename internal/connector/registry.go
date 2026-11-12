@@ -32,9 +32,6 @@ type kindSpec struct {
 	// (mcp_url overrides it). The CLI fills the oauth.Keys, which are then
 	// required.
 	oauth string
-	// oauthUnless is a key that, when set, makes the connector skip OAuth and
-	// use the provider's API instead.
-	oauthUnless string
 }
 
 // Kinds lists the supported connector kinds and their config keys.
@@ -44,12 +41,10 @@ var Kinds = map[string]kindSpec{
 		optional: []string{"tenant_id", "username", "password", "bearer_token"},
 		secret:   []string{"password", "bearer_token"},
 	},
-	// axiom uses the REST API with a token, else Axiom's MCP server with OAuth.
+	// axiom goes through Axiom's MCP server, which requires OAuth.
 	"axiom": {
-		optional:    []string{"token", "url", "org_id", "message_field", "mcp_url", "client_metadata_url"},
-		secret:      []string{"token"},
-		oauth:       logs.AxiomMCPURL,
-		oauthUnless: "token",
+		optional: []string{"org_id", "message_field", "mcp_url", "client_metadata_url"},
+		oauth:    logs.AxiomMCPURL,
 	},
 	"cloudwatch": {
 		optional: []string{"region", "access_key_id", "secret_access_key", "session_token", "endpoint", "log_group_prefix", "service_field"},
@@ -118,7 +113,7 @@ func Keys(kind string) (required, optional []string) {
 // OAuthServer returns the MCP server a connector logs in to, if it uses OAuth.
 func OAuthServer(kind string, config map[string]string) (string, bool) {
 	spec := Kinds[kind]
-	if spec.oauth == "" || spec.oauthUnless != "" && config[spec.oauthUnless] != "" {
+	if spec.oauth == "" {
 		return "", false
 	}
 	if u := config["mcp_url"]; u != "" {
@@ -126,10 +121,6 @@ func OAuthServer(kind string, config map[string]string) (string, bool) {
 	}
 	return spec.oauth, true
 }
-
-// OAuthUnless returns the key that, when set, makes a connector of kind skip
-// OAuth, or "".
-func OAuthUnless(kind string) string { return Kinds[kind].oauthUnless }
 
 // IsOAuthKey reports whether key is filled by the OAuth login, not by the user.
 func IsOAuthKey(kind, key string) bool {
@@ -155,11 +146,7 @@ func Validate(kind string, config map[string]string) error {
 	_, usesOAuth := OAuthServer(kind, config)
 	if usesOAuth {
 		if _, err := oauth.GrantFrom(config); err != nil {
-			hint := "log in with `stromboli connector add` in a terminal"
-			if spec.oauthUnless != "" {
-				hint = fmt.Sprintf("set %s, or %s", spec.oauthUnless, hint)
-			}
-			return fmt.Errorf("%s connector: no OAuth login: %s", kind, hint)
+			return fmt.Errorf("%s connector: no OAuth login: log in with `stromboli connector add` in a terminal", kind)
 		}
 	}
 	for k := range config {
@@ -331,18 +318,13 @@ func (r *Registry) Logs(ctx context.Context, name string) (logs.Source, error) {
 			Password: cfg["password"], BearerToken: cfg["bearer_token"],
 		})
 	case "axiom":
-		if _, ok := OAuthServer(c.Kind, cfg); ok {
-			m, err := r.oauthMCP(name, cfg, func(token func(context.Context) (string, error)) mcpconn.Config {
-				return logs.AxiomMCP(cfg["mcp_url"], token)
-			})
-			if err != nil {
-				return nil, err
-			}
-			return logs.NewAxiom(logs.AxiomConfig{MCP: m, OrgID: cfg["org_id"], MessageField: cfg["message_field"]})
-		}
-		return logs.NewAxiom(logs.AxiomConfig{
-			URL: cfg["url"], Token: cfg["token"], OrgID: cfg["org_id"], MessageField: cfg["message_field"],
+		m, err := r.oauthMCP(name, cfg, func(token func(context.Context) (string, error)) mcpconn.Config {
+			return logs.AxiomMCP(cfg["mcp_url"], token)
 		})
+		if err != nil {
+			return nil, err
+		}
+		return logs.NewAxiom(logs.AxiomConfig{MCP: m, OrgID: cfg["org_id"], MessageField: cfg["message_field"]})
 	case "cloudwatch":
 		return logs.NewCloudWatch(ctx, logs.CloudWatchConfig{
 			Region: cfg["region"], AccessKeyID: cfg["access_key_id"], SecretAccessKey: cfg["secret_access_key"],

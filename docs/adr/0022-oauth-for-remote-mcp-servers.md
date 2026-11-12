@@ -17,7 +17,7 @@ stromboli runs as a server with no browser, and each self-hosted instance has it
 - **Client identity:** a client ID metadata document when one is configured (`client_metadata_url`) and the server supports them, else dynamic registration at login.
 - When the refresh token is expired or revoked, calls fail with `run stromboli connector login <name>`.
 - The rules of 0011 still apply: an allow-list of tools, and the read-only check for servers that annotate their tools. One exception: a connector may name a tool it only calls read-only although the server does not mark it so, when the write is an argument stromboli never sets. Axiom's `queryDataset` is the case: `saveResults` stores a result snapshot, and stromboli always sends `false`. Such a tool is also retried like a read-only one.
-- A connector may offer both: Axiom keeps its REST API with a token (scoped to datasets) and uses its MCP server with OAuth without one.
+- A connector may offer both: Axiom kept its REST API with a token (scoped to datasets) and used its MCP server with OAuth without one. (The REST mode was later removed: Axiom is MCP-only.)
 
 ## Consequences
 

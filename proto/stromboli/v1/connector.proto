@@ -16,7 +16,7 @@ message CreateConnectorRequest {
   string name = 1;
   string kind = 2;
   // loki: url, tenant_id, username, password, bearer_token
-  // axiom: token, url, org_id, message_field
+  // axiom: org_id, message_field, mcp_url (logs in with OAuth)
   // cloudwatch: region, access_key_id, secret_access_key, session_token, endpoint, log_group_prefix, service_field
   // github: token, base_url
   map<string, string> config = 3;

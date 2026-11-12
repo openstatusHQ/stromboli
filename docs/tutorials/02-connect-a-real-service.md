@@ -83,7 +83,7 @@ Connector "loki" is reachable.
 For other stores, the first command is one of these (all keys are in [Connectors](../reference/connectors.md)):
 
 ```sh
-stromboli connector add axiom axiom token
+stromboli connector add axiom axiom          # logs in in a browser
 stromboli connector add cw cloudwatch region=eu-west-1
 stromboli connector add gcp-logs gcp_logging project=<project-id> credentials_json=@key.json
 ```

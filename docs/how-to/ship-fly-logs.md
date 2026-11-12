@@ -27,7 +27,7 @@ fly secrets set -a log-shipper AWS_ACCESS_KEY_ID=... AWS_SECRET_ACCESS_KEY=... A
 | Store | Connector | Selector `catalog discover` proposes |
 |---|---|---|
 | Loki | `stromboli connector add loki loki url=...` | `{fly_app_name="checker"}` |
-| Axiom | `stromboli connector add axiom axiom token` | `['fly-logs'] \| where ['fly.app.name'] == "checker"` |
+| Axiom | `stromboli connector add axiom axiom` (logs in in a browser) | `['fly-logs'] \| where ['fly.app.name'] == "checker"` |
 | CloudWatch | `stromboli connector add cw cloudwatch region=eu-west-1 log_group_prefix=/fly/ service_field=fly.app.name` | `/fly/logs \| filter fly.app.name = "checker"` |
 
 The CloudWatch shipper writes every app to one log group: `service_field` makes discovery split it per app with one Insights query, and `log_group_prefix` keeps that query to the Fly group.

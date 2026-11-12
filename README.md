@@ -234,7 +234,7 @@ stromboli calls a provider through the MCP server the provider hosts, when there
 | Google Cloud: `gcp_logging`, `gcp_monitoring` | Google's remote MCP servers (`logging.googleapis.com/mcp`, `monitoring.googleapis.com/mcp`) | none |
 | GitHub: `github` with a token | GitHub's remote MCP server, toolsets `repos,actions`, read-only mode | Deployments (`deploys.environment`), and token-less use |
 | Fly.io, Loki, Prometheus, CloudWatch | their APIs: the Machines API, Fly's managed Prometheus, the Loki and Prometheus HTTP APIs, the AWS SDK | no hosted MCP server: see [Not on MCP](#not-on-mcp) |
-| Axiom: `axiom` | REST API with a token; without one, Axiom's remote MCP server (`mcp.axiom.co`), logging in with OAuth | none |
+| Axiom: `axiom` | Axiom's remote MCP server (`mcp.axiom.co`), logging in with OAuth | none |
 | Vercel: `vercel` | Vercel's remote MCP server (`mcp.vercel.com`), logging in with OAuth | none |
 
 #### Not on MCP
@@ -248,7 +248,7 @@ stromboli calls a provider through the MCP server the provider hosts, when there
 | Kind | Add it | `logs.selector` | `catalog discover` proposes |
 |---|---|---|---|
 | `loki` | `connector add loki loki url=http://loki:3100` (+ `tenant_id`, `username`, `password`, `bearer_token`) | LogQL stream selector: `{service_name="api"}` | one service per `service_name` / `service` / `app` / `job` / `container` label value |
-| `axiom` | `connector add axiom axiom token=xaat-...` (+ `org_id` for personal tokens, `message_field`; datasets in any region work), or without `token` to log in with OAuth through Axiom's MCP server | Start of an APL query: `['logs']` or `['logs'] \| where ['service.name'] == "api"` | one service per `service.name` / `service` / `app` value in each log dataset, or one per dataset |
+| `axiom` | `connector add axiom axiom` logs in with OAuth through Axiom's MCP server (+ `org_id`, `message_field`, `mcp_url=https://mcp.eu.axiom.co/mcp` for the EU) | Start of an APL query: `['logs']` or `['logs'] \| where ['service.name'] == "api"` | one service per `service.name` / `service` / `app` value in each log dataset, or one per dataset |
 | `cloudwatch` | `connector add cw cloudwatch region=eu-west-1` (+ `access_key_id`, `secret_access_key`, `session_token`, `endpoint`) | Log group(s), optionally followed by Insights commands: `/ecs/api` or `/ecs/prod, /ecs/worker \| filter service = "api"` | one service per log group, named after its last path segment |
 | `gcp_logging` | `connector add gcp-logs gcp_logging project=<project-id>` (+ `credentials_json=@key.json`) | Logging query language filter: `resource.type="cloud_run_revision" AND resource.labels.service_name="api"` | one service per Cloud Run service or job, function, Cloud Scheduler job, Cloud Tasks queue, Pub/Sub subscription or topic seen in the last hour |
 | `vercel` | `connector add vercel vercel team_id=<slug>` (logs in with OAuth in a browser) | a project, optionally `environment=production`: `web environment=production` | one service per project |
@@ -324,7 +324,7 @@ fly secrets set -a log-shipper AWS_ACCESS_KEY_ID=... AWS_SECRET_ACCESS_KEY=... A
 | Store | Connector | Discovered selector, one service per Fly app |
 |---|---|---|
 | Loki | `connector add loki loki url=...` | `{fly_app_name="checker"}` |
-| Axiom | `connector add axiom axiom token=...` | `['fly-logs'] \| where ['fly.app.name'] == "checker"` |
+| Axiom | `connector add axiom axiom` | `['fly-logs'] \| where ['fly.app.name'] == "checker"` |
 | CloudWatch | `connector add cw cloudwatch region=eu-west-1 log_group_prefix=/fly/ service_field=fly.app.name` | `/fly/logs \| filter fly.app.name = "checker"` |
 
 The shipper writes JSON events (`message`, `log.level`, `fly.app.name`, `fly.region`, `host`). stromboli shows the `message` with its level, so pattern grouping isn't split by region or instance. The CloudWatch shipper writes every app to one log group, so `service_field` makes discovery split it per app with one Insights query (`log_group_prefix` keeps that query to the Fly group).

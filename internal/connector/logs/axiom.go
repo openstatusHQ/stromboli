@@ -1,13 +1,9 @@
 package logs
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
-	"net/url"
 	"sort"
 	"strconv"
 	"strings"
@@ -20,40 +16,28 @@ import (
 
 // AxiomConfig configures an Axiom connector.
 type AxiomConfig struct {
-	// URL defaults to https://api.axiom.co.
-	URL   string
-	Token string
-	// OrgID is only needed for personal access tokens.
+	// MCP is Axiom's MCP server, logged in with OAuth.
+	MCP *mcpconn.Client
+	// OrgID selects the organization when the login has several.
 	OrgID string
 	// MessageField is the field that holds the log line. When empty it is
 	// detected per selector from common names (message, msg, body, ...).
 	MessageField string
-	// MCP, when set, replaces the REST API (and Token): Axiom's MCP server,
-	// logged in with OAuth.
-	MCP *mcpconn.Client
 }
 
-// Axiom queries Axiom with APL. A selector is the start of an APL query: a
+// Axiom queries Axiom with APL through Axiom's MCP server. A selector is the start of an APL query: a
 // dataset, optionally followed by operators, e.g.
 //
 //	['logs'] | where ['service.name'] == "api"
 type Axiom struct {
-	cfg  AxiomConfig
-	http *http.Client
+	cfg AxiomConfig
 }
 
 func NewAxiom(cfg AxiomConfig) (*Axiom, error) {
-	if cfg.Token == "" && cfg.MCP == nil {
-		return nil, fmt.Errorf("axiom: token is required")
+	if cfg.MCP == nil {
+		return nil, fmt.Errorf("axiom: an MCP client is required")
 	}
-	if cfg.URL == "" {
-		cfg.URL = "https://api.axiom.co"
-	}
-	if _, err := url.Parse(cfg.URL); err != nil {
-		return nil, fmt.Errorf("axiom: invalid url: %w", err)
-	}
-	cfg.URL = strings.TrimRight(cfg.URL, "/")
-	return &Axiom{cfg: cfg, http: &http.Client{Timeout: 30 * time.Second}}, nil
+	return &Axiom{cfg: cfg}, nil
 }
 
 // axiomMessageFields are tried in order to find the field holding the log line.
@@ -149,7 +133,7 @@ const maxDiscoverDatasets = 50
 // Services proposes one service per value of a service field (service.name,
 // app, ...) in each log dataset, or one per dataset when there is none.
 func (a *Axiom) Services(ctx context.Context) ([]Service, error) {
-	datasets, err := a.datasets(ctx)
+	datasets, err := a.mcpDatasets(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -200,77 +184,13 @@ func (a *Axiom) Services(ctx context.Context) ([]Service, error) {
 }
 
 func (a *Axiom) Check(ctx context.Context) error {
-	_, err := a.datasets(ctx)
+	_, err := a.mcpDatasets(ctx)
 	return err
 }
 
 type axiomDataset struct {
-	Name string `json:"name"`
-	Kind string `json:"kind"`
-	// EdgeDeploymentURL serves queries on the dataset, e.g.
-	// https://eu-central-1.aws.edge.axiom.co. Empty on older deployments.
-	EdgeDeploymentURL string `json:"edgeDeploymentUrl"`
-}
-
-// edgeCache remembers each dataset's edge deployment per connector, so
-// queries are not preceded by a dataset listing.
-var edgeCache sync.Map // key -> cachedEdges
-
-type cachedEdges struct {
-	edges map[string]string // dataset -> edge deployment URL
-	until time.Time
-}
-
-func (a *Axiom) cacheKey() string {
-	return a.cfg.URL + "\x00" + a.cfg.OrgID + "\x00" + a.cfg.Token
-}
-
-// datasets lists the datasets and refreshes edgeCache.
-func (a *Axiom) datasets(ctx context.Context) ([]axiomDataset, error) {
-	if a.cfg.MCP != nil {
-		return a.mcpDatasets(ctx)
-	}
-	var datasets []axiomDataset
-	if err := a.do(ctx, http.MethodGet, a.cfg.URL+"/v2/datasets", nil, &datasets); err != nil {
-		return nil, err
-	}
-	edges := map[string]string{}
-	for _, ds := range datasets {
-		if u, err := url.Parse(ds.EdgeDeploymentURL); err == nil && u.Host != "" && (u.Scheme == "https" || u.Scheme == "http") {
-			edges[ds.Name] = strings.TrimRight(ds.EdgeDeploymentURL, "/")
-		}
-	}
-	edgeCache.Store(a.cacheKey(), cachedEdges{edges, time.Now().Add(10 * time.Minute)})
-	return datasets, nil
-}
-
-// queryURL returns where to send an APL query. Queries go to the edge
-// deployment holding the dataset: the main API refuses queries on datasets
-// stored in another region (430 "query prevented due to limiter"). When the
-// datasets cannot be listed, queries stay on the main API.
-func (a *Axiom) queryURL(ctx context.Context, apl string) string {
-	ds := aplDataset(apl)
-	c, ok := edgeCache.Load(a.cacheKey())
-	if ds != "" && (!ok || time.Now().After(c.(cachedEdges).until)) {
-		if _, err := a.datasets(ctx); err != nil {
-			// Don't list again before every query.
-			edgeCache.Store(a.cacheKey(), cachedEdges{until: time.Now().Add(time.Minute)})
-		}
-		c, ok = edgeCache.Load(a.cacheKey())
-	}
-	if ok {
-		if edge := c.(cachedEdges).edges[ds]; edge != "" {
-			return edge + "/v1/query/_apl?format=tabular"
-		}
-	}
-	return a.cfg.URL + "/v1/datasets/_apl?format=tabular"
-}
-
-// aplDataset returns the dataset an APL query starts with: ['name'],
-// ["name"] or a bare name. It is empty when the query starts otherwise.
-func aplDataset(apl string) string {
-	name, _ := aplDatasetSpan(apl)
-	return name
+	Name string
+	Kind string
 }
 
 // aplDatasetSpan returns the dataset an APL query starts with and the offset
@@ -347,7 +267,7 @@ type cachedFields struct {
 var axiomLevelFields = []string{"level", "log.level", "severity_text", "severity"}
 
 func (a *Axiom) lineFields(ctx context.Context, selector string) (axiomFields, error) {
-	key := a.cfg.URL + "\x00" + a.cfg.OrgID + "\x00" + a.cfg.MessageField + "\x00" + selector
+	key := a.cfg.OrgID + "\x00" + a.cfg.MessageField + "\x00" + selector
 	if c, ok := fieldCache.Load(key); ok && time.Now().Before(c.(cachedFields).until) {
 		return c.(cachedFields).axiomFields, nil
 	}
@@ -401,13 +321,14 @@ func (a *Axiom) fields(ctx context.Context, selector string, start, end time.Tim
 	return out, nil
 }
 
+// axiomResult holds tables in column-major order.
 type axiomResult struct {
 	Tables []struct {
 		Fields []struct {
-			Name string `json:"name"`
-		} `json:"fields"`
-		Columns [][]any `json:"columns"`
-	} `json:"tables"`
+			Name string
+		}
+		Columns [][]any
+	}
 }
 
 // rows converts the first (column-major) table into rows keyed by field name.
@@ -433,63 +354,7 @@ func (r *axiomResult) rows() []map[string]any {
 }
 
 func (a *Axiom) query(ctx context.Context, apl string, start, end time.Time) (*axiomResult, error) {
-	if a.cfg.MCP != nil {
-		return a.mcpQuery(ctx, apl, start, end)
-	}
-	body := map[string]any{"apl": apl}
-	if !start.IsZero() {
-		body["startTime"] = start.UTC().Format(time.RFC3339Nano)
-	}
-	if !end.IsZero() {
-		body["endTime"] = end.UTC().Format(time.RFC3339Nano)
-	}
-	var res axiomResult
-	if err := a.do(ctx, http.MethodPost, a.queryURL(ctx, apl), body, &res); err != nil {
-		return nil, err
-	}
-	return &res, nil
-}
-
-func (a *Axiom) do(ctx context.Context, method, u string, in, out any) error {
-	var rd io.Reader
-	if in != nil {
-		b, err := json.Marshal(in)
-		if err != nil {
-			return err
-		}
-		rd = bytes.NewReader(b)
-	}
-	req, err := http.NewRequestWithContext(ctx, method, u, rd)
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Authorization", "Bearer "+a.cfg.Token)
-	req.Header.Set("Accept", "application/json")
-	if in != nil {
-		req.Header.Set("Content-Type", "application/json")
-	}
-	if a.cfg.OrgID != "" {
-		req.Header.Set("X-Axiom-Org-Id", a.cfg.OrgID)
-	}
-	resp, err := a.http.Do(req)
-	if err != nil {
-		return fmt.Errorf("axiom: %w", err)
-	}
-	defer resp.Body.Close()
-	body, err := io.ReadAll(io.LimitReader(resp.Body, 32<<20))
-	if err != nil {
-		return fmt.Errorf("axiom: read response: %w", err)
-	}
-	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		var e struct {
-			Message string `json:"message"`
-		}
-		if json.Unmarshal(body, &e) == nil && e.Message != "" {
-			return fmt.Errorf("axiom: %s: %s", resp.Status, e.Message)
-		}
-		return fmt.Errorf("axiom: %s: %s", resp.Status, strings.TrimSpace(string(body)))
-	}
-	return json.Unmarshal(body, out)
+	return a.mcpQuery(ctx, apl, start, end)
 }
 
 func parseAxiomTime(v any) time.Time {
