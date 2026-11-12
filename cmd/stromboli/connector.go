@@ -40,11 +40,7 @@ func kindsHelp() string {
 			}
 		}
 		if _, ok := connector.OAuthServer(kind, nil); ok {
-			if k := connector.OAuthUnless(kind); k != "" {
-				keys = append(keys, "without "+k+": logs in with OAuth in a browser")
-			} else {
-				keys = append(keys, "then logs in with OAuth in a browser")
-			}
+			keys = append(keys, "then logs in with OAuth in a browser")
 		}
 		fmt.Fprintf(&b, "  %-11s %s\n", kind, strings.Join(keys, ", "))
 	}
@@ -74,7 +70,7 @@ history and the process list. Instead pass:
   key=-         to read the value from stdin`,
 		Example: `  stromboli connector add loki loki url=http://loki:3100
   stromboli connector add github github token          # prompts for the token
-  stromboli connector add axiom axiom token=@axiom.token
+  stromboli connector add axiom axiom                     # logs in in a browser
   stromboli connector add vercel vercel team_id=my-team   # logs in in a browser
   echo "$GITHUB_TOKEN" | stromboli connector add github github token=-
   stromboli connector add cw cloudwatch region=eu-west-1 --replace`,

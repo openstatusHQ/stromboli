@@ -27,7 +27,7 @@ Without a terminal, commands behave as with `--no-input`.
 
 ```sh
 stromboli connector add github github token=@/run/secrets/github-token
-echo "$AXIOM_TOKEN" | stromboli connector add axiom axiom token=-
+echo "$LOKI_PASSWORD" | stromboli connector add loki loki url=https://loki.example.com username=123 password=-
 ```
 
 Only one value can be read from stdin per command. A secret typed inline (`token=ghp_...`) works but prints a warning, since it ends up in your shell history.

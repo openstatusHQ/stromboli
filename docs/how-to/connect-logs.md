@@ -22,21 +22,17 @@ Selector: a LogQL stream selector, for example `{service_name="api"}`.
 
 ## Axiom
 
-```sh
-stromboli connector add axiom axiom token
-```
-
-Or, without a token, log in with OAuth in a browser and go through Axiom's MCP server (`mcp_url=https://mcp.eu.axiom.co/mcp` keeps query results in the EU):
+stromboli goes through Axiom's MCP server and logs in with OAuth in a browser:
 
 ```sh
-stromboli connector add axiom axiom mcp_url=https://mcp.eu.axiom.co/mcp
+stromboli connector add axiom axiom
 ```
 
-The login reaches every organization of your Axiom user; `org_id=<org>` picks one. Prefer a token when you want stromboli's access limited to some datasets: the login has your user's access.
+`mcp_url=https://mcp.eu.axiom.co/mcp` keeps query results in the EU. The login has your Axiom user's access and reaches every organization of it; `org_id=<org>` picks one.
 
 | Setup | Extra keys |
 |---|---|
-| a personal token (instead of an API token) | `org_id=<org>` |
+| your user belongs to several organizations | `org_id=<org>` |
 | the message is in an unusual field | `message_field=<field>` (detected from `message`, `msg`, `body`, `log`… otherwise) |
 
 Datasets in any region (US, EU…) work as is: queries go to the region that stores each dataset.

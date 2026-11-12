@@ -1,79 +1,82 @@
 package logs
 
 import (
+	"bytes"
 	"context"
-	"encoding/json"
+	"encoding/csv"
 	"fmt"
-	"net/http"
-	"net/http/httptest"
+	"regexp"
 	"strings"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/openstatushq/stromboli/internal/connector/mcpconn"
+	"github.com/openstatushq/stromboli/internal/connector/mcpconn/mcptest"
 )
 
-// fakeAxiom answers APL queries from a function and records them.
+// fakeAxiom answers APL queries from a function through Axiom's MCP tools and
+// records them, without the time range the connector adds.
 type fakeAxiom struct {
 	mu      sync.Mutex
 	queries []string
-	paths   []string                // path each query was sent to
-	answer  func(apl string) string // tabular response body
-	// edge lists extra datasets whose edge deployment is this server.
-	edge []string
-	// noList makes listing datasets fail, as for a token without that permission.
-	noList bool
+	answer  func(apl string) string // CSV result
 }
 
-func (f *fakeAxiom) server(t *testing.T) *httptest.Server {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Header.Get("Authorization") != "Bearer xaat-test" {
-			w.WriteHeader(http.StatusForbidden)
-			fmt.Fprint(w, `{"message":"forbidden"}`)
-			return
-		}
-		switch {
-		case r.Method == http.MethodGet && r.URL.Path == "/v2/datasets" && f.noList:
-			w.WriteHeader(http.StatusForbidden)
-			fmt.Fprint(w, `{"message":"forbidden"}`)
-		case r.Method == http.MethodGet && r.URL.Path == "/v2/datasets":
-			ds := []map[string]string{
-				{"name": "logs", "kind": "axiom:events:v1"},
-				{"name": "otel-metrics", "kind": "otel:metrics:v1"},
-				{"name": "edge", "kind": "axiom:events:v1"},
-			}
-			for _, name := range f.edge {
-				ds = append(ds, map[string]string{"name": name, "kind": "axiom:events:v1", "edgeDeploymentUrl": "http://" + r.Host + "/"})
-			}
-			json.NewEncoder(w).Encode(ds)
-		case r.Method == http.MethodPost && (r.URL.Path == "/v1/datasets/_apl" || r.URL.Path == "/v1/query/_apl") && r.URL.Query().Get("format") == "tabular":
-			var body struct {
-				APL       string `json:"apl"`
-				StartTime string `json:"startTime"`
-			}
-			if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.StartTime == "" {
-				w.WriteHeader(http.StatusBadRequest)
-				return
-			}
+var aplTimeRange = regexp.MustCompile(` \| where _time >= datetime\([^)]*\) and _time <= datetime\([^)]*\)`)
+
+func (f *fakeAxiom) axiom(t *testing.T, cfg AxiomConfig) *Axiom {
+	srv := mcptest.New(t, map[string]mcptest.Handler{
+		"listDatasets": func(map[string]any) (any, error) {
+			return mcptest.Text("# datasets.csv\n\ndatasetName,kind\nlogs,axiom:events:v1\notel-metrics,otel:metrics:v1\nedge,axiom:events:v1\n"), nil
+		},
+		"queryDataset": func(args map[string]any) (any, error) {
+			apl := aplTimeRange.ReplaceAllString(args["apl"].(string), "")
 			f.mu.Lock()
-			f.queries = append(f.queries, body.APL)
-			f.paths = append(f.paths, r.URL.Path)
+			f.queries = append(f.queries, apl)
 			f.mu.Unlock()
-			fmt.Fprint(w, f.answer(body.APL))
-		default:
-			http.NotFound(w, r)
-		}
-	}))
-	t.Cleanup(srv.Close)
-	return srv
+			return mcptest.Text("# Query results\n\n## results.csv\n\nEffective range (_time): x to y.\n\n" + f.answer(apl) + "\n---\n"), nil
+		},
+	}, true, "queryDataset")
+	c, err := mcpconn.New(AxiomMCP(srv.URL, nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { c.Close() })
+	cfg.MCP = c
+	ax, err := NewAxiom(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return ax
 }
 
+// table renders column-major values as CSV; nil is an empty cell.
 func table(fields []string, columns ...[]any) string {
-	fs := make([]map[string]string, len(fields))
-	for i, f := range fields {
-		fs[i] = map[string]string{"name": f}
+	var b bytes.Buffer
+	w := csv.NewWriter(&b)
+	w.Write(fields)
+	n := 0
+	if len(columns) > 0 {
+		n = len(columns[0])
 	}
-	b, _ := json.Marshal(map[string]any{"tables": []any{map[string]any{"fields": fs, "columns": columns}}})
-	return string(b)
+	for i := range n {
+		rec := make([]string, len(columns))
+		for j, col := range columns {
+			if col[i] != nil {
+				rec[j] = fmt.Sprint(col[i])
+			}
+		}
+		w.Write(rec)
+	}
+	w.Flush()
+	return b.String()
+}
+
+func TestAxiomRequiresMCP(t *testing.T) {
+	if _, err := NewAxiom(AxiomConfig{}); err == nil {
+		t.Fatal("want an error without an MCP client")
+	}
 }
 
 func TestAxiomQueryAndCount(t *testing.T) {
@@ -93,10 +96,7 @@ func TestAxiomQueryAndCount(t *testing.T) {
 				[]any{"error", nil})
 		}
 	}}
-	ax, err := NewAxiom(AxiomConfig{URL: f.server(t).URL, Token: "xaat-test"})
-	if err != nil {
-		t.Fatal(err)
-	}
+	ax := f.axiom(t, AxiomConfig{})
 	ctx := context.Background()
 	sel := `['logs'] | where ['service.name'] == "api"`
 	q := Query{Selector: sel, Filter: `(?i)timeout`, Start: now.Add(-time.Hour), End: now, Limit: 10}
@@ -138,7 +138,7 @@ func TestAxiomQueryAndCount(t *testing.T) {
 
 func TestAxiomMessageFieldOverride(t *testing.T) {
 	f := &fakeAxiom{answer: func(apl string) string { return table([]string{"n"}, []any{1}) }}
-	ax, _ := NewAxiom(AxiomConfig{URL: f.server(t).URL, Token: "xaat-test", MessageField: "attributes.line"})
+	ax := f.axiom(t, AxiomConfig{MessageField: "attributes.line"})
 	if _, err := ax.Count(context.Background(), Query{Selector: "['logs']", Filter: "x", Start: time.Now().Add(-time.Hour), End: time.Now()}); err != nil {
 		t.Fatal(err)
 	}
@@ -156,13 +156,12 @@ func TestAxiomServices(t *testing.T) {
 		case apl == `['edge'] | take 1`:
 			return table([]string{"_time", "message"}, []any{now}, []any{"x"})
 		case strings.HasPrefix(apl, `['logs'] | where isnotempty(['service.name']) | summarize count() by ['service.name']`):
-			return table([]string{"service.name", "count_"}, []any{"api", "web", ""}, []any{10, 5, 1})
+			return table([]string{"service.name", "count_"}, []any{"api", "web", nil}, []any{10, 5, 1})
 		}
 		t.Errorf("unexpected query %q", apl)
-		return table(nil)
+		return table([]string{"x"})
 	}}
-	ax, _ := NewAxiom(AxiomConfig{URL: f.server(t).URL, Token: "xaat-test"})
-	got, err := ax.Services(context.Background())
+	got, err := f.axiom(t, AxiomConfig{}).Services(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -176,67 +175,12 @@ func TestAxiomServices(t *testing.T) {
 	}
 }
 
-// Datasets stored in a region are queried on its edge deployment; the main
-// API refuses them.
-func TestAxiomEdgeDeployment(t *testing.T) {
-	f := &fakeAxiom{edge: []string{"eu-logs"}, answer: func(apl string) string { return table([]string{"n"}, []any{1}) }}
-	ax, _ := NewAxiom(AxiomConfig{URL: f.server(t).URL, Token: "xaat-test"})
-	ctx := context.Background()
-	for _, sel := range []string{`['eu-logs'] | where ['service.name'] == "api"`, `['logs']`} {
-		if _, err := ax.Count(ctx, Query{Selector: sel, Start: time.Now().Add(-time.Hour), End: time.Now()}); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if want := []string{"/v1/query/_apl", "/v1/datasets/_apl"}; fmt.Sprint(f.paths) != fmt.Sprint(want) {
-		t.Fatalf("paths = %v, want %v", f.paths, want)
-	}
-}
-
-// Without the datasets listing, queries stay on the main API.
-func TestAxiomEdgeListingFails(t *testing.T) {
-	f := &fakeAxiom{noList: true, answer: func(apl string) string { return table([]string{"n"}, []any{1}) }}
-	ax, _ := NewAxiom(AxiomConfig{URL: f.server(t).URL, Token: "xaat-test"})
-	for range 2 {
-		if _, err := ax.Count(context.Background(), Query{Selector: "['logs']", Start: time.Now().Add(-time.Hour), End: time.Now()}); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if want := []string{"/v1/datasets/_apl", "/v1/datasets/_apl"}; fmt.Sprint(f.paths) != fmt.Sprint(want) {
-		t.Fatalf("paths = %v, want %v", f.paths, want)
-	}
-}
-
-func TestAPLDataset(t *testing.T) {
-	for in, want := range map[string]string{
-		`['logs'] | take 1`:        "logs",
-		` ["eu.logs"] | take 1`:    "eu.logs",
-		`['it\'s'] | take 1`:       "it's",
-		`logs-2026 | where x == 1`: "logs-2026",
-		`logs`:                     "logs",
-		`union ['a'], ['b']`:       "union",
-		`['unterminated | take 1`:  "",
-		`| take 1`:                 "",
-	} {
-		if got := aplDataset(in); got != want {
-			t.Errorf("aplDataset(%q) = %q, want %q", in, got, want)
-		}
-	}
-}
-
-func TestAxiomError(t *testing.T) {
-	f := &fakeAxiom{}
-	ax, _ := NewAxiom(AxiomConfig{URL: f.server(t).URL, Token: "wrong"})
-	if err := ax.Check(context.Background()); err == nil || !strings.Contains(err.Error(), "forbidden") {
-		t.Fatalf("err = %v", err)
-	}
-}
-
 func TestAxiomHistogram(t *testing.T) {
 	start := time.Date(2026, 11, 2, 10, 0, 0, 0, time.UTC)
 	f := &fakeAxiom{answer: func(apl string) string {
 		return table([]string{"t", "n"}, []any{start.Add(5 * time.Minute).Format(time.RFC3339)}, []any{3})
 	}}
-	ax, _ := NewAxiom(AxiomConfig{URL: f.server(t).URL, Token: "xaat-test", MessageField: "message"})
+	ax := f.axiom(t, AxiomConfig{MessageField: "message"})
 	got, err := ax.Histogram(context.Background(), Query{Selector: "['logs']", Filter: "err", Start: start, End: start.Add(time.Hour)}, 5*time.Minute)
 	if err != nil {
 		t.Fatal(err)
@@ -260,7 +204,7 @@ func TestAxiomFlyLevel(t *testing.T) {
 		}
 		return table([]string{"_time", "message", "log.level", "fly.app.name"}, []any{now}, []any{"query failed"}, []any{"error"}, []any{"checker"})
 	}}
-	ax, _ := NewAxiom(AxiomConfig{URL: f.server(t).URL, Token: "xaat-test"})
+	ax := f.axiom(t, AxiomConfig{})
 	lines, err := ax.Query(context.Background(), Query{Selector: "['fly']", Filter: ErrorFilter, Start: time.Now().Add(-time.Hour), End: time.Now()})
 	if err != nil {
 		t.Fatal(err)

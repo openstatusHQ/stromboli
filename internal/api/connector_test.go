@@ -13,7 +13,6 @@ func TestToConnectorSecretKeys(t *testing.T) {
 		kind, config string
 		want         string
 	}{
-		{"axiom", `{"org_id":"o"}`, "map[org_id:o token:]"},
 		{"axiom", `{"authorized_at":"t","client_id":"c","mcp_url":"u"}`, "map[authorized_at:t client_id:c mcp_url:u refresh_token:]"},
 		{"vercel", `{"authorized_at":"t","team_id":"acme"}`, "map[authorized_at:t refresh_token: team_id:acme]"},
 		{"loki", `{"url":"u"}`, "map[bearer_token: password: url:u]"},

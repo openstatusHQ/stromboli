@@ -100,7 +100,7 @@ func toConnector(r db.Connector) *stromboliv1.Connector {
 		// Secrets are not decrypted here: list the keys the connector can hold.
 		keys := []string{"password", "bearer_token", "token"}
 		if cfg[oauth.KeyAuthorizedAt] != "" {
-			// Logged in with OAuth (an axiom connector then has no token).
+			// Logged in with OAuth.
 			keys = []string{oauth.KeyRefreshToken}
 		}
 		for _, k := range keys {

@@ -90,7 +90,7 @@ type CreateConnectorRequest struct {
 	Name  string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
 	Kind  string                 `protobuf:"bytes,2,opt,name=kind,proto3" json:"kind,omitempty"`
 	// loki: url, tenant_id, username, password, bearer_token
-	// axiom: token, url, org_id, message_field
+	// axiom: org_id, message_field, mcp_url (logs in with OAuth)
 	// cloudwatch: region, access_key_id, secret_access_key, session_token, endpoint, log_group_prefix, service_field
 	// github: token, base_url
 	Config map[string]string `protobuf:"bytes,3,rep,name=config,proto3" json:"config,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`

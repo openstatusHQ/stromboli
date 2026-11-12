@@ -21,8 +21,7 @@ const AxiomMCPURL = "https://mcp.axiom.co/mcp"
 // AxiomMCPTools are the Axiom MCP tools stromboli may call.
 var AxiomMCPTools = []string{"listDatasets", "queryDataset"}
 
-// AxiomMCP returns the MCP config of an axiom connector without a token;
-// token returns the current OAuth access token.
+// AxiomMCP returns the MCP config of an axiom connector; token returns the current OAuth access token.
 func AxiomMCP(endpoint string, token func(context.Context) (string, error)) mcpconn.Config {
 	return mcpconn.Config{
 		Name:            "axiom",
@@ -103,7 +102,7 @@ func (a *Axiom) mcpDatasets(ctx context.Context) ([]axiomDataset, error) {
 //	2026-11-12T20:00:00Z,timeout,ERROR
 //
 // "No data: ..." in place of the CSV means no rows. Numbers become float64
-// and empty cells nil, as in the REST API's tabular format.
+// and empty cells nil.
 func parseAxiomMCPResult(text string) (*axiomResult, error) {
 	// The section starts after a heading such as "## results.csv" or
 	// "# datasets.csv".
@@ -142,14 +141,14 @@ func parseAxiomMCPResult(text string) (*axiomResult, error) {
 	}
 	res := &axiomResult{Tables: make([]struct {
 		Fields []struct {
-			Name string `json:"name"`
-		} `json:"fields"`
-		Columns [][]any `json:"columns"`
+			Name string
+		}
+		Columns [][]any
 	}, 1)}
 	t := &res.Tables[0]
 	for _, h := range header {
 		t.Fields = append(t.Fields, struct {
-			Name string `json:"name"`
+			Name string
 		}{h})
 	}
 	t.Columns = make([][]any, len(header))

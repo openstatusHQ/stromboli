@@ -133,10 +133,10 @@ func TestValidateOAuthModes(t *testing.T) {
 		cfg  map[string]string
 		ok   bool
 	}{
-		{"axiom", map[string]string{"token": "xaat"}, true},                                     // REST
-		{"axiom", withGrant(map[string]string{"mcp_url": "https://mcp.eu.axiom.co/mcp"}), true}, // MCP
-		{"axiom", map[string]string{}, false},                                                   // neither
-		{"axiom", withGrant(map[string]string{"token": "xaat"}), false},                         // OAuth keys without OAuth
+		{"axiom", withGrant(map[string]string{"mcp_url": "https://mcp.eu.axiom.co/mcp"}), true},
+		{"axiom", map[string]string{}, false},                              // no OAuth login
+		{"axiom", map[string]string{"token": "xaat"}, false},               // the REST API is gone
+		{"axiom", withGrant(map[string]string{"url": "https://x"}), false}, // REST keys
 		{"vercel", withGrant(map[string]string{"team_id": "acme"}), true},
 		{"vercel", map[string]string{"team_id": "acme"}, false},
 	} {
@@ -146,8 +146,5 @@ func TestValidateOAuthModes(t *testing.T) {
 	}
 	if !IsSecret("axiom", oauth.KeyRefreshToken) || IsSecret("axiom", oauth.KeyClientID) || !IsSecret("vercel", oauth.KeyRefreshToken) {
 		t.Error("OAuth secrets are not secret")
-	}
-	if _, ok := OAuthServer("axiom", map[string]string{"token": "x"}); ok {
-		t.Error("axiom with a token uses OAuth")
 	}
 }
