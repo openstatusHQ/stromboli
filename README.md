@@ -234,7 +234,7 @@ stromboli calls a provider through the MCP server the provider hosts, when there
 | Google Cloud: `gcp_logging`, `gcp_monitoring` | Google's remote MCP servers (`logging.googleapis.com/mcp`, `monitoring.googleapis.com/mcp`) | none |
 | GitHub: `github` with a token | GitHub's remote MCP server, toolsets `repos,actions`, read-only mode | Deployments (`deploys.environment`), and token-less use |
 | Fly.io, Loki, Prometheus, CloudWatch | their APIs: the Machines API, Fly's managed Prometheus, the Loki and Prometheus HTTP APIs, the AWS SDK | no hosted MCP server: see [Not on MCP](#not-on-mcp) |
-| Axiom | REST API for now | see [Not on MCP](#not-on-mcp) |
+| Axiom: `axiom` | REST API with a token; without one, Axiom's remote MCP server (`mcp.axiom.co`), logging in with OAuth | none |
 | Vercel: `vercel` | Vercel's remote MCP server (`mcp.vercel.com`), logging in with OAuth | none |
 
 #### Not on MCP
@@ -242,14 +242,13 @@ stromboli calls a provider through the MCP server the provider hosts, when there
 - **Fly.io** offers MCP only through `flyctl mcp server`, a local process that runs flyctl commands and serves all of them (destroy, exec, secrets) without marking any read-only. stromboli calls the Machines API directly instead.
 - **CloudWatch:** AWS's MCP server (`awslabs.cloudwatch-mcp-server`) is a local Python process, so stromboli uses the AWS SDK.
 - **Loki and Prometheus** have no hosted MCP server. Grafana's `mcp-grafana` needs a Grafana instance in front of them.
-- **Axiom** hosts an MCP server (`mcp.axiom.co`). Its tool list needs credentials even to read, so its tools have not been checked yet. Until then, stromboli uses its REST API.
 
 ### Log connectors
 
 | Kind | Add it | `logs.selector` | `catalog discover` proposes |
 |---|---|---|---|
 | `loki` | `connector add loki loki url=http://loki:3100` (+ `tenant_id`, `username`, `password`, `bearer_token`) | LogQL stream selector: `{service_name="api"}` | one service per `service_name` / `service` / `app` / `job` / `container` label value |
-| `axiom` | `connector add axiom axiom token=xaat-...` (+ `org_id` for personal tokens, `message_field`; datasets in any region work) | Start of an APL query: `['logs']` or `['logs'] \| where ['service.name'] == "api"` | one service per `service.name` / `service` / `app` value in each log dataset, or one per dataset |
+| `axiom` | `connector add axiom axiom token=xaat-...` (+ `org_id` for personal tokens, `message_field`; datasets in any region work), or without `token` to log in with OAuth through Axiom's MCP server | Start of an APL query: `['logs']` or `['logs'] \| where ['service.name'] == "api"` | one service per `service.name` / `service` / `app` value in each log dataset, or one per dataset |
 | `cloudwatch` | `connector add cw cloudwatch region=eu-west-1` (+ `access_key_id`, `secret_access_key`, `session_token`, `endpoint`) | Log group(s), optionally followed by Insights commands: `/ecs/api` or `/ecs/prod, /ecs/worker \| filter service = "api"` | one service per log group, named after its last path segment |
 | `gcp_logging` | `connector add gcp-logs gcp_logging project=<project-id>` (+ `credentials_json=@key.json`) | Logging query language filter: `resource.type="cloud_run_revision" AND resource.labels.service_name="api"` | one service per Cloud Run service or job, function, Cloud Scheduler job, Cloud Tasks queue, Pub/Sub subscription or topic seen in the last hour |
 | `vercel` | `connector add vercel vercel team_id=<slug>` (logs in with OAuth in a browser) | a project, optionally `environment=production`: `web environment=production` | one service per project |

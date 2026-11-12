@@ -26,6 +26,14 @@ Selector: a LogQL stream selector, for example `{service_name="api"}`.
 stromboli connector add axiom axiom token
 ```
 
+Or, without a token, log in with OAuth in a browser and go through Axiom's MCP server (`mcp_url=https://mcp.eu.axiom.co/mcp` keeps query results in the EU):
+
+```sh
+stromboli connector add axiom axiom mcp_url=https://mcp.eu.axiom.co/mcp
+```
+
+The login reaches every organization of your Axiom user; `org_id=<org>` picks one. Prefer a token when you want stromboli's access limited to some datasets: the login has your user's access.
+
 | Setup | Extra keys |
 |---|---|
 | a personal token (instead of an API token) | `org_id=<org>` |

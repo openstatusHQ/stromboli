@@ -14,6 +14,8 @@ import (
 	"sync"
 	"time"
 	"unicode"
+
+	"github.com/openstatushq/stromboli/internal/connector/mcpconn"
 )
 
 // AxiomConfig configures an Axiom connector.
@@ -26,6 +28,9 @@ type AxiomConfig struct {
 	// MessageField is the field that holds the log line. When empty it is
 	// detected per selector from common names (message, msg, body, ...).
 	MessageField string
+	// MCP, when set, replaces the REST API (and Token): Axiom's MCP server,
+	// logged in with OAuth.
+	MCP *mcpconn.Client
 }
 
 // Axiom queries Axiom with APL. A selector is the start of an APL query: a
@@ -38,7 +43,7 @@ type Axiom struct {
 }
 
 func NewAxiom(cfg AxiomConfig) (*Axiom, error) {
-	if cfg.Token == "" {
+	if cfg.Token == "" && cfg.MCP == nil {
 		return nil, fmt.Errorf("axiom: token is required")
 	}
 	if cfg.URL == "" {
@@ -222,6 +227,9 @@ func (a *Axiom) cacheKey() string {
 
 // datasets lists the datasets and refreshes edgeCache.
 func (a *Axiom) datasets(ctx context.Context) ([]axiomDataset, error) {
+	if a.cfg.MCP != nil {
+		return a.mcpDatasets(ctx)
+	}
 	var datasets []axiomDataset
 	if err := a.do(ctx, http.MethodGet, a.cfg.URL+"/v2/datasets", nil, &datasets); err != nil {
 		return nil, err
@@ -261,7 +269,15 @@ func (a *Axiom) queryURL(ctx context.Context, apl string) string {
 // aplDataset returns the dataset an APL query starts with: ['name'],
 // ["name"] or a bare name. It is empty when the query starts otherwise.
 func aplDataset(apl string) string {
-	s := strings.TrimSpace(apl)
+	name, _ := aplDatasetSpan(apl)
+	return name
+}
+
+// aplDatasetSpan returns the dataset an APL query starts with and the offset
+// just after it, or "" and -1.
+func aplDatasetSpan(apl string) (string, int) {
+	off := len(apl) - len(strings.TrimLeft(apl, " \t\r\n"))
+	s := apl[off:]
 	if len(s) > 2 && s[0] == '[' && (s[1] == '\'' || s[1] == '"') {
 		quote := s[1]
 		var b strings.Builder
@@ -271,20 +287,26 @@ func aplDataset(apl string) string {
 				i++
 				b.WriteByte(s[i])
 			case c == quote:
-				return b.String()
+				if i+1 < len(s) && s[i+1] == ']' {
+					return b.String(), off + i + 2
+				}
+				return "", -1
 			default:
 				b.WriteByte(c)
 			}
 		}
-		return ""
+		return "", -1
 	}
 	end := strings.IndexFunc(s, func(r rune) bool {
 		return !unicode.IsLetter(r) && !unicode.IsDigit(r) && r != '_' && r != '-' && r != '.'
 	})
 	if end < 0 {
-		return s
+		end = len(s)
 	}
-	return s[:end]
+	if end == 0 {
+		return "", -1
+	}
+	return s[:end], off + end
 }
 
 // withFilter appends the regex filter. It matches "level=<level> <message>",
@@ -411,6 +433,9 @@ func (r *axiomResult) rows() []map[string]any {
 }
 
 func (a *Axiom) query(ctx context.Context, apl string, start, end time.Time) (*axiomResult, error) {
+	if a.cfg.MCP != nil {
+		return a.mcpQuery(ctx, apl, start, end)
+	}
 	body := map[string]any{"apl": apl}
 	if !start.IsZero() {
 		body["startTime"] = start.UTC().Format(time.RFC3339Nano)

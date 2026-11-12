@@ -53,6 +53,10 @@ type Config struct {
 	// annotated readOnlyHint. Leave it false only for servers that do not
 	// annotate their tools, and allow-list them tool by tool.
 	RequireReadOnly bool
+	// ReadOnlyUse lists allowed tools the server does not mark read-only but
+	// that stromboli only calls in a read-only way: the caller must keep the
+	// arguments that would write unset (e.g. queryDataset's saveResults).
+	ReadOnlyUse []string
 	// Timeout bounds each tool call. Defaults to 60s.
 	Timeout time.Duration
 }
@@ -139,6 +143,9 @@ func (c *Client) Call(ctx context.Context, tool string, args, out any) error {
 
 // readOnly reports whether the server annotates tool as read-only.
 func (c *Client) readOnly(ctx context.Context, tool string) bool {
+	if slices.Contains(c.cfg.ReadOnlyUse, tool) {
+		return true
+	}
 	t, err := c.Tool(ctx, tool)
 	return err == nil && t.Annotations != nil && t.Annotations.ReadOnlyHint
 }
@@ -250,7 +257,7 @@ func (c *Client) verify(ctx context.Context, s *mcp.ClientSession) (map[string]*
 		switch {
 		case !ok:
 			missing = append(missing, name)
-		case c.cfg.RequireReadOnly && (t.Annotations == nil || !t.Annotations.ReadOnlyHint):
+		case c.cfg.RequireReadOnly && (t.Annotations == nil || !t.Annotations.ReadOnlyHint) && !slices.Contains(c.cfg.ReadOnlyUse, name):
 			writable = append(writable, name)
 		default:
 			allowed[name] = t

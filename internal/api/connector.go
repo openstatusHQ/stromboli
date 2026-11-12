@@ -13,6 +13,7 @@ import (
 	stromboliv1 "github.com/openstatushq/stromboli/gen/stromboli/v1"
 	"github.com/openstatushq/stromboli/internal/connector"
 	"github.com/openstatushq/stromboli/internal/connector/logs"
+	"github.com/openstatushq/stromboli/internal/connector/oauth"
 	"github.com/openstatushq/stromboli/internal/secrets"
 	"github.com/openstatushq/stromboli/internal/store"
 	"github.com/openstatushq/stromboli/internal/store/db"
@@ -96,7 +97,13 @@ func toConnector(r db.Connector) *stromboliv1.Connector {
 	cfg := map[string]string{}
 	_ = json.Unmarshal(r.Config, &cfg)
 	if len(r.Secrets) > 0 {
-		for _, k := range []string{"password", "bearer_token", "token"} {
+		// Secrets are not decrypted here: list the keys the connector can hold.
+		keys := []string{"password", "bearer_token", "token"}
+		if cfg[oauth.KeyAuthorizedAt] != "" {
+			// Logged in with OAuth (an axiom connector then has no token).
+			keys = []string{oauth.KeyRefreshToken}
+		}
+		for _, k := range keys {
 			if connector.IsSecret(r.Kind, k) {
 				cfg[k] = ""
 			}
