@@ -55,7 +55,7 @@ func (a *app) connectorLoginCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "login <name>",
 		Short: "Log a connector in again with OAuth",
-		Long: `Log in again to the MCP server of a connector that uses OAuth (vercel), for
+		Long: `Log in again to the MCP server of a connector that uses OAuth (axiom, vercel), for
 example after its login expired or was revoked. Its other settings are kept.`,
 		Example: `  stromboli connector login vercel`,
 		Args:    exactArgs(1, "<name>"),

@@ -18,7 +18,7 @@ import (
 
 func (a *app) connectorCmd() *cobra.Command {
 	cmd := group("connector", "Manage connectors to logs, metrics, deploys and machines",
-		"Connectors give stromboli read access to your logs (Loki, Axiom, CloudWatch),\nmetrics (Prometheus, Fly.io), deploys (GitHub, Vercel) and Fly.io machines (fly_machines). Secrets are encrypted on the server and never printed back.")
+		"Connectors give stromboli read access to your logs (Loki, Axiom, CloudWatch, Google Cloud, Vercel),\nmetrics (Prometheus, Fly.io), deploys (GitHub, Vercel) and Fly.io machines (fly_machines). Secrets are encrypted on the server and never printed back.")
 	cmd.Aliases = []string{"connectors"}
 	cmd.AddCommand(a.connectorAddCmd(), a.connectorLoginCmd(), a.connectorListCmd(), a.connectorTestCmd(), a.connectorRmCmd())
 	return cmd

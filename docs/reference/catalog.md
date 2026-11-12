@@ -56,7 +56,7 @@ The catalog is a list of services stored in stromboli's database. Its import and
 
 | Field | |
 |---|---|
-| `source` | name of a log connector (`loki`, `axiom`, `cloudwatch`, `gcp_logging`) |
+| `source` | name of a log connector (`loki`, `axiom`, `cloudwatch`, `gcp_logging`, `vercel`) |
 | `selector` | the connector's query selecting the service's logs. Syntax per kind: [Connectors](connectors.md#log-connectors) |
 
 ### metrics

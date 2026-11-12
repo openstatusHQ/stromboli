@@ -34,7 +34,7 @@ Common keys:
 | Kind | `logs.selector` | Error filter applies to | `catalog discover` proposes |
 |---|---|---|---|
 | `loki` | LogQL stream selector: `{service_name="api"}` | the log line | one service per `service_name`, `service`, `app`, `job` or `container` label value |
-| `axiom` | start of an APL query: `['logs']` or `['logs'] \| where ['service.name'] == "api"` | the message field (`message_field`, else detected: `message`, `msg`, `body`, `log`…) | one service per `service.name`, `service` or `app` value in each log dataset, or one per dataset |
+| `axiom` | start of an APL query: `['logs']` or `['logs'] \| where ['service.name'] == "api"` | the message field (`message_field`, else detected: `message`, `msg`, `body`, `log`…) | one service per value of the first service field found (`service.name`, `resource.service.name`, `service_name`, `service`, `app`, `fly.app.name`, `job`, `container`) in each log dataset with events in the last 24 hours, or one per dataset |
 | `cloudwatch` | log group(s), optionally followed by Insights commands: `/ecs/api` or `/ecs/prod, /ecs/worker \| filter service = "api"` | `@message` | one service per log group, named after its last path segment; with `service_field`, one per value of that field (groups limited to `log_group_prefix`) |
 | `gcp_logging` | Logging query language filter: `resource.type="cloud_run_revision" AND resource.labels.service_name="api"` | `textPayload` and `jsonPayload.message`, plus `severity>=ERROR` and `httpRequest.status>=500` | one service per Cloud Run service or job, function, Cloud Scheduler job, Cloud Tasks queue, Pub/Sub subscription or topic seen in the last hour |
 | `vercel` | a project name or ID, optionally followed by `environment=production` or `environment=preview`: `web environment=production` | the message, prefixed with its level (`level=error …`). Counts with a filter stop at 500 lines | one service per project of the team |
@@ -107,7 +107,7 @@ What a deploy is depends on the service's [`deploys`](catalog.md#deploys): compl
 
 There is no token to pass: `connector add` logs in to Vercel in a browser. The login has the access of your Vercel user; stromboli may only call `list_projects`, `list_deployments` and `get_runtime_logs`, all marked read-only by Vercel.
 
-Logs are the project's runtime logs (`get_runtime_logs`): 100 lines per call, as far back as your Vercel plan keeps them. Deploys are the deployments of the service's `deploys.project` to `deploys.environment` (`production` by default, or `preview`), optionally only of `deploys.branch`. The commit SHA, message and author come from the Git metadata Vercel records (GitHub, GitLab or Bitbucket). Vercel logs are read through a log store: see [Connect Vercel](../how-to/connect-vercel.md).
+Logs are the project's runtime logs (`get_runtime_logs`): 100 lines per call, as far back as your Vercel plan keeps them. Deploys are the deployments of the service's `deploys.project` to `deploys.environment` (`production` by default, or `preview`), optionally only of `deploys.branch`. The commit SHA, message and author come from the Git metadata Vercel records (GitHub, GitLab or Bitbucket). Request records without a message are not in the runtime logs; for those, and for longer history, see [Connect Vercel](../how-to/connect-vercel.md#limits).
 
 ## Action connectors
 
