@@ -65,6 +65,12 @@ Generate the secret key with `openssl rand -base64 32`. Slack is optional: [crea
 
 Already have Postgres? Run the image alone with `STROMBOLI_DB_URL=postgres://...`. Migrations run on startup. Binaries for Linux, macOS and Windows are on the [releases page](https://github.com/openstatushq/stromboli/releases).
 
+To install the CLI on macOS or Linux with Homebrew:
+
+```sh
+brew install openstatushq/tap/stromboli
+```
+
 Running it for real? Read [Self-hosting](docs/how-to/self-host.md) for the production checklist (TLS, tokens, backups) and how to upgrade.
 
 Or deploy stromboli and Postgres to Railway in one command, with the secrets generated for you. The setup is code, in [`.railway/railway.go`](.railway/railway.go) ([details](docs/how-to/deploy-on-railway.md)):
