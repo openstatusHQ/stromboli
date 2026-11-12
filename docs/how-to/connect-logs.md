@@ -28,9 +28,10 @@ stromboli connector add axiom axiom token
 
 | Setup | Extra keys |
 |---|---|
-| a region other than the default | `url=<api url>` |
 | a personal token (instead of an API token) | `org_id=<org>` |
 | the message is in an unusual field | `message_field=<field>` (detected from `message`, `msg`, `body`, `log`… otherwise) |
+
+Datasets in any region (US, EU…) work as is: queries go to the region that stores each dataset.
 
 Selector: the start of an APL query, for example `['logs']` or `['logs'] | where ['service.name'] == "api"`.
 
