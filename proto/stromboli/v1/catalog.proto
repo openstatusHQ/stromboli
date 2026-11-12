@@ -52,16 +52,20 @@ message LogsConfig {
 }
 
 message DeploysConfig {
-  // Name of a configured deploy connector.
+  // Name of a configured deploy connector (github or vercel).
   string source = 1;
   // owner/name of the GitHub repository.
   string repo = 2;
   // Optional workflow file name; deploys are its completed runs.
   string workflow = 3;
-  // Optional GitHub deployment environment.
+  // Optional GitHub deployment environment. For vercel, the deployment
+  // target (production or preview); defaults to production.
   string environment = 4;
-  // Branch used when falling back to commits. Defaults to the repo's default branch.
+  // Branch used when falling back to commits. Defaults to the repo's default
+  // branch. For vercel, only deploys of this branch.
   string branch = 5;
+  // Vercel project ID or name; required for vercel.
+  string project = 6;
 }
 
 message MetricsConfig {

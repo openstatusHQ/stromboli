@@ -99,5 +99,6 @@ The **Logs** section should show error patterns compared with the previous hour.
 
 ## See also
 
+- [Connect Vercel](connect-vercel.md): runtime logs and deploys, logging in with OAuth
 - [Connectors reference](../reference/connectors.md): every key, selector and what `discover` proposes
 - [Data access: on demand, MCP first](../explanation/data-access.md)

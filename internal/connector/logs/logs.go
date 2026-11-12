@@ -34,7 +34,7 @@ type Service struct {
 }
 
 // Kinds lists the connector kinds that are log sources.
-var Kinds = []string{"loki", "axiom", "cloudwatch", "gcp_logging"}
+var Kinds = []string{"loki", "axiom", "cloudwatch", "gcp_logging", "vercel"}
 
 // Source is a log backend. Implementations must bound their responses.
 type Source interface {

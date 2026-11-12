@@ -1,6 +1,7 @@
 package catalog
 
 import (
+	"fmt"
 	"slices"
 	"strings"
 	"testing"
@@ -137,5 +138,26 @@ func TestValidateMetrics(t *testing.T) {
 	}
 	if len(errs) != 2 || errs["no-selector"] != "metrics.selectors" || errs["wrong-kind"] != "metrics.source" {
 		t.Errorf("unexpected errors: %v", errs)
+	}
+}
+
+func TestValidateDeploys(t *testing.T) {
+	services := []*stromboliv1.Service{
+		{Name: "gh", Owners: []string{"@a"}, Deploys: &stromboliv1.DeploysConfig{Source: "gh", Repo: "o/r"}},
+		{Name: "gh-no-repo", Owners: []string{"@a"}, Deploys: &stromboliv1.DeploysConfig{Source: "gh"}},
+		{Name: "vercel", Owners: []string{"@a"}, Deploys: &stromboliv1.DeploysConfig{Source: "vercel", Project: "web"}},
+		{Name: "vercel-no-project", Owners: []string{"@a"}, Deploys: &stromboliv1.DeploysConfig{Source: "vercel", Repo: "o/r"}},
+		{Name: "wrong-kind", Owners: []string{"@a"}, Deploys: &stromboliv1.DeploysConfig{Source: "loki", Repo: "o/r"}},
+	}
+	issues := Validate(services, ValidateOptions{Connectors: map[string]string{"gh": "github", "vercel": "vercel", "loki": "loki"}})
+	errs := map[string]string{}
+	for _, i := range issues {
+		if !i.Warning {
+			errs[i.Service] = i.Field
+		}
+	}
+	want := map[string]string{"gh-no-repo": "deploys.repo", "vercel-no-project": "deploys.project", "wrong-kind": "deploys.source"}
+	if fmt.Sprint(errs) != fmt.Sprint(want) {
+		t.Errorf("errors = %v, want %v", errs, want)
 	}
 }

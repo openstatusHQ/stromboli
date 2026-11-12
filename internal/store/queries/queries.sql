@@ -41,6 +41,12 @@ INSERT INTO connectors (name, kind, config, secrets) VALUES ($1, $2, $3, $4)
 ON CONFLICT (name) DO UPDATE SET kind = EXCLUDED.kind, config = EXCLUDED.config,
     secrets = EXCLUDED.secrets, updated_at = now();
 
+-- name: UpdateConnectorSecrets :execrows
+-- Saves a rotated OAuth refresh token, unless the connector was logged in
+-- again (authorized_at changed) since it was read.
+UPDATE connectors SET secrets = $2, updated_at = now()
+WHERE name = $1 AND config->>'authorized_at' = @authorized_at::text;
+
 -- name: DeleteConnector :execrows
 DELETE FROM connectors WHERE name = $1;
 

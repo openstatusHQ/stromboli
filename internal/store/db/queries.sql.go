@@ -890,6 +890,27 @@ func (q *Queries) SupersedeActions(ctx context.Context, investigationID uuid.UUI
 	return result.RowsAffected(), nil
 }
 
+const updateConnectorSecrets = `-- name: UpdateConnectorSecrets :execrows
+UPDATE connectors SET secrets = $2, updated_at = now()
+WHERE name = $1 AND config->>'authorized_at' = $3::text
+`
+
+type UpdateConnectorSecretsParams struct {
+	Name         string
+	Secrets      []byte
+	AuthorizedAt string
+}
+
+// Saves a rotated OAuth refresh token, unless the connector was logged in
+// again (authorized_at changed) since it was read.
+func (q *Queries) UpdateConnectorSecrets(ctx context.Context, arg UpdateConnectorSecretsParams) (int64, error) {
+	result, err := q.db.Exec(ctx, updateConnectorSecrets, arg.Name, arg.Secrets, arg.AuthorizedAt)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const upsertRunbook = `-- name: UpsertRunbook :exec
 INSERT INTO runbooks (path, content) VALUES ($1, $2)
 ON CONFLICT (path) DO UPDATE SET content = EXCLUDED.content, updated_at = now()

@@ -28,7 +28,7 @@ New to stromboli? Do the tutorials in order:
 ### How-to guides
 
 - Install and run: [self-host in production](how-to/self-host.md), [deploy on Railway](how-to/deploy-on-railway.md), [deploy on Fly.io](how-to/deploy-on-fly.md)
-- Connect data: [logs](how-to/connect-logs.md), [metrics](how-to/connect-metrics.md), [deploys from GitHub](how-to/connect-github.md), [ship Fly.io logs](how-to/ship-fly-logs.md)
+- Connect data: [logs](how-to/connect-logs.md), [metrics](how-to/connect-metrics.md), [deploys from GitHub](how-to/connect-github.md), [Vercel](how-to/connect-vercel.md), [ship Fly.io logs](how-to/ship-fly-logs.md)
 - Describe your system: [manage the catalog in git](how-to/manage-the-catalog.md)
 - Receive alerts and report: [send alerts to stromboli](how-to/send-alerts.md), [set up Slack](how-to/set-up-slack.md)
 - Tune: [choose models](how-to/choose-models.md), [enable health checks](how-to/enable-health-checks.md)

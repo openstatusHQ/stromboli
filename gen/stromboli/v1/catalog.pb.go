@@ -311,16 +311,20 @@ func (x *LogsConfig) GetSelector() string {
 
 type DeploysConfig struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// Name of a configured deploy connector.
+	// Name of a configured deploy connector (github or vercel).
 	Source string `protobuf:"bytes,1,opt,name=source,proto3" json:"source,omitempty"`
 	// owner/name of the GitHub repository.
 	Repo string `protobuf:"bytes,2,opt,name=repo,proto3" json:"repo,omitempty"`
 	// Optional workflow file name; deploys are its completed runs.
 	Workflow string `protobuf:"bytes,3,opt,name=workflow,proto3" json:"workflow,omitempty"`
-	// Optional GitHub deployment environment.
+	// Optional GitHub deployment environment. For vercel, the deployment
+	// target (production or preview); defaults to production.
 	Environment string `protobuf:"bytes,4,opt,name=environment,proto3" json:"environment,omitempty"`
-	// Branch used when falling back to commits. Defaults to the repo's default branch.
-	Branch        string `protobuf:"bytes,5,opt,name=branch,proto3" json:"branch,omitempty"`
+	// Branch used when falling back to commits. Defaults to the repo's default
+	// branch. For vercel, only deploys of this branch.
+	Branch string `protobuf:"bytes,5,opt,name=branch,proto3" json:"branch,omitempty"`
+	// Vercel project ID or name; required for vercel.
+	Project       string `protobuf:"bytes,6,opt,name=project,proto3" json:"project,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -386,6 +390,13 @@ func (x *DeploysConfig) GetEnvironment() string {
 func (x *DeploysConfig) GetBranch() string {
 	if x != nil {
 		return x.Branch
+	}
+	return ""
+}
+
+func (x *DeploysConfig) GetProject() string {
+	if x != nil {
+		return x.Project
 	}
 	return ""
 }
@@ -1415,13 +1426,14 @@ const file_stromboli_v1_catalog_proto_rawDesc = "" +
 	"\n" +
 	"LogsConfig\x12\x16\n" +
 	"\x06source\x18\x01 \x01(\tR\x06source\x12\x1a\n" +
-	"\bselector\x18\x02 \x01(\tR\bselector\"\x91\x01\n" +
+	"\bselector\x18\x02 \x01(\tR\bselector\"\xab\x01\n" +
 	"\rDeploysConfig\x12\x16\n" +
 	"\x06source\x18\x01 \x01(\tR\x06source\x12\x12\n" +
 	"\x04repo\x18\x02 \x01(\tR\x04repo\x12\x1a\n" +
 	"\bworkflow\x18\x03 \x01(\tR\bworkflow\x12 \n" +
 	"\venvironment\x18\x04 \x01(\tR\venvironment\x12\x16\n" +
-	"\x06branch\x18\x05 \x01(\tR\x06branch\"E\n" +
+	"\x06branch\x18\x05 \x01(\tR\x06branch\x12\x18\n" +
+	"\aproject\x18\x06 \x01(\tR\aproject\"E\n" +
 	"\rMetricsConfig\x12\x16\n" +
 	"\x06source\x18\x01 \x01(\tR\x06source\x12\x1c\n" +
 	"\tselectors\x18\x02 \x03(\tR\tselectors\"1\n" +
