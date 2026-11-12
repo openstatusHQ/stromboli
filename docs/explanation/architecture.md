@@ -36,7 +36,7 @@ stromboli is a single Go binary and a Postgres database. The binary is both the 
 
 **The agent engine** owns investigations. It builds a deterministic brief, then runs one LLM conversation over read-only tools until a mitigation and a report are submitted. Investigations run in the background, outlive the request that started them, and are bounded by a timeout and a tool budget.
 
-**The connector registry** turns a connector stored in Postgres (with encrypted secrets) into a client for Loki, Axiom, CloudWatch, Google Cloud, Prometheus, Fly.io or GitHub. It reuses MCP sessions per connector and closes them on shutdown.
+**The connector registry** turns a connector stored in Postgres (with encrypted secrets) into a client for Loki, Axiom, CloudWatch, Google Cloud, Prometheus, Fly.io, GitHub or Vercel. It reuses MCP sessions per connector and closes them on shutdown.
 
 **The action service** stores machine actions proposed by investigations, and runs one only after a human approves it.
 
