@@ -16,7 +16,12 @@ import (
 type fakeAxiom struct {
 	mu      sync.Mutex
 	queries []string
+	paths   []string                // path each query was sent to
 	answer  func(apl string) string // tabular response body
+	// edge lists extra datasets whose edge deployment is this server.
+	edge []string
+	// noList makes listing datasets fail, as for a token without that permission.
+	noList bool
 }
 
 func (f *fakeAxiom) server(t *testing.T) *httptest.Server {
@@ -27,9 +32,20 @@ func (f *fakeAxiom) server(t *testing.T) *httptest.Server {
 			return
 		}
 		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/v2/datasets" && f.noList:
+			w.WriteHeader(http.StatusForbidden)
+			fmt.Fprint(w, `{"message":"forbidden"}`)
 		case r.Method == http.MethodGet && r.URL.Path == "/v2/datasets":
-			fmt.Fprint(w, `[{"name":"logs","kind":"axiom:events:v1"},{"name":"otel-metrics","kind":"otel:metrics:v1"},{"name":"edge","kind":"axiom:events:v1"}]`)
-		case r.Method == http.MethodPost && r.URL.Path == "/v1/datasets/_apl" && r.URL.Query().Get("format") == "tabular":
+			ds := []map[string]string{
+				{"name": "logs", "kind": "axiom:events:v1"},
+				{"name": "otel-metrics", "kind": "otel:metrics:v1"},
+				{"name": "edge", "kind": "axiom:events:v1"},
+			}
+			for _, name := range f.edge {
+				ds = append(ds, map[string]string{"name": name, "kind": "axiom:events:v1", "edgeDeploymentUrl": "http://" + r.Host + "/"})
+			}
+			json.NewEncoder(w).Encode(ds)
+		case r.Method == http.MethodPost && (r.URL.Path == "/v1/datasets/_apl" || r.URL.Path == "/v1/query/_apl") && r.URL.Query().Get("format") == "tabular":
 			var body struct {
 				APL       string `json:"apl"`
 				StartTime string `json:"startTime"`
@@ -40,6 +56,7 @@ func (f *fakeAxiom) server(t *testing.T) *httptest.Server {
 			}
 			f.mu.Lock()
 			f.queries = append(f.queries, body.APL)
+			f.paths = append(f.paths, r.URL.Path)
 			f.mu.Unlock()
 			fmt.Fprint(w, f.answer(body.APL))
 		default:
@@ -156,6 +173,53 @@ func TestAxiomServices(t *testing.T) {
 	}
 	if fmt.Sprint(got) != fmt.Sprint(want) {
 		t.Fatalf("services = %v, want %v", got, want)
+	}
+}
+
+// Datasets stored in a region are queried on its edge deployment; the main
+// API refuses them.
+func TestAxiomEdgeDeployment(t *testing.T) {
+	f := &fakeAxiom{edge: []string{"eu-logs"}, answer: func(apl string) string { return table([]string{"n"}, []any{1}) }}
+	ax, _ := NewAxiom(AxiomConfig{URL: f.server(t).URL, Token: "xaat-test"})
+	ctx := context.Background()
+	for _, sel := range []string{`['eu-logs'] | where ['service.name'] == "api"`, `['logs']`} {
+		if _, err := ax.Count(ctx, Query{Selector: sel, Start: time.Now().Add(-time.Hour), End: time.Now()}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if want := []string{"/v1/query/_apl", "/v1/datasets/_apl"}; fmt.Sprint(f.paths) != fmt.Sprint(want) {
+		t.Fatalf("paths = %v, want %v", f.paths, want)
+	}
+}
+
+// Without the datasets listing, queries stay on the main API.
+func TestAxiomEdgeListingFails(t *testing.T) {
+	f := &fakeAxiom{noList: true, answer: func(apl string) string { return table([]string{"n"}, []any{1}) }}
+	ax, _ := NewAxiom(AxiomConfig{URL: f.server(t).URL, Token: "xaat-test"})
+	for range 2 {
+		if _, err := ax.Count(context.Background(), Query{Selector: "['logs']", Start: time.Now().Add(-time.Hour), End: time.Now()}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if want := []string{"/v1/datasets/_apl", "/v1/datasets/_apl"}; fmt.Sprint(f.paths) != fmt.Sprint(want) {
+		t.Fatalf("paths = %v, want %v", f.paths, want)
+	}
+}
+
+func TestAPLDataset(t *testing.T) {
+	for in, want := range map[string]string{
+		`['logs'] | take 1`:        "logs",
+		` ["eu.logs"] | take 1`:    "eu.logs",
+		`['it\'s'] | take 1`:       "it's",
+		`logs-2026 | where x == 1`: "logs-2026",
+		`logs`:                     "logs",
+		`union ['a'], ['b']`:       "union",
+		`['unterminated | take 1`:  "",
+		`| take 1`:                 "",
+	} {
+		if got := aplDataset(in); got != want {
+			t.Errorf("aplDataset(%q) = %q, want %q", in, got, want)
+		}
 	}
 }
 

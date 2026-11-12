@@ -13,6 +13,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 )
 
 // AxiomConfig configures an Axiom connector.
@@ -143,11 +144,8 @@ const maxDiscoverDatasets = 50
 // Services proposes one service per value of a service field (service.name,
 // app, ...) in each log dataset, or one per dataset when there is none.
 func (a *Axiom) Services(ctx context.Context) ([]Service, error) {
-	var datasets []struct {
-		Name string `json:"name"`
-		Kind string `json:"kind"`
-	}
-	if err := a.do(ctx, http.MethodGet, "/v2/datasets", nil, &datasets); err != nil {
+	datasets, err := a.datasets(ctx)
+	if err != nil {
 		return nil, err
 	}
 	end := time.Now()
@@ -197,8 +195,96 @@ func (a *Axiom) Services(ctx context.Context) ([]Service, error) {
 }
 
 func (a *Axiom) Check(ctx context.Context) error {
-	var datasets []json.RawMessage
-	return a.do(ctx, http.MethodGet, "/v2/datasets", nil, &datasets)
+	_, err := a.datasets(ctx)
+	return err
+}
+
+type axiomDataset struct {
+	Name string `json:"name"`
+	Kind string `json:"kind"`
+	// EdgeDeploymentURL serves queries on the dataset, e.g.
+	// https://eu-central-1.aws.edge.axiom.co. Empty on older deployments.
+	EdgeDeploymentURL string `json:"edgeDeploymentUrl"`
+}
+
+// edgeCache remembers each dataset's edge deployment per connector, so
+// queries are not preceded by a dataset listing.
+var edgeCache sync.Map // key -> cachedEdges
+
+type cachedEdges struct {
+	edges map[string]string // dataset -> edge deployment URL
+	until time.Time
+}
+
+func (a *Axiom) cacheKey() string {
+	return a.cfg.URL + "\x00" + a.cfg.OrgID + "\x00" + a.cfg.Token
+}
+
+// datasets lists the datasets and refreshes edgeCache.
+func (a *Axiom) datasets(ctx context.Context) ([]axiomDataset, error) {
+	var datasets []axiomDataset
+	if err := a.do(ctx, http.MethodGet, a.cfg.URL+"/v2/datasets", nil, &datasets); err != nil {
+		return nil, err
+	}
+	edges := map[string]string{}
+	for _, ds := range datasets {
+		if u, err := url.Parse(ds.EdgeDeploymentURL); err == nil && u.Host != "" && (u.Scheme == "https" || u.Scheme == "http") {
+			edges[ds.Name] = strings.TrimRight(ds.EdgeDeploymentURL, "/")
+		}
+	}
+	edgeCache.Store(a.cacheKey(), cachedEdges{edges, time.Now().Add(10 * time.Minute)})
+	return datasets, nil
+}
+
+// queryURL returns where to send an APL query. Queries go to the edge
+// deployment holding the dataset: the main API refuses queries on datasets
+// stored in another region (430 "query prevented due to limiter"). When the
+// datasets cannot be listed, queries stay on the main API.
+func (a *Axiom) queryURL(ctx context.Context, apl string) string {
+	ds := aplDataset(apl)
+	c, ok := edgeCache.Load(a.cacheKey())
+	if ds != "" && (!ok || time.Now().After(c.(cachedEdges).until)) {
+		if _, err := a.datasets(ctx); err != nil {
+			// Don't list again before every query.
+			edgeCache.Store(a.cacheKey(), cachedEdges{until: time.Now().Add(time.Minute)})
+		}
+		c, ok = edgeCache.Load(a.cacheKey())
+	}
+	if ok {
+		if edge := c.(cachedEdges).edges[ds]; edge != "" {
+			return edge + "/v1/query/_apl?format=tabular"
+		}
+	}
+	return a.cfg.URL + "/v1/datasets/_apl?format=tabular"
+}
+
+// aplDataset returns the dataset an APL query starts with: ['name'],
+// ["name"] or a bare name. It is empty when the query starts otherwise.
+func aplDataset(apl string) string {
+	s := strings.TrimSpace(apl)
+	if len(s) > 2 && s[0] == '[' && (s[1] == '\'' || s[1] == '"') {
+		quote := s[1]
+		var b strings.Builder
+		for i := 2; i < len(s); i++ {
+			switch c := s[i]; {
+			case c == '\\' && i+1 < len(s):
+				i++
+				b.WriteByte(s[i])
+			case c == quote:
+				return b.String()
+			default:
+				b.WriteByte(c)
+			}
+		}
+		return ""
+	}
+	end := strings.IndexFunc(s, func(r rune) bool {
+		return !unicode.IsLetter(r) && !unicode.IsDigit(r) && r != '_' && r != '-' && r != '.'
+	})
+	if end < 0 {
+		return s
+	}
+	return s[:end]
 }
 
 // withFilter appends the regex filter. It matches "level=<level> <message>",
@@ -333,13 +419,13 @@ func (a *Axiom) query(ctx context.Context, apl string, start, end time.Time) (*a
 		body["endTime"] = end.UTC().Format(time.RFC3339Nano)
 	}
 	var res axiomResult
-	if err := a.do(ctx, http.MethodPost, "/v1/datasets/_apl?format=tabular", body, &res); err != nil {
+	if err := a.do(ctx, http.MethodPost, a.queryURL(ctx, apl), body, &res); err != nil {
 		return nil, err
 	}
 	return &res, nil
 }
 
-func (a *Axiom) do(ctx context.Context, method, path string, in, out any) error {
+func (a *Axiom) do(ctx context.Context, method, u string, in, out any) error {
 	var rd io.Reader
 	if in != nil {
 		b, err := json.Marshal(in)
@@ -348,7 +434,7 @@ func (a *Axiom) do(ctx context.Context, method, path string, in, out any) error 
 		}
 		rd = bytes.NewReader(b)
 	}
-	req, err := http.NewRequestWithContext(ctx, method, a.cfg.URL+path, rd)
+	req, err := http.NewRequestWithContext(ctx, method, u, rd)
 	if err != nil {
 		return err
 	}

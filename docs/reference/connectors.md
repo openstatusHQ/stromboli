@@ -47,7 +47,7 @@ JSON log lines (Fly's log shipper, Vector, most structured loggers) are reduced 
 
 ### axiom
 
-`url` defaults to Axiom's API; set it for other regions. `org_id` is needed with a personal token.
+`url` defaults to Axiom's API (`https://api.axiom.co`). Queries go to the edge deployment that stores each dataset (for example `https://eu-central-1.aws.edge.axiom.co`), as listed by the API, so datasets in any region work without changing `url`. `org_id` is needed with a personal token.
 
 ### cloudwatch
 
