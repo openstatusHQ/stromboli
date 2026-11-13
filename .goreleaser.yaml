@@ -62,7 +62,7 @@ homebrew_casks:
       branch: main
       token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
     directory: Casks
-    homepage: https://github.com/openstatusHQ/opensre
+    homepage: https://github.com/openstatusHQ/stromboli
     description: An open-source AI SRE agent you host yourself
     commit_author:
       name: goreleaserbot
