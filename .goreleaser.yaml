@@ -1,0 +1,84 @@
+# yaml-language-server: $schema=https://goreleaser.com/static/schema.json
+# Release config. Run by .github/workflows/release.yml on v* tags.
+# Try it locally with: goreleaser release --snapshot --clean
+version: 2
+
+project_name: stromboli
+
+before:
+  hooks:
+    - go mod download
+
+builds:
+  - id: stromboli
+    main: ./cmd/stromboli
+    binary: stromboli
+    env:
+      - CGO_ENABLED=0
+    goos: [linux, darwin, windows]
+    goarch: [amd64, arm64]
+    ignore:
+      - goos: windows
+        goarch: arm64
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w -X main.version={{ .Tag }}
+    mod_timestamp: "{{ .CommitTimestamp }}"
+
+archives:
+  - id: stromboli
+    ids: [stromboli]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    wrap_in_directory: true
+    formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    files:
+      - LICENSE
+      - README.md
+
+checksum:
+  name_template: checksums.txt
+
+changelog:
+  use: github-native
+
+release:
+  prerelease: auto
+  draft: false
+
+# Publishes a cask to the openstatusHQ/homebrew-stromboli repository, so users can
+#   brew install openstatushq/stromboli/stromboli
+# Needs a HOMEBREW_TAP_GITHUB_TOKEN secret with write access to that repo.
+homebrew_casks:
+  - name: stromboli
+    ids: [stromboli]
+    binaries: [stromboli]
+    repository:
+      owner: openstatusHQ
+      name: homebrew-stromboli
+      branch: main
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    directory: Casks
+    homepage: https://github.com/openstatusHQ/opensre
+    description: An open-source AI SRE agent you host yourself
+    commit_author:
+      name: goreleaserbot
+      email: bot@goreleaser.com
+    commit_msg_template: "chore: bump {{ .ProjectName }} to {{ .Tag }}"
+    # Don't push the cask for pre-releases (e.g. v0.2.0-rc.1).
+    skip_upload: auto
+    # Cobra's built-in `stromboli completion <shell>`.
+    generate_completions_from_executable:
+      executable: stromboli
+      args: [completion]
+      shells: [bash, zsh, fish]
+    hooks:
+      post:
+        # The binary isn't notarized; drop the quarantine flag so macOS runs it.
+        install_steps: |
+          if OS.mac? && system_command("/usr/bin/xattr", args: ["-h"]).exit_status == 0
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/stromboli"]
+          end
