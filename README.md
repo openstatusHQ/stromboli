@@ -68,7 +68,7 @@ Already have Postgres? Run the image alone with `STROMBOLI_DB_URL=postgres://...
 To install the CLI on macOS or Linux with Homebrew:
 
 ```sh
-brew install openstatushq/tap/stromboli
+brew install openstatushq/stromboli/stromboli
 ```
 
 Running it for real? Read [Self-hosting](docs/how-to/self-host.md) for the production checklist (TLS, tokens, backups) and how to upgrade.

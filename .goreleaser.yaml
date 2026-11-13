@@ -49,8 +49,8 @@ release:
   prerelease: auto
   draft: false
 
-# Publishes a cask to the openstatusHQ/homebrew-tap repository, so users can
-#   brew install openstatushq/tap/stromboli
+# Publishes a cask to the openstatusHQ/homebrew-stromboli repository, so users can
+#   brew install openstatushq/stromboli/stromboli
 # Needs a HOMEBREW_TAP_GITHUB_TOKEN secret with write access to that repo.
 homebrew_casks:
   - name: stromboli
@@ -58,7 +58,7 @@ homebrew_casks:
     binaries: [stromboli]
     repository:
       owner: openstatusHQ
-      name: homebrew-tap
+      name: homebrew-stromboli
       branch: main
       token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
     directory: Casks

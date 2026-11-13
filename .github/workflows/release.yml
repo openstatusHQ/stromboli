@@ -63,7 +63,7 @@ jobs:
         with:
           go-version-file: go.mod
       # Builds the binaries, publishes the GitHub release (see .goreleaser.yaml)
-      # and pushes the Homebrew cask to openstatusHQ/homebrew-tap.
+      # and pushes the Homebrew cask to openstatusHQ/homebrew-stromboli.
       - uses: goreleaser/goreleaser-action@v6
         with:
           distribution: goreleaser
