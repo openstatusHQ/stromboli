@@ -540,6 +540,12 @@ claude mcp add --transport http stromboli https://stromboli.example.com/mcp --he
 
 Investigations started from MCP have source `mcp`, with the client's name in their alert.
 
+**As a Claude Code skill**, Claude drives the `stromboli` CLI for you: briefs, investigations, the catalog, connectors and action approvals, with secrets kept off the command line and approvals left to a named human. Copy [`skills/stromboli`](skills/stromboli) into your skills folder:
+
+```sh
+cp -R skills/stromboli ~/.claude/skills/
+```
+
 ## Development
 
 The dev stack includes a demo app that triggers a fake incident after 3 minutes, so you can watch a full investigation locally:

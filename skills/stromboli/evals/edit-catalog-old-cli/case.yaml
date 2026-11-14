@@ -1,0 +1,4 @@
+schema_version: "1.1"
+name: edit-catalog-old-cli
+expected_outcome: |
+  Changes checker in the stromboli catalog so its owners are @payments and it depends on db-proxy, using export/edit/import because the installed v0.1.0 CLI has no catalog set, without --prune and without touching other services.
