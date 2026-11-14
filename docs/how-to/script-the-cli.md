@@ -16,6 +16,7 @@ In CI, pass `--no-input` so a command fails instead of waiting for input. Comman
 | Command | Asks for | Non-interactive |
 |---|---|---|
 | `connector rm` | confirmation | `--yes` |
+| `catalog rm` | confirmation | `--yes` |
 | `catalog import --prune` | confirmation, when it would delete something | `--yes` |
 | `actions approve` | confirmation, and your name | `--yes`, `--as <name>` or `STROMBOLI_USER` |
 | `actions reject` | your name | `--as <name>` or `STROMBOLI_USER` |

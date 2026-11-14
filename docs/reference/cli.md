@@ -124,6 +124,14 @@ Manage the [service catalog](catalog.md).
 
 Alias: `ls`. Prints `NAME`, `TIER`, `OWNERS`, `DEPENDS ON`, `SOURCES` (e.g. `logs=loki metrics=fly deploys=github`).
 
+#### catalog rm
+
+Aliases: `remove`, `delete`. Deletes a service from the catalog. Asks for confirmation. If the catalog is kept in a file, remove the entry there too, or the next `catalog import` adds it back.
+
+| Flag | |
+|---|---|
+| `-y`, `--yes` | do not ask |
+
 #### catalog import
 
 ```text

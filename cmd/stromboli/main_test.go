@@ -24,7 +24,7 @@ type fake struct {
 	stromboliv1connect.UnimplementedInvestigationServiceHandler
 
 	created  *stromboliv1.CreateConnectorRequest
-	deleted  []string
+	deleted  []string // connectors and services, by name
 	imported *stromboliv1.ImportCatalogRequest
 	existing string // services YAML returned by ExportCatalog
 	services []*stromboliv1.Service
@@ -48,6 +48,11 @@ func (f *fake) TestConnector(context.Context, *connect.Request[stromboliv1.TestC
 func (f *fake) DeleteConnector(_ context.Context, req *connect.Request[stromboliv1.DeleteConnectorRequest]) (*connect.Response[stromboliv1.DeleteConnectorResponse], error) {
 	f.deleted = append(f.deleted, req.Msg.Name)
 	return connect.NewResponse(&stromboliv1.DeleteConnectorResponse{}), nil
+}
+
+func (f *fake) DeleteService(_ context.Context, req *connect.Request[stromboliv1.DeleteServiceRequest]) (*connect.Response[stromboliv1.DeleteServiceResponse], error) {
+	f.deleted = append(f.deleted, req.Msg.Name)
+	return connect.NewResponse(&stromboliv1.DeleteServiceResponse{}), nil
 }
 
 func (f *fake) ExportCatalog(context.Context, *connect.Request[stromboliv1.ExportCatalogRequest]) (*connect.Response[stromboliv1.ExportCatalogResponse], error) {
@@ -202,6 +207,26 @@ func TestConnectorRmConfirms(t *testing.T) {
 		t.Fatalf("answered yes: exit %d, deleted %v, stderr %q", r.code, f.deleted, r.stderr)
 	}
 	r = run(t, f, "", false, "connector", "rm", "loki", "-y")
+	if r.code != 0 || len(f.deleted) != 2 {
+		t.Fatalf("--yes: exit %d, deleted %v", r.code, f.deleted)
+	}
+}
+
+func TestCatalogRmConfirms(t *testing.T) {
+	f := &fake{}
+	r := run(t, f, "", false, "catalog", "rm", "api")
+	if r.code != exitError || len(f.deleted) != 0 || !strings.Contains(r.stderr, "--yes") {
+		t.Fatalf("non-interactive: exit %d, deleted %v, stderr %q", r.code, f.deleted, r.stderr)
+	}
+	r = run(t, f, "n\n", true, "catalog", "rm", "api")
+	if r.code != exitError || len(f.deleted) != 0 {
+		t.Fatalf("answered no: exit %d, deleted %v", r.code, f.deleted)
+	}
+	r = run(t, f, "y\n", true, "catalog", "rm", "api")
+	if r.code != 0 || len(f.deleted) != 1 || f.deleted[0] != "api" {
+		t.Fatalf("answered yes: exit %d, deleted %v, stderr %q", r.code, f.deleted, r.stderr)
+	}
+	r = run(t, f, "", false, "catalog", "rm", "api", "-y")
 	if r.code != 0 || len(f.deleted) != 2 {
 		t.Fatalf("--yes: exit %d, deleted %v", r.code, f.deleted)
 	}
