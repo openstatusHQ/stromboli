@@ -47,6 +47,20 @@ sqlc generate                # after editing internal/store/queries or migration
 - **No secrets in logs, errors or reports.** Connector credentials are encrypted at rest; keep them that way.
 - **Document new settings** in [`.env.example`](.env.example), the [Configuration](README.md#configuration) table and the [configuration reference](docs/reference/configuration.md).
 
+## Releasing
+
+stromboli follows [Semantic Versioning](https://semver.org). Before 1.0.0, a minor version (`0.x.0`) may break configuration or the catalog format; a patch version (`0.x.y`) only fixes bugs. The API stays backwards compatible either way.
+
+1. Move the **Unreleased** entries in [CHANGELOG.md](CHANGELOG.md) under a new version heading with today's date, update the compare links, and merge that to `main`.
+2. Tag the merge commit on `main` and push the tag:
+
+   ```sh
+   git tag -a v0.2.0 -m "v0.2.0"
+   git push origin v0.2.0
+   ```
+
+The [release workflow](.github/workflows/release.yml) then publishes the `ghcr.io/openstatushq/stromboli` image (`0.2.0`, `0.2` and `latest`), the GitHub release with binaries and checksums, and the Homebrew cask. A tag with a suffix such as `v0.2.0-rc.1` is a pre-release: no `latest` image and no cask update.
+
 ## License
 
 By contributing, you agree that your contributions are licensed under the [MIT license](LICENSE), like the rest of the project.
