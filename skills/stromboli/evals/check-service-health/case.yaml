@@ -1,0 +1,4 @@
+schema_version: "1.1"
+name: check-service-health
+expected_outcome: |
+  Runs a stromboli brief on api (free, no LLM) rather than starting an investigation without asking, and reports the new 'too many clients' database error pattern and 500s, with when they started.

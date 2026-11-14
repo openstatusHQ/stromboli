@@ -1,0 +1,4 @@
+schema_version: "1.1"
+name: investigate-without-llm
+expected_outcome: |
+  Tries to start the investigation, recognises the server has no LLM configured (a server-side setting the team must fix), says so plainly, and falls back to the brief to describe what is going on with api.
