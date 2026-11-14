@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -156,11 +155,26 @@ func (a *app) confirm(ctx context.Context, yes bool, action, question string) er
 func (a *app) prompt(ctx context.Context, question string) (string, error) {
 	fmt.Fprint(a.stderr, question)
 	return a.cancelable(ctx, func() (string, error) {
-		line, err := bufio.NewReader(a.stdin).ReadString('\n')
-		if err != nil && !errors.Is(err, io.EOF) {
-			return "", err
+		// Read byte by byte: a buffered reader would swallow the answers to
+		// the prompts that follow.
+		var line []byte
+		b := make([]byte, 1)
+		for {
+			n, err := a.stdin.Read(b)
+			if n == 1 {
+				if b[0] == '\n' {
+					break
+				}
+				line = append(line, b[0])
+			}
+			if errors.Is(err, io.EOF) {
+				break
+			}
+			if err != nil {
+				return "", err
+			}
 		}
-		return strings.TrimSpace(line), nil
+		return strings.TrimSpace(string(line)), nil
 	})
 }
 

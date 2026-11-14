@@ -124,6 +124,23 @@ Manage the [service catalog](catalog.md).
 
 Alias: `ls`. Prints `NAME`, `TIER`, `OWNERS`, `DEPENDS ON`, `SOURCES` (e.g. `logs=loki metrics=fly deploys=github`).
 
+#### catalog set
+
+```text
+stromboli catalog set <name> [flags]
+```
+
+Changes fields of one service and keeps the others. `--owner` and `--depends-on` replace the list (`""` clears it); `--add-owner` and `--add-depends-on` add to it. Validation issues for the service are printed as for `catalog import`. If the catalog is kept in a file, make the same change there, or the next `catalog import` reverts it.
+
+| Flag | |
+|---|---|
+| `--owner <owner>` | set the owners (repeatable) |
+| `--add-owner <owner>` | add an owner (repeatable) |
+| `--depends-on <service>` | set the services it depends on (repeatable) |
+| `--add-depends-on <service>` | add a service it depends on (repeatable) |
+| `--tier <n>` | set the tier (`0` unsets it) |
+| `--description <text>` | set the description |
+
 #### catalog rm
 
 Aliases: `remove`, `delete`. Deletes a service from the catalog. Asks for confirmation. If the catalog is kept in a file, remove the entry there too, or the next `catalog import` adds it back.
@@ -168,10 +185,17 @@ Checks the stored catalog: schema, unknown dependencies, cycles, missing runbook
 #### catalog discover
 
 ```text
-stromboli catalog discover <log-or-metrics-connector>
+stromboli catalog discover <log-or-metrics-connector> [flags]
 ```
 
-Prints one YAML catalog entry per service the connector sees that is not in the catalog yet, with its selector filled in. For a metrics connector, also existing services without metrics, as their full entry with `metrics` filled in. What each kind proposes: [Connectors](connectors.md).
+Proposes one catalog entry per service the connector sees that is not in the catalog yet, with its selector filled in. For a metrics connector, also existing services without metrics, as their full entry with `metrics` filled in. On a Vercel connector, `deploys` is filled in too. What each kind proposes: [Connectors](connectors.md).
+
+In a terminal, it lists the services, asks whether to add them and for an optional owner, then imports them. When stdout is redirected, it prints the entries as YAML instead, for `catalog import`.
+
+| Flag | |
+|---|---|
+| `--import` | add the services without asking |
+| `--owner <owner>` | owner to set on every discovered service (repeatable) |
 
 ---
 

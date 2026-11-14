@@ -213,7 +213,8 @@ func (c *CatalogService) DiscoverServices(ctx context.Context, req *connect.Requ
 	if err != nil {
 		return nil, internal(err)
 	}
-	if cn, err := c.store.GetConnector(ctx, req.Msg.Connector); err == nil && slices.Contains(metrics.Kinds, cn.Kind) {
+	cn, cnErr := c.store.GetConnector(ctx, req.Msg.Connector)
+	if cnErr == nil && slices.Contains(metrics.Kinds, cn.Kind) {
 		return c.discoverMetrics(ctx, req.Msg.Connector, services)
 	}
 	src, err := c.connectors.Logs(ctx, req.Msg.Connector)
@@ -235,10 +236,15 @@ func (c *CatalogService) DiscoverServices(ctx context.Context, req *connect.Requ
 			continue
 		}
 		known[name] = true
-		resp.Candidates = append(resp.Candidates, &stromboliv1.Service{
+		svc := &stromboliv1.Service{
 			Name: name,
 			Logs: &stromboliv1.LogsConfig{Source: req.Msg.Connector, Selector: f.Selector},
-		})
+		}
+		// A Vercel project is both the log source and the deploy source.
+		if cnErr == nil && cn.Kind == "vercel" {
+			svc.Deploys = &stromboliv1.DeploysConfig{Source: req.Msg.Connector, Project: f.Name}
+		}
+		resp.Candidates = append(resp.Candidates, svc)
 	}
 	return connect.NewResponse(resp), nil
 }
