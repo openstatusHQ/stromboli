@@ -23,11 +23,31 @@ type fake struct {
 	stromboliv1connect.UnimplementedCatalogServiceHandler
 	stromboliv1connect.UnimplementedInvestigationServiceHandler
 
-	created  *stromboliv1.CreateConnectorRequest
-	deleted  []string // connectors and services, by name
-	imported *stromboliv1.ImportCatalogRequest
-	existing string // services YAML returned by ExportCatalog
-	services []*stromboliv1.Service
+	created    *stromboliv1.CreateConnectorRequest
+	deleted    []string // connectors and services, by name
+	imported   *stromboliv1.ImportCatalogRequest
+	existing   string // services YAML returned by ExportCatalog
+	services   []*stromboliv1.Service
+	discovered []*stromboliv1.Service
+	upserted   *stromboliv1.Service
+}
+
+func (f *fake) GetService(_ context.Context, req *connect.Request[stromboliv1.GetServiceRequest]) (*connect.Response[stromboliv1.GetServiceResponse], error) {
+	for _, s := range f.services {
+		if s.Name == req.Msg.Name {
+			return connect.NewResponse(&stromboliv1.GetServiceResponse{Service: s}), nil
+		}
+	}
+	return nil, connect.NewError(connect.CodeNotFound, errors.New("service not found"))
+}
+
+func (f *fake) UpsertService(_ context.Context, req *connect.Request[stromboliv1.UpsertServiceRequest]) (*connect.Response[stromboliv1.UpsertServiceResponse], error) {
+	f.upserted = req.Msg.Service
+	return connect.NewResponse(&stromboliv1.UpsertServiceResponse{Service: req.Msg.Service}), nil
+}
+
+func (f *fake) DiscoverServices(context.Context, *connect.Request[stromboliv1.DiscoverServicesRequest]) (*connect.Response[stromboliv1.DiscoverServicesResponse], error) {
+	return connect.NewResponse(&stromboliv1.DiscoverServicesResponse{Candidates: f.discovered}), nil
 }
 
 func (f *fake) ListConnectors(context.Context, *connect.Request[stromboliv1.ListConnectorsRequest]) (*connect.Response[stromboliv1.ListConnectorsResponse], error) {
@@ -80,6 +100,12 @@ type result struct {
 // run executes the CLI against f with the given stdin.
 func run(t *testing.T, f *fake, stdin string, interactive bool, args ...string) result {
 	t.Helper()
+	return runTTY(t, f, stdin, interactive, false, args...)
+}
+
+// runTTY is run with stdout optionally reported as a terminal.
+func runTTY(t *testing.T, f *fake, stdin string, interactive, stdoutTTY bool, args ...string) result {
+	t.Helper()
 	mux := http.NewServeMux()
 	mux.Handle(stromboliv1connect.NewConnectorServiceHandler(f))
 	mux.Handle(stromboliv1connect.NewCatalogServiceHandler(f))
@@ -90,6 +116,7 @@ func run(t *testing.T, f *fake, stdin string, interactive bool, args ...string) 
 	var stdout, stderr bytes.Buffer
 	a := newApp(strings.NewReader(stdin), &stdout, &stderr)
 	a.interactive = func() bool { return interactive }
+	a.stdoutTerminal = func() bool { return stdoutTTY }
 	a.readSecret = func(context.Context) (string, error) { return "prompted-secret", nil }
 	code := a.run(context.Background(), append([]string{"--url", srv.URL}, args...))
 	return result{code, stdout.String(), stderr.String()}
@@ -251,6 +278,80 @@ func TestCatalogImportPrune(t *testing.T) {
 	r = run(t, f, yaml, false, "catalog", "import", "-", "--prune", "--yes")
 	if r.code != 0 || f.imported == nil {
 		t.Fatalf("--yes: exit %d, stderr %q", r.code, r.stderr)
+	}
+}
+
+func TestCatalogDiscover(t *testing.T) {
+	discovered := func() []*stromboliv1.Service {
+		return []*stromboliv1.Service{
+			{Name: "web", Logs: &stromboliv1.LogsConfig{Source: "vercel", Selector: "web"}},
+			{Name: "docs", Logs: &stromboliv1.LogsConfig{Source: "vercel", Selector: "docs"}},
+		}
+	}
+
+	// Redirected stdout: YAML to review, nothing imported.
+	f := &fake{discovered: discovered()}
+	r := run(t, f, "", false, "catalog", "discover", "vercel")
+	if r.code != 0 || f.imported != nil || !strings.Contains(r.stdout, "name: web") {
+		t.Fatalf("redirected: exit %d, imported %v, stdout %q", r.code, f.imported, r.stdout)
+	}
+
+	// Terminal: asks, then imports with the owner given.
+	f = &fake{discovered: discovered()}
+	r = runTTY(t, f, "\n@frontend\n", true, true, "catalog", "discover", "vercel")
+	if r.code != 0 || f.imported == nil || !strings.Contains(r.stdout, "Added 1 service") {
+		t.Fatalf("terminal: exit %d, stdout %q, stderr %q", r.code, r.stdout, r.stderr)
+	}
+	if !strings.Contains(string(f.imported.ServicesYaml), "@frontend") || f.imported.Prune {
+		t.Fatalf("terminal: imported %q (prune %v)", f.imported.ServicesYaml, f.imported.Prune)
+	}
+
+	// Terminal, answered no.
+	f = &fake{discovered: discovered()}
+	r = runTTY(t, f, "n\n", true, true, "catalog", "discover", "vercel")
+	if r.code != exitError || f.imported != nil {
+		t.Fatalf("answered no: exit %d, imported %v", r.code, f.imported)
+	}
+
+	// --import in a script: no prompts.
+	f = &fake{discovered: discovered()}
+	r = run(t, f, "", false, "catalog", "discover", "vercel", "--import", "--owner", "@a", "--owner", "@b")
+	if r.code != 0 || f.imported == nil || !strings.Contains(string(f.imported.ServicesYaml), "@b") {
+		t.Fatalf("--import: exit %d, imported %v, stderr %q", r.code, f.imported, r.stderr)
+	}
+}
+
+func TestCatalogSet(t *testing.T) {
+	svc := func() *stromboliv1.Service {
+		return &stromboliv1.Service{Name: "web", Owners: []string{"@old"}, DependsOn: []string{"api"}, Description: "site",
+			Logs: &stromboliv1.LogsConfig{Source: "vercel", Selector: "web"}}
+	}
+
+	f := &fake{services: []*stromboliv1.Service{svc()}}
+	r := run(t, f, "", false, "catalog", "set", "web")
+	if r.code != exitUsage || f.upserted != nil {
+		t.Fatalf("no flags: exit %d, upserted %v", r.code, f.upserted)
+	}
+
+	r = run(t, f, "", false, "catalog", "set", "web", "--owner", "@frontend", "--add-depends-on", "db", "--add-depends-on", "api", "--tier", "1")
+	u := f.upserted
+	if r.code != 0 || u == nil || !strings.Contains(r.stdout, `Service "web" updated.`) {
+		t.Fatalf("set: exit %d, stdout %q, stderr %q", r.code, r.stdout, r.stderr)
+	}
+	if strings.Join(u.Owners, ",") != "@frontend" || strings.Join(u.DependsOn, ",") != "api,db" || u.Tier != 1 ||
+		u.Description != "site" || u.Logs.GetSelector() != "web" {
+		t.Fatalf("set: got %v", u)
+	}
+
+	f = &fake{services: []*stromboliv1.Service{svc()}}
+	r = run(t, f, "", false, "catalog", "set", "web", "--depends-on", "")
+	if r.code != 0 || f.upserted == nil || len(f.upserted.DependsOn) != 0 || len(f.upserted.Owners) != 1 {
+		t.Fatalf("clear: exit %d, got %v, stderr %q", r.code, f.upserted, r.stderr)
+	}
+
+	r = run(t, f, "", false, "catalog", "set", "nope", "--owner", "@x")
+	if r.code != exitError || !strings.Contains(r.stderr, "not found") {
+		t.Fatalf("unknown service: exit %d, stderr %q", r.code, r.stderr)
 	}
 }
 

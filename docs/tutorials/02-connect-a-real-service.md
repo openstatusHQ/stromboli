@@ -97,7 +97,7 @@ stromboli catalog discover loki > services.yaml
 ```
 
 ```text
-Found 7 services. Add owners and depends_on, then run `stromboli catalog import <file>`.
+Found 7 services. Import them with `stromboli catalog import <file>`; owners and depends_on are optional.
 ```
 
 Open `services.yaml`. There is one entry per service, each with its `logs.source` and `logs.selector` filled in. Delete every entry except your service, then add who owns it and what it depends on:

@@ -16,29 +16,39 @@ The login has the access of your Vercel user; stromboli may only call `list_proj
 
 ## 2. Add the services
 
-Let the connector propose one service per project:
+Let the connector propose one service per project, with its logs and deploys filled in:
 
 ```sh
-stromboli catalog discover vercel > vercel.yaml
+stromboli catalog discover vercel --owner @you
 ```
 
-Then add owners, and the deploys of each project:
+```text
+Found 3 services: api, docs, web.
+Add them to the catalog? [Y/n]
+Added 3 services to the catalog.
+```
+
+Each service comes out like this:
 
 ```yaml
 - name: web
   owners: ["@you"]
   logs:
     source: vercel
-    selector: web environment=production   # project name or ID; environment is optional
+    selector: web     # project name or ID
   deploys:
     source: vercel
-    project: web              # project name or ID
-    environment: production   # optional: production (default) or preview
-    branch: main              # optional: only deploys of this branch
+    project: web      # project name or ID
 ```
 
-```sh
-stromboli catalog import vercel.yaml
+Add what each project depends on as you go, e.g. `stromboli catalog set web --add-depends-on api`. To narrow it down, redirect discover to a file (`> vercel.yaml`), edit the entries, then run `stromboli catalog import vercel.yaml`:
+
+```yaml
+  logs:
+    selector: web environment=production   # environment is optional
+  deploys:
+    environment: production   # optional: production (default) or preview
+    branch: main              # optional: only deploys of this branch
 ```
 
 ## 3. Check it

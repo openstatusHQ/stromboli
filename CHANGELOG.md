@@ -6,6 +6,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Added
+
+- `catalog set <name>` changes the owners, dependencies, tier or description of one service without editing a file, e.g. `stromboli catalog set web --owner @frontend --add-depends-on api`.
+
+### Changed
+
+- `catalog discover` run in a terminal lists the services it found and adds them to the catalog after one confirmation, optionally with an owner. Redirect it to a file to get the YAML as before. `--import` adds them without asking, and `--owner` sets owners on every discovered service.
+- `catalog discover` on a Vercel connector also fills in `deploys` for each project.
+
 ## [0.1.0] - 2026-11-13
 
 The first release.

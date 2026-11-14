@@ -85,8 +85,7 @@ which talk to a running server.`,
 
   # Set up a log source and the service catalog
   stromboli connector add loki loki url=http://loki:3100
-  stromboli catalog discover loki > services.yaml
-  stromboli catalog import services.yaml --runbooks runbooks/
+  stromboli catalog discover loki
 
   # Investigate
   stromboli brief api --since 1h
@@ -200,6 +199,8 @@ type app struct {
 
 	// interactive reports whether we may prompt; overridable in tests.
 	interactive func() bool
+	// stdoutTerminal reports whether stdout is a terminal; overridable in tests.
+	stdoutTerminal func() bool
 	// readSecret reads a line without echo; overridable in tests.
 	readSecret func(context.Context) (string, error)
 
@@ -209,6 +210,7 @@ type app struct {
 func newApp(stdin io.Reader, stdout, stderr io.Writer) *app {
 	a := &app{stdin: stdin, stdout: stdout, stderr: stderr}
 	a.interactive = func() bool { return isTerminal(stdin) && isTerminal(stderr) }
+	a.stdoutTerminal = func() bool { return isTerminal(stdout) }
 	a.readSecret = func(ctx context.Context) (string, error) { return readPassword(ctx, stdin) }
 	return a
 }

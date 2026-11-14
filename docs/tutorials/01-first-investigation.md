@@ -62,7 +62,7 @@ go run ./cmd/stromboli connector add loki loki url=http://localhost:3100
 ```text
 Connector "loki" saved.
 Connector "loki" is reachable.
-Next: propose catalog entries from it with `stromboli catalog discover loki > services.yaml`
+Next: add the services it sees with `stromboli catalog discover loki`
 ```
 
 stromboli tested the connection when you added it. It does not copy your logs anywhere: it will query Loki only when it needs to.

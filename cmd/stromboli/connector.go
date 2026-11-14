@@ -107,7 +107,7 @@ history and the process list. Instead pass:
 			}
 			if !a.json {
 				if slices.Contains([]string{"loki", "axiom", "cloudwatch", "gcp_logging", "vercel", "prometheus", "fly", "gcp_monitoring"}, kind) {
-					a.info("Next: propose catalog entries from it with `stromboli catalog discover %s > services.yaml`", name)
+					a.info("Next: add the services it sees with `stromboli catalog discover %s`", name)
 				}
 			}
 			return nil

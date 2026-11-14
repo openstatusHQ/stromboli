@@ -23,7 +23,7 @@ func (a *app) catalogCmd() *cobra.Command {
 		`The service catalog lists your services, their owners, dependencies, log and
 deploy sources, and runbooks. It is stored on the server; YAML is its import and
 export format, so you can keep a copy in git.`)
-	cmd.AddCommand(a.catalogListCmd(), a.catalogRmCmd(), a.catalogImportCmd(), a.catalogExportCmd(), a.catalogValidateCmd(), a.catalogDiscoverCmd())
+	cmd.AddCommand(a.catalogListCmd(), a.catalogSetCmd(), a.catalogRmCmd(), a.catalogImportCmd(), a.catalogExportCmd(), a.catalogValidateCmd(), a.catalogDiscoverCmd())
 	return cmd
 }
 
@@ -50,7 +50,7 @@ data sources. Use catalog export for the full entries.`,
 				return a.printJSON(resp.Msg)
 			}
 			if len(resp.Msg.Services) == 0 {
-				a.info("The catalog is empty. Propose entries with `stromboli catalog discover <connector>`, then `stromboli catalog import <file>`.")
+				a.info("The catalog is empty. Add services with `stromboli catalog discover <connector>`.")
 				return nil
 			}
 			tw := tabwriter.NewWriter(a.stdout, 0, 4, 2, ' ', 0)
@@ -98,6 +98,87 @@ confirmation unless --yes is given.`,
 	}
 	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "delete without asking for confirmation")
 	return cmd
+}
+
+func (a *app) catalogSetCmd() *cobra.Command {
+	var owners, addOwners, deps, addDeps []string
+	var tier int32
+	var description string
+	cmd := &cobra.Command{
+		Use:   "set <name> [flags]",
+		Short: "Change the owners, dependencies, tier or description of one service",
+		Long: `Change fields of one service in the catalog; the others are kept. --owner and
+--depends-on replace the list (pass "" to clear it), --add-owner and
+--add-depends-on add to it. If you keep the catalog in a file, make the same
+change there or the next import reverts it.`,
+		Example: `  stromboli catalog set web --owner @frontend
+  stromboli catalog set web --add-depends-on api --add-depends-on postgres
+  stromboli catalog set web --tier 1 --description "Marketing site"
+  stromboli catalog set web --depends-on ""`,
+		Args: exactArgs(1, "<name>"),
+		RunE: func(cmd *cobra.Command, pos []string) error {
+			f := cmd.Flags()
+			if !slices.ContainsFunc([]string{"owner", "add-owner", "depends-on", "add-depends-on", "tier", "description"}, f.Changed) {
+				return usagef(cmd, "nothing to change: pass --owner, --add-owner, --depends-on, --add-depends-on, --tier or --description")
+			}
+			c, err := a.api()
+			if err != nil {
+				return err
+			}
+			got, err := c.catalog.GetService(cmd.Context(), connect.NewRequest(&stromboliv1.GetServiceRequest{Name: pos[0]}))
+			if err != nil {
+				return err
+			}
+			svc := got.Msg.Service
+			if f.Changed("owner") {
+				svc.Owners = nonEmpty(owners)
+			}
+			svc.Owners = appendNew(svc.Owners, addOwners)
+			if f.Changed("depends-on") {
+				svc.DependsOn = nonEmpty(deps)
+			}
+			svc.DependsOn = appendNew(svc.DependsOn, addDeps)
+			if f.Changed("tier") {
+				svc.Tier = tier
+			}
+			if f.Changed("description") {
+				svc.Description = description
+			}
+			resp, err := c.catalog.UpsertService(cmd.Context(), connect.NewRequest(&stromboliv1.UpsertServiceRequest{Service: svc}))
+			if err != nil {
+				return err
+			}
+			if a.json {
+				return a.printJSON(resp.Msg)
+			}
+			a.printIssues(resp.Msg.Issues)
+			a.out("Service %q updated.", svc.Name)
+			return nil
+		},
+	}
+	f := cmd.Flags()
+	f.StringSliceVar(&owners, "owner", nil, "set the owners (repeatable; \"\" clears them)")
+	f.StringSliceVar(&addOwners, "add-owner", nil, "add an owner (repeatable)")
+	f.StringSliceVar(&deps, "depends-on", nil, "set the services it depends on (repeatable; \"\" clears them)")
+	f.StringSliceVar(&addDeps, "add-depends-on", nil, "add a service it depends on (repeatable)")
+	f.Int32Var(&tier, "tier", 0, "set the tier (1 is the most critical, 0 unsets it)")
+	f.StringVar(&description, "description", "", "set the description")
+	return cmd
+}
+
+// appendNew appends the values of add that are not in list yet.
+func appendNew(list, add []string) []string {
+	for _, v := range nonEmpty(add) {
+		if !slices.Contains(list, v) {
+			list = append(list, v)
+		}
+	}
+	return list
+}
+
+// nonEmpty drops empty values, so --owner "" clears the list.
+func nonEmpty(v []string) []string {
+	return slices.DeleteFunc(slices.Clone(v), func(s string) bool { return s == "" })
 }
 
 // serviceSources names the connectors a service reads from, e.g. "logs=loki".
@@ -306,14 +387,22 @@ do not fail).`,
 }
 
 func (a *app) catalogDiscoverCmd() *cobra.Command {
-	return &cobra.Command{
+	var doImport bool
+	var owners []string
+	cmd := &cobra.Command{
 		Use:   "discover <log-or-metrics-connector>",
-		Short: "Propose catalog entries from the services a log or metrics connector sees",
-		Long: `Ask a log or metrics connector which services it can see, and print one catalog entry per
-service not in the catalog yet, with its selector filled in. Add owners and
-depends_on, then import the file.`,
-		Example: `  stromboli catalog discover loki > services.yaml
-  stromboli catalog import services.yaml`,
+		Short: "Add the services a log or metrics connector sees to the catalog",
+		Long: `Ask a log or metrics connector which services it can see, and propose one
+catalog entry per service not in the catalog yet, with its selector filled in.
+
+In a terminal, it lists them and asks whether to add them. When stdout is
+redirected, it prints them as YAML instead, to review or keep in git before
+catalog import. --import adds them without asking, e.g. in a script.
+
+Owners and depends_on are optional; set them now with --owner, or later.`,
+		Example: `  stromboli catalog discover loki
+  stromboli catalog discover loki --import --owner @platform
+  stromboli catalog discover loki > services.yaml`,
 		Args: exactArgs(1, "<log-or-metrics-connector>"),
 		RunE: func(cmd *cobra.Command, pos []string) error {
 			c, err := a.api()
@@ -324,24 +413,120 @@ depends_on, then import the file.`,
 			if err != nil {
 				return err
 			}
-			if a.json {
-				return a.printJSON(resp.Msg)
+			candidates := resp.Msg.Candidates
+			ask := !doImport && !a.json && a.canPrompt() && a.stdoutTerminal()
+			if !doImport && !ask {
+				if a.json {
+					return a.printJSON(resp.Msg)
+				}
+				if len(candidates) == 0 {
+					a.info("No new services found.")
+					return nil
+				}
+				setOwners(candidates, owners)
+				out, err := catalog.MarshalYAML(candidates)
+				if err != nil {
+					return err
+				}
+				if _, err := a.stdout.Write(out); err != nil {
+					return err
+				}
+				a.info("Found %s. Import them with `stromboli catalog import <file>`; owners and depends_on are optional.", plural(int32(len(candidates)), "service"))
+				return nil
 			}
-			if len(resp.Msg.Candidates) == 0 {
+			if len(candidates) == 0 {
 				a.info("No new services found.")
 				return nil
 			}
-			out, err := catalog.MarshalYAML(resp.Msg.Candidates)
-			if err != nil {
-				return err
+			a.info("Found %s: %s.", plural(int32(len(candidates)), "service"), strings.Join(serviceNames(candidates), ", "))
+			if ask {
+				line, err := a.prompt(cmd.Context(), "Add them to the catalog? [Y/n] ")
+				if err != nil {
+					return err
+				}
+				if l := strings.ToLower(line); l != "" && l != "y" && l != "yes" {
+					return errors.New("aborted")
+				}
 			}
-			if _, err := a.stdout.Write(out); err != nil {
-				return err
+			if len(owners) == 0 && a.canPrompt() {
+				line, err := a.prompt(cmd.Context(), "Owner for these services, e.g. @team (Enter to skip): ")
+				if err != nil {
+					return err
+				}
+				owners = strings.Fields(strings.ReplaceAll(line, ",", " "))
 			}
-			a.info("Found %s. Add owners and depends_on, then run `stromboli catalog import <file>`.", plural(int32(len(resp.Msg.Candidates)), "service"))
-			return nil
+			setOwners(candidates, owners)
+			return a.importDiscovered(cmd, c, candidates)
 		},
 	}
+	f := cmd.Flags()
+	f.BoolVar(&doImport, "import", false, "add the services to the catalog without asking")
+	f.StringSliceVar(&owners, "owner", nil, "owner to set on every discovered service (repeatable)")
+	return cmd
+}
+
+// importDiscovered adds discovered services to the catalog and points at what
+// is left to fill in.
+func (a *app) importDiscovered(cmd *cobra.Command, c *clients, services []*stromboliv1.Service) error {
+	data, err := catalog.MarshalYAML(services)
+	if err != nil {
+		return err
+	}
+	resp, err := c.catalog.ImportCatalog(cmd.Context(), connect.NewRequest(&stromboliv1.ImportCatalogRequest{ServicesYaml: data}))
+	if err != nil {
+		return err
+	}
+	if a.json {
+		return a.printJSON(resp.Msg)
+	}
+	// The response validates the whole catalog: only show issues about the new
+	// services, and fold the expected "no owners" into one hint.
+	names := serviceNames(services)
+	var issues []*stromboliv1.ValidationIssue
+	var ownerless []string
+	for _, i := range resp.Msg.Issues {
+		switch {
+		case !slices.Contains(names, i.Service):
+		case i.Field == "owners":
+			ownerless = append(ownerless, i.Service)
+		default:
+			issues = append(issues, i)
+		}
+	}
+	a.printIssues(issues)
+	a.out("Added %s to the catalog.", plural(resp.Msg.ServicesUpserted, "service"))
+	if len(ownerless) > 0 {
+		a.info("%s no owner: %s. Set one with `stromboli catalog set <name> --owner <owner>`.",
+			pluralVerb(len(ownerless), "has", "have"), strings.Join(ownerless, ", "))
+	}
+	return nil
+}
+
+func setOwners(services []*stromboliv1.Service, owners []string) {
+	if len(owners) == 0 {
+		return
+	}
+	for _, s := range services {
+		if len(s.Owners) == 0 {
+			s.Owners = owners
+		}
+	}
+}
+
+func serviceNames(services []*stromboliv1.Service) []string {
+	names := make([]string, len(services))
+	for i, s := range services {
+		names[i] = s.Name
+	}
+	return names
+}
+
+// pluralVerb is "1 service has" or "3 services have".
+func pluralVerb(n int, one, many string) string {
+	if n == 1 {
+		return "1 service " + one
+	}
+	return fmt.Sprintf("%d services %s", n, many)
 }
 
 // readInput reads a file, or stdin for "-".

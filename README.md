@@ -111,10 +111,17 @@ stromboli connector add fly fly org=<org-slug> token="$(fly tokens create readon
 
 ### 3. Describe your services
 
-stromboli can propose a catalog from what it finds in your logs or Fly metrics. Review the file, add owners, dependencies and runbooks, then import it:
+stromboli can build a catalog from what it finds in your logs or Fly metrics. It lists the services and asks whether to add them; then fill in owners and dependencies one service at a time:
 
 ```sh
-stromboli catalog discover loki > services.yaml   # or: discover fly, one service per Fly app
+stromboli catalog discover loki   # or: discover fly, one service per Fly app
+stromboli catalog set api --owner @backend --add-depends-on postgres
+```
+
+To review the entries first or keep them in git, redirect them to a file, add owners, dependencies and runbooks, then import it:
+
+```sh
+stromboli catalog discover loki > services.yaml
 stromboli catalog import services.yaml --runbooks runbooks/
 ```
 
@@ -298,7 +305,7 @@ Fly collects the metrics of every machine in the organisation into a [managed Pr
 
 ```sh
 stromboli connector add fly fly org=<org-slug> token="$(fly tokens create readonly <org-slug>)"
-stromboli catalog discover fly > fly.yaml && stromboli catalog import fly.yaml
+stromboli catalog discover fly
 ```
 
 Tokens from `fly tokens create` are sent with the `FlyV1` scheme, others (from `fly auth token`) as `Bearer`. The `fly` connector comes with presets, per machine (`instance`) and `region`:
