@@ -23,7 +23,7 @@ func (a *app) catalogCmd() *cobra.Command {
 		`The service catalog lists your services, their owners, dependencies, log and
 deploy sources, and runbooks. It is stored on the server; YAML is its import and
 export format, so you can keep a copy in git.`)
-	cmd.AddCommand(a.catalogListCmd(), a.catalogImportCmd(), a.catalogExportCmd(), a.catalogValidateCmd(), a.catalogDiscoverCmd())
+	cmd.AddCommand(a.catalogListCmd(), a.catalogRmCmd(), a.catalogImportCmd(), a.catalogExportCmd(), a.catalogValidateCmd(), a.catalogDiscoverCmd())
 	return cmd
 }
 
@@ -65,6 +65,39 @@ data sources. Use catalog export for the full entries.`,
 			return tw.Flush()
 		},
 	}
+}
+
+func (a *app) catalogRmCmd() *cobra.Command {
+	var yes bool
+	cmd := &cobra.Command{
+		Use:     "rm <name>",
+		Aliases: []string{"remove", "delete"},
+		Short:   "Delete a service from the catalog",
+		Long: `Delete a service from the catalog. Services that depend on it then fail
+catalog validate, and alerts for it no longer match. If you keep the catalog in a
+file, remove the entry there too or the next import adds it back. Asks for
+confirmation unless --yes is given.`,
+		Example: `  stromboli catalog rm api
+  stromboli catalog rm api --yes`,
+		Args: exactArgs(1, "<name>"),
+		RunE: func(cmd *cobra.Command, pos []string) error {
+			name := pos[0]
+			if err := a.confirm(cmd.Context(), yes, fmt.Sprintf("delete service %q", name), fmt.Sprintf("Delete service %q from the catalog?", name)); err != nil {
+				return err
+			}
+			c, err := a.api()
+			if err != nil {
+				return err
+			}
+			if _, err := c.catalog.DeleteService(cmd.Context(), connect.NewRequest(&stromboliv1.DeleteServiceRequest{Name: name})); err != nil {
+				return err
+			}
+			a.out("Service %q deleted.", name)
+			return nil
+		},
+	}
+	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "delete without asking for confirmation")
+	return cmd
 }
 
 // serviceSources names the connectors a service reads from, e.g. "logs=loki".
