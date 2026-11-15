@@ -148,3 +148,32 @@ func TestValidateOAuthModes(t *testing.T) {
 		t.Error("OAuth secrets are not secret")
 	}
 }
+
+func TestValidatePrometheusMCP(t *testing.T) {
+	for _, c := range []struct {
+		kind string
+		cfg  map[string]string
+		ok   bool
+	}{
+		{"prometheus", map[string]string{"url": "http://prom:9090"}, true},
+		{"prometheus", map[string]string{"mcp_url": "http://prometheus-mcp:8080/mcp"}, true},
+		{"prometheus", map[string]string{"mcp_url": "http://m/mcp", "mcp_token": "t", "backend": "prod", "tenant_id": "a", "service_label": "job"}, true},
+		{"prometheus", map[string]string{}, false},                                               // neither url nor mcp_url
+		{"prometheus", map[string]string{"url": "http://p", "mcp_url": "http://m/mcp"}, false},   // both
+		{"prometheus", map[string]string{"mcp_url": "http://m/mcp", "bearer_token": "x"}, false}, // credentials belong to prometheus-mcp
+		{"prometheus", map[string]string{"url": "http://p", "backend": "prod"}, false},           // MCP key without mcp_url
+		{"fly", map[string]string{"org": "acme", "token": "FlyV1 x"}, true},
+		{"fly", map[string]string{"org": "acme", "mcp_url": "http://m/mcp"}, true},
+		{"fly", map[string]string{"org": "acme", "token": "FlyV1 x", "mcp_url": "http://m/mcp"}, true}, // token lists machines
+		{"fly", map[string]string{"org": "acme"}, false},                                               // no token, no mcp_url
+		{"fly", map[string]string{"org": "acme", "mcp_url": "http://m/mcp", "url": "http://x"}, false},
+		{"fly", map[string]string{"mcp_url": "http://m/mcp"}, false}, // org is required
+	} {
+		if err := Validate(c.kind, c.cfg); (err == nil) != c.ok {
+			t.Errorf("Validate(%s, %v) = %v, want ok=%v", c.kind, c.cfg, err, c.ok)
+		}
+	}
+	if !IsSecret("prometheus", "mcp_token") || !IsSecret("fly", "mcp_token") {
+		t.Error("mcp_token is not secret")
+	}
+}

@@ -32,6 +32,8 @@ type kindSpec struct {
 	// (mcp_url overrides it). The CLI fills the oauth.Keys, which are then
 	// required.
 	oauth string
+	// check validates combinations of keys the lists above cannot express.
+	check func(config map[string]string) error
 }
 
 // Kinds lists the supported connector kinds and their config keys.
@@ -50,15 +52,37 @@ var Kinds = map[string]kindSpec{
 		optional: []string{"region", "access_key_id", "secret_access_key", "session_token", "endpoint", "log_group_prefix", "service_field"},
 		secret:   []string{"secret_access_key", "session_token"},
 	},
+	// prometheus reads the Prometheus HTTP API at url, or goes through a
+	// prometheus-mcp server at mcp_url, which then holds the backend's URL and
+	// credentials.
 	"prometheus": {
-		required: []string{"url"},
-		optional: []string{"tenant_id", "username", "password", "bearer_token", "service_label"},
-		secret:   []string{"password", "bearer_token"},
+		optional: []string{"url", "tenant_id", "username", "password", "bearer_token", "service_label", "mcp_url", "mcp_token", "backend"},
+		secret:   []string{"password", "bearer_token", "mcp_token"},
+		check: func(c map[string]string) error {
+			if c["mcp_url"] == "" {
+				if c["url"] == "" {
+					return errors.New(`"url" or "mcp_url" is required`)
+				}
+				return noneOf(c, "without mcp_url", "mcp_token", "backend")
+			}
+			return noneOf(c, "with mcp_url (set the backend's URL and credentials in the prometheus-mcp config)", "url", "username", "password", "bearer_token")
+		},
 	},
+	// fly reads Fly.io's managed Prometheus directly, or through a
+	// prometheus-mcp server at mcp_url. Its token also lists machines.
 	"fly": {
-		required: []string{"org", "token"},
-		optional: []string{"url"},
-		secret:   []string{"token"},
+		required: []string{"org"},
+		optional: []string{"token", "url", "mcp_url", "mcp_token", "backend"},
+		secret:   []string{"token", "mcp_token"},
+		check: func(c map[string]string) error {
+			if c["mcp_url"] == "" {
+				if c["token"] == "" {
+					return errors.New(`"token" is required without mcp_url`)
+				}
+				return noneOf(c, "without mcp_url", "mcp_token", "backend")
+			}
+			return noneOf(c, "with mcp_url (set Fly's Prometheus URL in the prometheus-mcp config)", "url")
+		},
 	},
 	// With a token, github goes through GitHub's remote MCP server (mcp_url
 	// overrides it); deployments and token-less use stay on the REST API.
@@ -149,9 +173,24 @@ func Validate(kind string, config map[string]string) error {
 			return fmt.Errorf("%s connector: no OAuth login: log in with `stromboli connector add` in a terminal", kind)
 		}
 	}
+	if spec.check != nil {
+		if err := spec.check(config); err != nil {
+			return fmt.Errorf("%s connector: %w", kind, err)
+		}
+	}
 	for k := range config {
 		if !slices.Contains(spec.required, k) && !slices.Contains(spec.optional, k) && !(usesOAuth && IsOAuthKey(kind, k)) {
 			return fmt.Errorf("%s connector: unknown config key %q", kind, k)
+		}
+	}
+	return nil
+}
+
+// noneOf fails when config sets any of keys.
+func noneOf(config map[string]string, when string, keys ...string) error {
+	for _, k := range keys {
+		if config[k] != "" {
+			return fmt.Errorf("%q cannot be set %s", k, when)
 		}
 	}
 	return nil
@@ -355,6 +394,19 @@ func (r *Registry) Metrics(ctx context.Context, name string) (metrics.Source, st
 		return nil, "", err
 	}
 	var p *metrics.Prometheus
+	if u := cfg["mcp_url"]; u != "" && (c.Kind == "prometheus" || c.Kind == "fly") {
+		m, err := r.mcp.Get(name, cfg, func() (mcpconn.Config, error) {
+			return metrics.PrometheusMCPConfig(name, u, cfg["mcp_token"]), nil
+		})
+		if err != nil {
+			return nil, "", err
+		}
+		label := cfg["service_label"]
+		if c.Kind == "fly" {
+			label = "app"
+		}
+		return metrics.NewPrometheusMCP(m, cfg["backend"], cfg["tenant_id"], label), c.Kind, nil
+	}
 	switch c.Kind {
 	case "gcp_monitoring":
 		m, err := r.gcpMCP(name, cfg, gcp.Monitoring, metrics.GCPMonitoringTools)
@@ -434,6 +486,9 @@ func (r *Registry) FlyMachines(ctx context.Context, name string) (*fly.Machines,
 		m, err := fly.NewMachines(cfg["org"], cfg["token"], cfg["url"])
 		return m, c.Kind, err
 	case "fly":
+		if cfg["token"] == "" {
+			return nil, "", fmt.Errorf("fly connector %q has no token to list machines: add a read-only token to it, or set fly.actions", name)
+		}
 		// Its url is the Prometheus endpoint, not the Machines API.
 		m, err := fly.NewMachines(cfg["org"], cfg["token"], "")
 		return m, c.Kind, err

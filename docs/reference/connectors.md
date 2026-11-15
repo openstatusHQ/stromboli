@@ -14,8 +14,8 @@ Create one with `stromboli connector add <name> <kind> key=value...` or `Connect
 | `axiom` | logs | `org_id`, `message_field`, `mcp_url`, `client_metadata_url`; logs in with OAuth | Axiom's remote MCP server |
 | `cloudwatch` | logs | `region`, `access_key_id`, `secret_access_key` 🔒, `session_token` 🔒, `endpoint`, `log_group_prefix`, `service_field` | AWS SDK |
 | `gcp_logging` | logs | **`project`**, `credentials_json` 🔒 | Google's remote MCP server `logging.googleapis.com/mcp` |
-| `prometheus` | metrics | **`url`**, `tenant_id`, `username`, `password` 🔒, `bearer_token` 🔒, `service_label` | Prometheus HTTP API |
-| `fly` | metrics, Fly machine list | **`org`**, **`token`** 🔒, `url` | Fly managed Prometheus, Machines API |
+| `prometheus` | metrics | `url` or `mcp_url`, `tenant_id`, `username`, `password` 🔒, `bearer_token` 🔒, `service_label`, `mcp_token` 🔒, `backend` | Prometheus HTTP API, or a [prometheus-mcp](https://github.com/freepik-company/prometheus-mcp) server |
+| `fly` | metrics, Fly machine list | **`org`**, `token` 🔒 (required without `mcp_url`), `url`, `mcp_url`, `mcp_token` 🔒, `backend` | Fly managed Prometheus (directly or through prometheus-mcp), Machines API |
 | `gcp_monitoring` | metrics | **`project`**, `credentials_json` 🔒 | Google's remote MCP server `monitoring.googleapis.com/mcp` |
 | `github` | deploys and commits | `token` 🔒, `base_url`, `mcp_url` | GitHub's remote MCP server; REST API for deployments and without a token |
 | `vercel` | logs, deploys | **`team_id`**, `mcp_url`, `client_metadata_url`; logs in with OAuth | Vercel's remote MCP server |
@@ -73,11 +73,26 @@ In PromQL passed to `get_metrics`, `$selector` expands to the service's matchers
 
 ### prometheus
 
-Works with anything that speaks the Prometheus HTTP API: Prometheus, Mimir, Thanos, VictoriaMetrics, Grafana Cloud.
+Works with anything that speaks the Prometheus HTTP API: Prometheus, Mimir, Thanos, VictoriaMetrics, Grafana Cloud. Set either `url` (stromboli calls the API) or `mcp_url` (see [through prometheus-mcp](#through-prometheus-mcp)).
 
 ### fly
 
 `org` is the organisation slug (`fly orgs list`; `personal` for a personal org). Metrics are read from `https://api.fly.io/prometheus/<org>` (`url` overrides the base). Tokens from `fly tokens create` (`FlyV1 …`) are sent with the `FlyV1` scheme, others as `Bearer`. A read-only org token (`fly tokens create readonly <org>`) is enough. The same token lists an app's machines for the brief, unless the service has a `fly_machines` connector.
+
+With `mcp_url`, metrics go [through prometheus-mcp](#through-prometheus-mcp) instead, and `url` cannot be set. `token` is then optional: without it, the brief cannot list machines unless the service has a `fly_machines` connector.
+
+### Through prometheus-mcp
+
+With `mcp_url`, a `prometheus` or `fly` connector reads metrics through a [prometheus-mcp](https://github.com/freepik-company/prometheus-mcp) server (v0.8.0 or later) that you run, instead of calling the Prometheus HTTP API itself. The backend's URL and credentials live in the prometheus-mcp config, so stromboli never holds them.
+
+| Key | Meaning |
+|---|---|
+| `mcp_url` | the server's Streamable HTTP endpoint, e.g. `http://prometheus-mcp.internal:8080/mcp` |
+| `mcp_token` 🔒 | sent as `Authorization: Bearer`, for a server behind JWT validation or an authenticating proxy |
+| `backend` | which of the server's `backends` to query; optional when it has one |
+| `tenant_id` | (`prometheus` only) sent as `org_id`, which prometheus-mcp forwards as `X-Scope-OrgId` |
+
+stromboli calls only `prometheus_query` and `prometheus_range_query`. prometheus-mcp does not annotate its tools as read-only; both only evaluate PromQL. The `username`, `password` and `bearer_token` keys are rejected with `mcp_url`: set them in the prometheus-mcp config. Presets, `$selector` and discovery work as without it; metric names and discovered services come from `group by` queries sampled over the window (discovery: the last 24 hours, every 30 minutes) rather than the label values API.
 
 ### gcp_monitoring
 

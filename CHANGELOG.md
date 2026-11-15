@@ -9,6 +9,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 ### Added
 
 - A Claude Code skill in [`skills/stromboli`](skills/stromboli) that operates a stromboli instance through the CLI: briefs before paid investigations, the catalog on any CLI version, connectors without inline secrets, and action approvals recorded under the user's name.
+- `prometheus` and `fly` connectors can read metrics through a [prometheus-mcp](https://github.com/freepik-company/prometheus-mcp) server (v0.8.0+) with `mcp_url`, optionally `mcp_token` and `backend`, instead of calling the Prometheus HTTP API. The backend's URL and credentials then stay in the prometheus-mcp config. See [connect metrics](docs/how-to/connect-metrics.md#through-prometheus-mcp).
 - `catalog set <name>` changes the owners, dependencies, tier or description of one service without editing a file, e.g. `stromboli catalog set web --owner @frontend --add-depends-on api`.
 
 ### Changed
