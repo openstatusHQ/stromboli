@@ -45,6 +45,19 @@ func TestShortenKeepsRunes(t *testing.T) {
 	}
 }
 
+func TestShortenTooSmall(t *testing.T) {
+	// n shorter than the ellipsis must not panic and must stay valid.
+	for n, want := range map[int]string{0: "", 1: "", 2: "", 3: "…"} {
+		if got := shorten("abcdef", n); got != want {
+			t.Errorf("shorten(%q, %d) = %q, want %q", "abcdef", n, got, want)
+		}
+	}
+	// n landing in the middle of a multibyte rune backs up to a boundary.
+	if got := shorten("ééééé", 4); !utf8.ValidString(got) || len(got) > 4 {
+		t.Errorf("shorten(ééééé, 4) = %q (%d bytes)", got, len(got))
+	}
+}
+
 func TestFailedText(t *testing.T) {
 	got := FailedText(map[string]string{"web": "no metrics", "api": "cpu_percent: timeout"})
 	want := "⚠️ Health check: could not check 2 services\n• *api*: cpu_percent: timeout\n• *web*: no metrics"

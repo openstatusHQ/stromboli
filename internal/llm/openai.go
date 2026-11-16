@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 // OpenAIConfig configures an OpenAI-compatible Chat Completions endpoint.
@@ -243,10 +244,17 @@ func (m *openaiModel) post(ctx context.Context, body []byte, out any) error {
 }
 
 func truncate(b []byte, n int) string {
-	if len(b) > n {
-		return string(b[:n]) + "…"
+	if n <= 0 {
+		return ""
 	}
-	return string(b)
+	s := string(b)
+	if len(s) <= n {
+		return s
+	}
+	for n > 0 && !utf8.RuneStart(s[n]) {
+		n--
+	}
+	return s[:n] + "…"
 }
 
 // openaiEffort maps the effort scale to reasoning_effort. Empty stays empty:

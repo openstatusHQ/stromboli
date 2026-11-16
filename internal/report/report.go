@@ -499,15 +499,20 @@ func isNone(s string) bool {
 }
 
 // shorten cuts s to at most n bytes on a rune boundary, adding an ellipsis.
+// For n shorter than the ellipsis itself it returns an empty string.
 func shorten(s string, n int) string {
 	if len(s) <= n {
 		return s
 	}
-	cut := n - len("…")
+	const ell = "…"
+	if n < len(ell) {
+		return ""
+	}
+	cut := n - len(ell)
 	for cut > 0 && !utf8.RuneStart(s[cut]) {
 		cut--
 	}
-	return s[:cut] + "…"
+	return s[:cut] + ell
 }
 
 // clip keeps a section under Slack's 3000 character limit.

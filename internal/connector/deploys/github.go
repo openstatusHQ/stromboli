@@ -16,6 +16,7 @@ import (
 	"net/url"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/openstatushq/stromboli/internal/connector/mcpconn"
 )
@@ -305,7 +306,7 @@ func (g *GitHub) Commit(ctx context.Context, repo, sha string) (*Commit, error) 
 		}
 		patch := f.Patch
 		if len(patch) > maxPatch {
-			patch = patch[:maxPatch] + "\n… (truncated)"
+			patch = cutBytes(patch, maxPatch) + "\n… (truncated)"
 		}
 		out.Files = append(out.Files, FileChange{Filename: f.Filename, Status: f.Status, Additions: f.Additions, Deletions: f.Deletions, Patch: patch})
 	}
@@ -385,4 +386,16 @@ func firstLine(s string) string {
 		return s[:i]
 	}
 	return s
+}
+
+// cutBytes returns at most the first n bytes of s without splitting a UTF-8
+// character: Postgres rejects text with invalid UTF-8.
+func cutBytes(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	for n > 0 && !utf8.RuneStart(s[n]) {
+		n--
+	}
+	return s[:n]
 }

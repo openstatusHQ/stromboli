@@ -245,7 +245,7 @@ func (e *Engine) briefRunbooks(ctx context.Context, svc *stromboliv1.Service) st
 		}
 		content := rb.Content
 		if len(content) > maxRunbookInBrief {
-			content = content[:maxRunbookInBrief] + "\n… (truncated, use read_runbook for the rest)"
+			content = cut(content, maxRunbookInBrief) + "\n… (truncated, use read_runbook for the rest)"
 		}
 		fmt.Fprintf(&b, "### %s\n\n%s\n\n", path, content)
 	}

@@ -15,6 +15,7 @@ import (
 	"net/url"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 // MachinesURL is the public Machines API endpoint.
@@ -226,6 +227,18 @@ func appPath(app, id string) string {
 	return p
 }
 
+// cut returns at most the first n bytes of s without splitting a UTF-8
+// character: Postgres rejects text with invalid UTF-8.
+func cut(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	for n > 0 && !utf8.RuneStart(s[n]) {
+		n--
+	}
+	return s[:n]
+}
+
 // maxBody bounds a Machines API response.
 const maxBody = 8 << 20
 
@@ -265,7 +278,7 @@ func (c *Machines) do(ctx context.Context, method, path string, in, out any) err
 			msg = e.Error
 		}
 		if len(msg) > 300 {
-			msg = msg[:300] + "…"
+			msg = cut(msg, 300) + "…"
 		}
 		return fmt.Errorf("fly machines: %s %s: %s: %s", method, strings.SplitN(path, "?", 2)[0], resp.Status, msg)
 	}

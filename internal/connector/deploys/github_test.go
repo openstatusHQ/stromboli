@@ -2,8 +2,10 @@ package deploys
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/openstatushq/stromboli/internal/connector/mcpconn/mcptest"
 )
@@ -72,5 +74,26 @@ func TestGitHubMCP(t *testing.T) {
 
 	if _, err := g.Recent(ctx, Target{Repo: "nope", Workflow: "x"}, since); err == nil {
 		t.Error("a repo without owner should fail")
+	}
+}
+
+func TestCommitTruncatesPatchOnRuneBoundary(t *testing.T) {
+	// maxPatch+1 bytes: the "é" straddles Commit's patch limit.
+	body := strings.Repeat("a", maxPatch-1) + "é"
+	srv := mcptest.New(t, map[string]mcptest.Handler{
+		"get_commit": func(args map[string]any) (any, error) {
+			return map[string]any{
+				"sha": "abc", "commit": map[string]any{"message": "fix", "author": map[string]any{"name": "A"}},
+				"files": []map[string]any{{"filename": "a.go", "status": "modified", "patch": body}},
+			}, nil
+		},
+	}, true)
+	g := NewGitHub(GitHubConfig{MCP: srv.Client(t, "get_commit")})
+	c, err := g.Commit(context.Background(), "o/r", "abc")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if patch := c.Files[0].Patch; !utf8.ValidString(patch) {
+		t.Fatalf("patch is not valid UTF-8: %q", patch)
 	}
 }
