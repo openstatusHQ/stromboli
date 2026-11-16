@@ -1,8 +1,10 @@
 package logs
 
 import (
+	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 )
 
 func TestTemplateGroupsVariableParts(t *testing.T) {
@@ -10,6 +12,37 @@ func TestTemplateGroupsVariableParts(t *testing.T) {
 	b := Template(`2026-11-02T10:05:44Z error: query 1c383cd3-0b7c-48a2-b3a2-23d9d2e4a111 took 87ms from 10.0.3.9:5432`)
 	if a != b {
 		t.Fatalf("templates differ:\n%s\n%s", a, b)
+	}
+}
+
+func TestTemplateTruncatesOnRuneBoundary(t *testing.T) {
+	// 401 bytes: the "é" straddles Template's 400-byte limit.
+	got := Template(strings.Repeat("a", 399) + "é")
+	if !utf8.ValidString(got) {
+		t.Fatalf("Template is not valid UTF-8: %q", got)
+	}
+	if len(got) > 400 {
+		t.Fatalf("Template = %d bytes, want at most 400", len(got))
+	}
+}
+
+func TestTruncateKeepsRunes(t *testing.T) {
+	for _, tc := range []struct {
+		in   string
+		n    int
+		want string
+	}{
+		{"abc", 10, "abc"},
+		{"abcdef", 3, "abc…"},
+		// The 3-byte cut lands in the middle of the second "é".
+		{"ééé", 3, "é…"},
+	} {
+		if got := truncate(tc.in, tc.n); got != tc.want {
+			t.Errorf("truncate(%q, %d) = %q, want %q", tc.in, tc.n, got, tc.want)
+		}
+		if got := truncate(tc.in, tc.n); !utf8.ValidString(got) {
+			t.Errorf("truncate(%q, %d) = %q, not valid UTF-8", tc.in, tc.n, got)
+		}
 	}
 }
 

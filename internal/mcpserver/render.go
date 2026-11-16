@@ -60,8 +60,8 @@ func serviceMarkdown(r *stromboliv1.GetServiceResponse) string {
 	field("Runtime", s.Runtime)
 	field("Repo", s.Repo)
 	field("Depends on", strings.Join(s.DependsOn, ", "))
-	field("Upstream (everything it depends on)", strings.Join(r.Upstream, ", "))
-	field("Downstream (affected when it fails)", strings.Join(r.Downstream, ", "))
+	field("Upstream (affected when it fails)", strings.Join(r.Upstream, ", "))
+	field("Downstream (everything it depends on)", strings.Join(r.Downstream, ", "))
 	if l := s.Logs; l != nil && l.Source != "" {
 		field("Logs", fmt.Sprintf("%s `%s`", l.Source, l.Selector))
 	}

@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/openstatushq/stromboli/internal/connector/mcpconn/mcptest"
 )
@@ -77,6 +78,21 @@ func TestGCPLoggingQuery(t *testing.T) {
 
 	if err := src.Check(context.Background()); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestGCPEntryTextTruncatesOnRuneBoundary(t *testing.T) {
+	// 2001 bytes: the "é" straddles text()'s 2000-byte limit.
+	e := gcpEntry{Severity: "ERROR", TextPayload: strings.Repeat("a", 1999) + "é"}
+	got := e.text()
+	if !utf8.ValidString(got) {
+		t.Fatalf("text() is not valid UTF-8: %q", got)
+	}
+	if !strings.HasSuffix(got, "…") {
+		t.Fatalf("text() = %q, want an ellipsis suffix", got)
+	}
+	if strings.Contains(got, "é") {
+		t.Fatalf("text() = %q, expected the split rune to be dropped", got)
 	}
 }
 

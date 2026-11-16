@@ -414,6 +414,7 @@ Owners and depends_on are optional; set them now with --owner, or later.`,
 				return err
 			}
 			candidates := resp.Msg.Candidates
+			setOwners(candidates, owners)
 			ask := !doImport && !a.json && a.canPrompt() && a.stdoutTerminal()
 			if !doImport && !ask {
 				if a.json {
@@ -423,7 +424,6 @@ Owners and depends_on are optional; set them now with --owner, or later.`,
 					a.info("No new services found.")
 					return nil
 				}
-				setOwners(candidates, owners)
 				out, err := catalog.MarshalYAML(candidates)
 				if err != nil {
 					return err

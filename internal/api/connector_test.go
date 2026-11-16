@@ -16,6 +16,8 @@ func TestToConnectorSecretKeys(t *testing.T) {
 		{"axiom", `{"authorized_at":"t","client_id":"c","mcp_url":"u"}`, "map[authorized_at:t client_id:c mcp_url:u refresh_token:]"},
 		{"vercel", `{"authorized_at":"t","team_id":"acme"}`, "map[authorized_at:t refresh_token: team_id:acme]"},
 		{"loki", `{"url":"u"}`, "map[bearer_token: password: url:u]"},
+		{"cloudwatch", `{"region":"eu-west-1"}`, "map[region:eu-west-1 secret_access_key: session_token:]"},
+		{"gcp_logging", `{"project":"p"}`, "map[credentials_json: project:p]"},
 	} {
 		got := toConnector(db.Connector{Name: "x", Kind: c.kind, Config: json.RawMessage(c.config), Secrets: []byte{1}})
 		if fmt.Sprint(got.Config) != c.want {

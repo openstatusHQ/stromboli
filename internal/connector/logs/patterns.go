@@ -5,6 +5,7 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 // Pattern is a group of log lines that differ only in variable parts
@@ -35,7 +36,7 @@ var normalizers = []struct {
 func Template(line string) string {
 	t := line
 	if len(t) > 400 {
-		t = t[:400]
+		t = cut(t, 400)
 	}
 	for _, n := range normalizers {
 		t = n.re.ReplaceAllString(t, n.repl)
@@ -121,5 +122,17 @@ func truncate(s string, n int) string {
 	if len(s) <= n {
 		return s
 	}
-	return s[:n] + "…"
+	return cut(s, n) + "…"
+}
+
+// cut returns at most the first n bytes of s without splitting a UTF-8
+// character: Postgres rejects text with invalid UTF-8.
+func cut(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	for n > 0 && !utf8.RuneStart(s[n]) {
+		n--
+	}
+	return s[:n]
 }

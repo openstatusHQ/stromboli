@@ -75,8 +75,8 @@ func (f *fakeAPI) GetService(_ context.Context, req *connect.Request[stromboliv1
 	return connect.NewResponse(&stromboliv1.GetServiceResponse{
 		Service: &stromboliv1.Service{Name: "api", Tier: 1, Logs: &stromboliv1.LogsConfig{Source: "loki", Selector: `{service_name="api"}`},
 			Deploys: &stromboliv1.DeploysConfig{Source: "github", Repo: "acme/api", Workflow: "deploy.yml"}},
-		Upstream:   []string{"db"},
-		Downstream: []string{"web"},
+		Upstream:   []string{"web"},
+		Downstream: []string{"db"},
 	}), nil
 }
 
@@ -259,7 +259,8 @@ func TestCatalogAndBrief(t *testing.T) {
 	}
 
 	text, _ = call(t, cs, "get_service", map[string]any{"name": "api"})
-	mustContain(t, text, "# api", "Logs: loki `{service_name=\"api\"}`", "Deploys: github acme/api (workflow deploy.yml)", "Downstream (affected when it fails): web")
+	mustContain(t, text, "# api", "Logs: loki `{service_name=\"api\"}`", "Deploys: github acme/api (workflow deploy.yml)",
+		"Upstream (affected when it fails): web", "Downstream (everything it depends on): db")
 
 	msg := callErr(t, cs, "get_service", map[string]any{"name": "nope"})
 	if msg != `service "nope" not found` {

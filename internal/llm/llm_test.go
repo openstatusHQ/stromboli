@@ -168,6 +168,24 @@ func TestOpenAIErrors(t *testing.T) {
 	}
 }
 
+func TestTruncateKeepsRunes(t *testing.T) {
+	for _, tc := range []struct {
+		in   string
+		n    int
+		want string
+	}{
+		{"abc", 10, "abc"},
+		{"abcdef", 3, "abc…"},
+		// The 3-byte cut lands in the middle of the second "é".
+		{"ééé", 3, "é…"},
+		{"abc", 0, ""},
+	} {
+		if got := truncate([]byte(tc.in), tc.n); got != tc.want {
+			t.Errorf("truncate(%q, %d) = %q, want %q", tc.in, tc.n, got, tc.want)
+		}
+	}
+}
+
 func TestDeepSeekReasoningRoundTrip(t *testing.T) {
 	var bodies []map[string]any
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

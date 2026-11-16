@@ -241,7 +241,7 @@ func (e gcpEntry) text() string {
 		}
 	}
 	if len(msg) > 2000 {
-		msg = msg[:2000] + "…"
+		msg = cut(msg, 2000) + "…"
 	}
 	// Always the same prefix, so that patterns group by severity and message.
 	sev := strings.ToLower(e.Severity)
