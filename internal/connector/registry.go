@@ -110,6 +110,13 @@ func Keys(kind string) (required, optional []string) {
 	return slices.Clone(spec.required), slices.Clone(spec.optional)
 }
 
+// SecretKeys returns the config keys that hold secrets for a kind: its own
+// secret settings, such as cloudwatch's secret_access_key or gcp's
+// credentials_json. The OAuth keys are managed by the login flow instead.
+func SecretKeys(kind string) []string {
+	return slices.Clone(Kinds[kind].secret)
+}
+
 // OAuthServer returns the MCP server a connector logs in to, if it uses OAuth.
 func OAuthServer(kind string, config map[string]string) (string, bool) {
 	spec := Kinds[kind]

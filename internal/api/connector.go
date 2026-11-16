@@ -98,13 +98,12 @@ func toConnector(r db.Connector) *stromboliv1.Connector {
 	_ = json.Unmarshal(r.Config, &cfg)
 	if len(r.Secrets) > 0 {
 		// Secrets are not decrypted here: list the keys the connector can hold.
-		keys := []string{"password", "bearer_token", "token"}
 		if cfg[oauth.KeyAuthorizedAt] != "" {
-			// Logged in with OAuth.
-			keys = []string{oauth.KeyRefreshToken}
-		}
-		for _, k := range keys {
-			if connector.IsSecret(r.Kind, k) {
+			// Logged in with OAuth: the refresh token (a public client has no
+			// client_secret, so only refresh_token is shown).
+			cfg[oauth.KeyRefreshToken] = ""
+		} else {
+			for _, k := range connector.SecretKeys(r.Kind) {
 				cfg[k] = ""
 			}
 		}
