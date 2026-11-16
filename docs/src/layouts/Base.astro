@@ -26,6 +26,16 @@ const { title, description = "An open-source AI SRE agent you host yourself." } 
         if (t === "light" || t === "dark") document.documentElement.dataset.theme = t;
       } catch {}
     </script>
+    {
+      import.meta.env.PROD && (
+        <script
+          is:inline
+          defer
+          data-domain="stromboli.dev"
+          src="https://plausible.io/js/script.js"
+        />
+      )
+    }
   </head>
   <body>
     <Header />
