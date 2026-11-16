@@ -313,6 +313,13 @@ func TestCatalogDiscover(t *testing.T) {
 		t.Fatalf("answered no: exit %d, imported %v", r.code, f.imported)
 	}
 
+	// --json lists the candidates, with the owner already set, and imports nothing.
+	f = &fake{discovered: discovered()}
+	r = run(t, f, "", false, "catalog", "discover", "vercel", "--json", "--owner", "@frontend")
+	if r.code != 0 || f.imported != nil || !strings.Contains(r.stdout, "@frontend") {
+		t.Fatalf("--json: exit %d, imported %v, stdout %q", r.code, f.imported, r.stdout)
+	}
+
 	// --import in a script: no prompts.
 	f = &fake{discovered: discovered()}
 	r = run(t, f, "", false, "catalog", "discover", "vercel", "--import", "--owner", "@a", "--owner", "@b")
