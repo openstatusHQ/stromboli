@@ -1,0 +1,239 @@
+@import "@fontsource/commit-mono/400.css";
+@import "@fontsource/commit-mono/400-italic.css";
+@import "@fontsource/commit-mono/700.css";
+
+/* Neutral tokens, after openstatus.dev (shadcn neutral). Square corners, hairlines. */
+:root {
+  --background: #ffffff;
+  --foreground: #0a0a0a;
+  --muted: #f5f5f5;
+  --muted-foreground: #737373;
+  --border: #e5e5e5;
+  --ring: #a1a1a1;
+  --link: #1d4ed8;
+  --success: #16a34a;
+  --warning: #f49f1e;
+  --destructive: #e40014;
+  --lava: #e25a1c;
+  --font-mono: "Commit Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --max: 64rem;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --background: #0a0a0a;
+    --foreground: #fafafa;
+    --muted: #171717;
+    --muted-foreground: #a1a1a1;
+    --border: #262626;
+    --ring: #525252;
+    --link: #60a5fa;
+    --lava: #f47b45;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --background: #0a0a0a;
+  --foreground: #fafafa;
+  --muted: #171717;
+  --muted-foreground: #a1a1a1;
+  --border: #262626;
+  --ring: #525252;
+  --link: #60a5fa;
+  --lava: #f47b45;
+  color-scheme: dark;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  scroll-padding-top: 1rem;
+}
+
+body {
+  margin: 0;
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-mono);
+  font-size: 14px;
+  line-height: 1.7;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+a {
+  color: inherit;
+}
+
+::selection {
+  background: var(--foreground);
+  color: var(--background);
+}
+
+:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+.container {
+  width: 100%;
+  max-width: var(--max);
+  margin: 0 auto;
+  padding: 0 16px;
+}
+
+.muted {
+  color: var(--muted-foreground);
+}
+
+/* A grid of cells separated by 1px hairlines: the openstatus.dev signature. */
+.cells {
+  display: grid;
+  gap: 1px;
+  background: var(--border);
+  border: 1px solid var(--border);
+}
+.cells > * {
+  background: var(--background);
+}
+
+/* Shiki dual themes: colours come from CSS variables. */
+.astro-code,
+.astro-code span {
+  color: var(--shiki-light);
+  background-color: var(--shiki-light-bg);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .astro-code,
+  :root:not([data-theme="light"]) .astro-code span {
+    color: var(--shiki-dark);
+    background-color: var(--shiki-dark-bg);
+  }
+}
+:root[data-theme="dark"] .astro-code,
+:root[data-theme="dark"] .astro-code span {
+  color: var(--shiki-dark);
+  background-color: var(--shiki-dark-bg);
+}
+.astro-code,
+.astro-code span {
+  background-color: transparent !important;
+}
+
+/* ---------- Prose: the rendered markdown ---------- */
+.prose {
+  min-width: 0;
+  overflow-wrap: break-word;
+}
+.prose > :first-child {
+  margin-top: 0;
+}
+.prose h1 {
+  font-size: 1.6rem;
+  line-height: 1.25;
+  margin: 0 0 1.25rem;
+  letter-spacing: -0.02em;
+}
+.prose h2 {
+  font-size: 1.15rem;
+  margin: 2.5rem 0 0.75rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--border);
+}
+.prose h3 {
+  font-size: 1rem;
+  margin: 1.75rem 0 0.5rem;
+}
+.prose h4 {
+  font-size: 0.95rem;
+  margin: 1.5rem 0 0.5rem;
+}
+.prose :is(h2, h3, h4) a {
+  text-decoration: none;
+}
+.prose p,
+.prose ul,
+.prose ol,
+.prose blockquote,
+.prose table,
+.prose pre {
+  margin: 0 0 1rem;
+}
+.prose ul,
+.prose ol {
+  padding-left: 1.4rem;
+}
+.prose li {
+  margin: 0.2rem 0;
+}
+.prose li::marker {
+  color: var(--muted-foreground);
+}
+.prose a {
+  color: var(--link);
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--link) 35%, transparent);
+  text-underline-offset: 3px;
+}
+.prose a:hover {
+  text-decoration-color: currentColor;
+}
+.prose strong {
+  font-weight: 700;
+}
+.prose hr {
+  border: 0;
+  border-top: 1px solid var(--border);
+  margin: 2rem 0;
+}
+.prose blockquote {
+  border-left: 2px solid var(--foreground);
+  padding: 0.25rem 0 0.25rem 1rem;
+  color: var(--muted-foreground);
+}
+.prose :not(pre) > code {
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+  background: var(--muted);
+  border: 1px solid var(--border);
+  padding: 0.05em 0.3em;
+}
+.prose pre {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.6;
+  border: 1px solid var(--border);
+  background: var(--muted) !important;
+  padding: 0.9rem 1rem;
+  overflow-x: auto;
+}
+.prose pre code {
+  font-family: inherit;
+}
+.prose table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.prose th,
+.prose td {
+  border: 1px solid var(--border);
+  padding: 0.4rem 0.7rem;
+  text-align: left;
+  vertical-align: top;
+}
+.prose th {
+  background: var(--muted);
+  font-weight: 700;
+}
+.prose img {
+  max-width: 100%;
+}

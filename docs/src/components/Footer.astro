@@ -1,0 +1,43 @@
+---
+const year = new Date().getFullYear();
+---
+
+<footer class="container footer">
+  <div class="cells row">
+    <span class="muted">© {year} stromboli · MIT</span>
+    <a href="/docs/">Docs</a>
+    <a href="/docs/adr/">Decisions</a>
+    <a href="https://github.com/openstatushq/stromboli/releases">Releases</a>
+    <a href="https://github.com/openstatushq/stromboli">GitHub</a>
+    <a href="https://www.openstatus.dev">openstatus</a>
+  </div>
+</footer>
+
+<style>
+  .footer {
+    padding-bottom: 16px;
+    margin-top: 4rem;
+  }
+  .row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    font-size: 13px;
+  }
+  .row > * {
+    padding: 0.5rem 0.75rem;
+    text-decoration: none;
+  }
+  .row > a:hover {
+    background: var(--muted);
+  }
+  .row > span {
+    grid-column: 1 / -1;
+  }
+  @media (min-width: 900px) {
+    .row {
+      grid-template-columns: 2fr repeat(5, minmax(0, 1fr));
+    }
+    .row > span {
+      grid-column: auto;
+    }
+  }
+</style>

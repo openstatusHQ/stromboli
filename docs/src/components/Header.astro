@@ -1,0 +1,110 @@
+---
+const path = Astro.url.pathname;
+const links = [
+  { href: "/docs/", label: "Docs", match: (p: string) => p === "/docs/" },
+  { href: "/docs/tutorials/", label: "Tutorials", match: (p: string) => p.startsWith("/docs/tutorials") },
+  { href: "/docs/how-to/", label: "How-to", match: (p: string) => p.startsWith("/docs/how-to") },
+  { href: "/docs/reference/", label: "Reference", match: (p: string) => p.startsWith("/docs/reference") },
+];
+---
+
+<header class="container header">
+  <nav class="cells nav" aria-label="Main">
+    <a href="/" class="brand">
+      <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+        <path d="M2 21 9.5 6h5L22 21Z" fill="currentColor" />
+        <path d="M9.5 6 12 9l2.5-3" fill="none" stroke="var(--lava)" stroke-width="2" />
+        <circle cx="12" cy="2.5" r="1.5" fill="var(--lava)" />
+      </svg>
+      <span>stromboli</span>
+    </a>
+    {
+      links.map((l) => (
+        <a href={l.href} class="link" aria-current={l.match(path) ? "page" : undefined}>
+          {l.label}
+        </a>
+      ))
+    }
+    <a href="https://github.com/openstatushq/stromboli" class="link">GitHub <span class="muted">↗</span></a>
+    <button type="button" class="link theme" aria-label="Toggle theme" data-theme-toggle>
+      <span class="sun">☀</span><span class="moon">☾</span>
+    </button>
+  </nav>
+</header>
+
+<script>
+  document.querySelector("[data-theme-toggle]")?.addEventListener("click", () => {
+    const root = document.documentElement;
+    const dark =
+      root.dataset.theme === "dark" ||
+      (!root.dataset.theme && matchMedia("(prefers-color-scheme: dark)").matches);
+    root.dataset.theme = dark ? "light" : "dark";
+    try {
+      localStorage.setItem("theme", root.dataset.theme);
+    } catch {}
+  });
+</script>
+
+<style>
+  .header {
+    padding-top: 16px;
+  }
+  .nav {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .brand {
+    grid-column: 1 / -1;
+  }
+  .nav > * {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    text-decoration: none;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .nav > *:hover,
+  .nav > [aria-current="page"] {
+    background: var(--muted);
+  }
+  .brand {
+    font-weight: 700;
+  }
+  .theme {
+    font: inherit;
+    color: inherit;
+    border: 0;
+    cursor: pointer;
+    justify-content: center;
+  }
+  .moon {
+    display: none;
+  }
+  :global(:root[data-theme="dark"]) .sun {
+    display: none;
+  }
+  :global(:root[data-theme="dark"]) .moon {
+    display: inline;
+  }
+  @media (prefers-color-scheme: dark) {
+    :global(:root:not([data-theme="light"])) .sun {
+      display: none;
+    }
+    :global(:root:not([data-theme="light"])) .moon {
+      display: inline;
+    }
+  }
+  @media (min-width: 900px) {
+    .nav {
+      grid-template-columns: 2fr repeat(5, minmax(0, 1fr)) auto;
+    }
+    .brand {
+      grid-column: auto;
+    }
+    .theme {
+      min-width: 3rem;
+    }
+  }
+</style>

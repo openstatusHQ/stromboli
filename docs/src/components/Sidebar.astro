@@ -1,0 +1,125 @@
+---
+import type { NavSection } from "../lib/docs";
+
+interface Props {
+  sections: NavSection[];
+  current: string;
+}
+const { sections, current } = Astro.props;
+const active = sections.find((s) => current.startsWith(s.href));
+---
+
+<details class="sidebar" open>
+  <summary>Menu <span class="muted">{active?.label ?? "Overview"}</span></summary>
+  <nav aria-label="Documentation">
+    <a href="/docs/" class="top" aria-current={current === "/docs/" ? "page" : undefined}>Overview</a>
+    {
+      sections.map((s) => (
+        <div class="section">
+          <a href={s.href} class="top" aria-current={current === s.href ? "page" : undefined}>
+            {s.label}
+          </a>
+          {s.groups.map((g) => (
+            <>
+              {g.label && <p class="group muted">{g.label}</p>}
+              <ul>
+                {g.items.map((item) => (
+                  <li>
+                    <a href={item.href} aria-current={current === item.href ? "page" : undefined}>
+                      {item.title}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </>
+          ))}
+        </div>
+      ))
+    }
+  </nav>
+</details>
+
+<script>
+  // Collapsed by default on small screens, always open on large ones.
+  const el = document.querySelector<HTMLDetailsElement>("details.sidebar");
+  if (el && !matchMedia("(min-width: 900px)").matches) el.open = false;
+</script>
+
+<style>
+  .sidebar {
+    font-size: 13px;
+    border: 1px solid var(--border);
+  }
+  summary {
+    padding: 0.5rem 0.75rem;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+  }
+  nav {
+    padding: 0.25rem 0.75rem 0.75rem;
+    border-top: 1px solid var(--border);
+  }
+  .section {
+    margin-top: 1rem;
+  }
+  .top {
+    display: block;
+    font-weight: 700;
+    margin-top: 0.5rem;
+  }
+  .group {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin: 0.75rem 0 0.25rem;
+  }
+  ul {
+    list-style: none;
+    margin: 0.25rem 0 0;
+    padding: 0;
+    border-left: 1px solid var(--border);
+  }
+  li a {
+    display: block;
+    padding: 0.15rem 0 0.15rem 0.75rem;
+    margin-left: -1px;
+    border-left: 1px solid transparent;
+    color: var(--muted-foreground);
+    line-height: 1.45;
+  }
+  a {
+    text-decoration: none;
+  }
+  a:hover {
+    color: var(--foreground);
+  }
+  li a[aria-current="page"] {
+    color: var(--foreground);
+    border-left-color: var(--foreground);
+  }
+  .top[aria-current="page"] {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+  @media (min-width: 900px) {
+    .sidebar {
+      border: 0;
+      position: sticky;
+      top: 1.5rem;
+      align-self: start;
+      max-height: calc(100vh - 3rem);
+      overflow-y: auto;
+    }
+    summary {
+      display: none;
+    }
+    nav {
+      border: 0;
+      padding: 0;
+    }
+    .section:first-of-type {
+      margin-top: 0.5rem;
+    }
+  }
+</style>

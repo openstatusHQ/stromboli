@@ -20,6 +20,14 @@ go run ./cmd/stromboli serve
 
 See [Development](README.md#development) in the README to load the example catalog and run an investigation against the demo app.
 
+### Docs site
+
+The markdown in [`docs/`](docs) is also the website: a small [Astro](https://astro.build) site in the same folder renders it with a landing page. Write docs as plain markdown with relative `.md` links, as on GitHub; the site rewrites them at build time. Each section's `README.md` sets the order of its pages in the sidebar. To preview (Node 22+ and pnpm):
+
+```sh
+cd docs && pnpm install && pnpm dev   # http://localhost:4321
+```
+
 ## Checks
 
 CI runs these; run them before you push:

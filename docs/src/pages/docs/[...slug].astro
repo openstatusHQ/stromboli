@@ -1,0 +1,162 @@
+---
+import { getCollection, render } from "astro:content";
+import Base from "../../layouts/Base.astro";
+import Sidebar from "../../components/Sidebar.astro";
+import { descriptionOf, getNav, href, titleOf, type Doc } from "../../lib/docs";
+
+export async function getStaticPaths() {
+  const docs = await getCollection("docs");
+  return docs.map((doc) => ({
+    params: { slug: doc.id === "index" ? undefined : doc.id },
+    props: { doc },
+  }));
+}
+
+const { doc } = Astro.props as { doc: Doc };
+const { Content, headings } = await render(doc);
+const { sections, flat } = await getNav();
+const current = href(doc.id);
+const i = flat.findIndex((n) => n.href === current);
+const prev = i > 0 ? flat[i - 1] : undefined;
+const next = i >= 0 && i < flat.length - 1 ? flat[i + 1] : undefined;
+const toc = headings.filter((h) => h.depth === 2 || h.depth === 3);
+const title = titleOf(doc);
+const editUrl = `https://github.com/openstatushq/stromboli/blob/main/docs/${doc.filePath}`;
+---
+
+<Base title={doc.id === "index" ? "Documentation · stromboli" : `${title} · stromboli`} description={descriptionOf(doc)}>
+  <div class="container layout">
+    <Sidebar sections={sections} current={current} />
+
+    <main class="main">
+      <article class="prose">
+        <Content />
+      </article>
+
+      <nav class="cells pager" aria-label="Pagination">
+        {
+          prev ? (
+            <a href={prev.href}>
+              <span class="muted">← previous</span>
+              {prev.title}
+            </a>
+          ) : (
+            <span />
+          )
+        }
+        {
+          next ? (
+            <a href={next.href} class="next">
+              <span class="muted">next →</span>
+              {next.title}
+            </a>
+          ) : (
+            <span />
+          )
+        }
+      </nav>
+      <p class="edit"><a href={editUrl} class="muted">Edit this page on GitHub ↗</a></p>
+    </main>
+
+    {
+      toc.length > 1 && (
+        <aside class="toc">
+          <p class="muted heading">On this page</p>
+          <ul>
+            {toc.map((h) => (
+              <li class={`d${h.depth}`}>
+                <a href={`#${h.slug}`}>{h.text}</a>
+              </li>
+            ))}
+          </ul>
+        </aside>
+      )
+    }
+  </div>
+</Base>
+
+<style>
+  .layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 1.5rem;
+    margin-top: 1.5rem;
+  }
+  .main {
+    min-width: 0;
+  }
+  .pager {
+    grid-template-columns: 1fr 1fr;
+    margin-top: 3rem;
+    font-size: 13px;
+  }
+  .pager > * {
+    display: flex;
+    flex-direction: column;
+    padding: 0.75rem 1rem;
+    text-decoration: none;
+  }
+  .pager a:hover {
+    background: var(--muted);
+  }
+  .pager .next {
+    text-align: right;
+  }
+  .edit {
+    font-size: 12px;
+    margin: 1rem 0 0;
+  }
+  .edit a {
+    text-decoration: none;
+  }
+  .edit a:hover {
+    color: var(--foreground);
+  }
+  .toc {
+    display: none;
+    font-size: 12px;
+  }
+  .toc .heading {
+    margin: 0 0 0.5rem;
+  }
+  .toc ul {
+    list-style: none;
+    margin: 0;
+    padding: 0 0 0 0.75rem;
+    border-left: 1px solid var(--border);
+  }
+  .toc li {
+    margin: 0.3rem 0;
+  }
+  .toc .d3 {
+    padding-left: 0.75rem;
+  }
+  .toc a {
+    color: var(--muted-foreground);
+    text-decoration: none;
+  }
+  .toc a:hover {
+    color: var(--foreground);
+  }
+  @media (min-width: 900px) {
+    .layout {
+      grid-template-columns: 14rem minmax(0, 1fr);
+      gap: 2.5rem;
+    }
+  }
+  @media (min-width: 1200px) {
+    .layout {
+      --max: 80rem;
+      max-width: 80rem;
+      grid-template-columns: 14rem minmax(0, 1fr) 13rem;
+    }
+    .toc {
+      display: block;
+      position: sticky;
+      top: 1.5rem;
+      align-self: start;
+      max-height: calc(100vh - 3rem);
+      overflow-y: auto;
+    }
+  }
+</style>
