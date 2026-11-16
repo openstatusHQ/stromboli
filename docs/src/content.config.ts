@@ -8,8 +8,7 @@ const docs = defineCollection({
     base: ".",
     pattern: [
       "README.md",
-      "{tutorials,how-to,reference,explanation,adr}/**/*.md",
-      "!adr/template.md",
+      "{tutorials,how-to,reference,explanation}/**/*.md",
     ],
     generateId: ({ entry }) => {
       const parts = entry.replace(/\.md$/, "").split("/");

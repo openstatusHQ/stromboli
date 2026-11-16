@@ -6,7 +6,6 @@ const year = new Date().getFullYear();
   <div class="cells row">
     <span class="muted">© {year} stromboli · MIT</span>
     <a href="/docs/">Docs</a>
-    <a href="/docs/adr/">Decisions</a>
     <a href="https://github.com/openstatushq/stromboli/releases">Releases</a>
     <a href="https://github.com/openstatushq/stromboli">GitHub</a>
     <a href="https://www.openstatus.dev">openstatus</a>
@@ -34,7 +33,7 @@ const year = new Date().getFullYear();
   }
   @media (min-width: 900px) {
     .row {
-      grid-template-columns: 2fr repeat(5, minmax(0, 1fr));
+      grid-template-columns: 2fr repeat(4, minmax(0, 1fr));
     }
     .row > span {
       grid-column: auto;

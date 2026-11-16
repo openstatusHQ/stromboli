@@ -10,8 +10,9 @@ import { fileURLToPath } from "node:url";
 const DOCS_ROOT = fileURLToPath(new URL("../..", import.meta.url));
 const REPO_ROOT = path.dirname(DOCS_ROOT.replace(/\/$/, ""));
 const REPO_URL = "https://github.com/openstatushq/stromboli";
-// Markdown files in docs/ that are not pages of the site (see content.config.ts).
-const NOT_PAGES = new Set(["adr/template.md"]);
+// Markdown in docs/ that is not part of the site (see content.config.ts): the
+// ADRs stay on GitHub.
+const notPage = (rel) => rel === "adr" || rel.startsWith("adr/");
 
 /** Maps a docs markdown path relative to docs/ to its site route. */
 export function routeFor(rel) {
@@ -30,8 +31,8 @@ function rewrite(href, fromFile) {
   const relToDocs = path.relative(DOCS_ROOT, abs);
   const insideDocs = !relToDocs.startsWith("..") && !path.isAbsolute(relToDocs);
 
-  if (insideDocs && abs.endsWith(".md") && !NOT_PAGES.has(relToDocs)) return routeFor(relToDocs) + suffix;
-  if (insideDocs && existsSync(path.join(abs, "README.md"))) {
+  if (insideDocs && abs.endsWith(".md") && !notPage(relToDocs)) return routeFor(relToDocs) + suffix;
+  if (insideDocs && !notPage(relToDocs) && existsSync(path.join(abs, "README.md"))) {
     return routeFor(path.join(relToDocs, "README.md")) + suffix;
   }
   // Anything else (source files, folders, LICENSE...) lives on GitHub.

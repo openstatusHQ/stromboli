@@ -7,7 +7,6 @@ export const SECTIONS = [
   { id: "how-to", label: "How-to guides", blurb: "Get a specific job done: connect Axiom, set up Slack…" },
   { id: "reference", label: "Reference", blurb: "Look up a CLI flag, a variable, a catalog field, an API." },
   { id: "explanation", label: "Explanation", blurb: "Understand how stromboli works and why." },
-  { id: "adr", label: "Decisions", blurb: "The architecture decision records behind the design." },
 ] as const;
 
 export function href(id: string): string {
