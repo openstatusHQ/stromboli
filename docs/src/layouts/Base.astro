@@ -26,6 +26,17 @@ const { title, description = "An open-source AI SRE agent you host yourself." } 
         if (t === "light" || t === "dark") document.documentElement.dataset.theme = t;
       } catch {}
     </script>
+    {
+      import.meta.env.PROD && (
+        <Fragment>
+          <script is:inline async src="https://plausible.io/js/pa-RLf-Oeno5-e4IScYVZrcD.js" />
+          <script is:inline>
+            window.plausible=window.plausible||function(){(plausible.q=plausible.q||[]).push(arguments)},plausible.init=plausible.init||function(i){plausible.o=i||{}};
+            plausible.init()
+          </script>
+        </Fragment>
+      )
+    }
   </head>
   <body>
     <Header />
