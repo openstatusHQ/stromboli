@@ -166,7 +166,7 @@ func TestCloudWatchHistogram(t *testing.T) {
 	if len(got) != 1 || got[0].Count != 4 || !got[0].Start.Equal(start.Add(5*time.Minute)) {
 		t.Fatalf("buckets = %+v", got)
 	}
-	if q := f.started[0]["queryString"]; q != "filter @message like /err/ | stats count(*) as n by bin(300s)" {
+	if q := f.started[0]["queryString"]; q != "filter @message like /(?i)err/ | stats count(*) as n by bin(300s)" {
 		t.Fatalf("query = %q", q)
 	}
 }

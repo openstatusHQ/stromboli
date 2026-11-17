@@ -25,6 +25,7 @@ import (
 	"github.com/openstatushq/stromboli/internal/config"
 	"github.com/openstatushq/stromboli/internal/connector"
 	"github.com/openstatushq/stromboli/internal/llm"
+	"github.com/openstatushq/stromboli/internal/policy"
 	"github.com/openstatushq/stromboli/internal/store"
 	"github.com/openstatushq/stromboli/internal/store/db"
 )
@@ -109,23 +110,6 @@ func (e *Engine) Start(ctx context.Context, req StartRequest) (inv db.Investigat
 		}
 	}
 
-	if req.Fingerprint != "" {
-		window := e.cfg.DedupeWindow
-		if req.DedupeWindow > 0 {
-			window = req.DedupeWindow
-		}
-		existing, err := e.store.FindOpenInvestigation(ctx, db.FindOpenInvestigationParams{
-			Fingerprint:   pgtype.Text{String: req.Fingerprint, Valid: true},
-			WindowMinutes: int32(window.Minutes()),
-		})
-		if err == nil {
-			return existing, true, nil
-		}
-		if !store.IsNotFound(err) {
-			return inv, false, err
-		}
-	}
-
 	if req.At.IsZero() {
 		req.At = time.Now()
 	}
@@ -140,7 +124,7 @@ func (e *Engine) Start(ctx context.Context, req StartRequest) (inv db.Investigat
 	if err != nil {
 		return inv, false, err
 	}
-	inv, err = e.store.CreateInvestigation(ctx, db.CreateInvestigationParams{
+	create := db.CreateInvestigationParams{
 		ID:          uuid.New(),
 		Title:       req.Title,
 		Source:      req.Source,
@@ -148,9 +132,14 @@ func (e *Engine) Start(ctx context.Context, req StartRequest) (inv db.Investigat
 		Services:    req.Services,
 		Status:      StatusRunning,
 		Alert:       alert,
-	})
-	if err != nil {
-		return inv, false, err
+	}
+	if req.Fingerprint == "" {
+		inv, err = e.store.CreateInvestigation(ctx, create)
+	} else {
+		inv, reused, err = e.createOrReuse(ctx, req, create)
+	}
+	if err != nil || reused {
+		return inv, reused, err
 	}
 
 	e.wg.Add(1)
@@ -160,6 +149,40 @@ func (e *Engine) Start(ctx context.Context, req StartRequest) (inv db.Investigat
 	}()
 	return inv, false, nil
 }
+
+// createOrReuse returns the open investigation with req's fingerprint, or
+// creates one. The lookup and the insert run in one transaction under a lock
+// on the fingerprint: concurrent repeats of an alert (Alertmanager replicas
+// send the same webhook at once) must not each start an investigation.
+func (e *Engine) createOrReuse(ctx context.Context, req StartRequest, create db.CreateInvestigationParams) (inv db.Investigation, reused bool, err error) {
+	window := e.cfg.DedupeWindow
+	if req.DedupeWindow > 0 {
+		window = req.DedupeWindow
+	}
+	err = e.store.Tx(ctx, func(q *db.Queries) error {
+		if err := q.LockFingerprint(ctx, req.Fingerprint); err != nil {
+			return err
+		}
+		existing, err := q.FindOpenInvestigation(ctx, db.FindOpenInvestigationParams{
+			Fingerprint:   pgtype.Text{String: req.Fingerprint, Valid: true},
+			WindowMinutes: int32(window.Minutes()),
+		})
+		if err == nil {
+			inv, reused = existing, true
+			return nil
+		}
+		if !store.IsNotFound(err) {
+			return err
+		}
+		inv, err = q.CreateInvestigation(ctx, create)
+		return err
+	})
+	return inv, reused, err
+}
+
+// notifyTimeout bounds a notification sent after the investigation's own
+// context is done (finished, timed out or shutting down).
+const notifyTimeout = 30 * time.Second
 
 func (e *Engine) run(inv db.Investigation, req StartRequest) {
 	ctx, cancel := context.WithTimeout(e.baseCtx, e.cfg.InvestigationTimeout)
@@ -192,7 +215,8 @@ func (e *Engine) run(inv db.Investigation, req StartRequest) {
 		rec.record(ctx, step{Kind: "report", Output: string(reportJSON)})
 		log.Info("investigation completed", "confidence", report.Confidence)
 	}
-	finishCtx := context.WithoutCancel(ctx)
+	finishCtx, cancelFinish := context.WithTimeout(context.WithoutCancel(ctx), notifyTimeout)
+	defer cancelFinish()
 	if err := e.store.FinishInvestigation(finishCtx, db.FinishInvestigationParams{
 		ID: inv.ID, Status: status, Report: reportJSON, Error: pgtype.Text{String: errText, Valid: errText != ""},
 	}); err != nil {
@@ -238,9 +262,11 @@ func (e *Engine) investigate(ctx context.Context, rec *recorder, inv *db.Investi
 		briefs = append(briefs, b)
 	}
 
+	// The alert is untrusted input like logs and commits: it is redacted the
+	// same way before it reaches the LLM.
 	alert, _ := json.MarshalIndent(json.RawMessage(inv.Alert), "", "  ")
 	first := fmt.Sprintf("Investigation: %s\nSource: %s\nAffected services: %s\nCurrent time: %s\n\nAlert payload:\n```json\n%s\n```\n\n%s",
-		inv.Title, inv.Source, strings.Join(inv.Services, ", "), tc.now.UTC().Format(time.RFC3339), alert, strings.Join(briefs, "\n\n---\n\n"))
+		policy.Redact(inv.Title), inv.Source, strings.Join(inv.Services, ", "), tc.now.UTC().Format(time.RFC3339), policy.Redact(string(alert)), strings.Join(briefs, "\n\n---\n\n"))
 
 	params := llm.Request{
 		System:    systemPrompt,
@@ -390,7 +416,10 @@ func (e *Engine) mitigate(ctx context.Context, rec *recorder, tc *toolContext, i
 		inv.MitigatedAt = pgtype.Timestamptz{Time: time.Now(), Valid: true}
 	}
 	if e.notifier != nil {
-		if err := e.notifier.Mitigated(context.WithoutCancel(ctx), *inv, m); err != nil {
+		// Published even if the investigation times out meanwhile, but bounded.
+		nctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), notifyTimeout)
+		defer cancel()
+		if err := e.notifier.Mitigated(nctx, *inv, m); err != nil {
 			slog.Warn("notify mitigation", "investigation", inv.ID, "err", err)
 		}
 	}

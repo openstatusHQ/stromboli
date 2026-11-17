@@ -20,6 +20,16 @@ type Query struct {
 	Limit  int
 }
 
+// caseInsensitive returns filter with the RE2 (?i) flag, which every backend
+// supports (LogQL, CloudWatch Insights, Cloud Logging, APL, Go regexp) but
+// none applies by default. Filter is documented as case-insensitive.
+func caseInsensitive(filter string) string {
+	if filter == "" || strings.HasPrefix(filter, "(?i)") {
+		return filter
+	}
+	return "(?i)" + filter
+}
+
 type Line struct {
 	Time   time.Time         `json:"time"`
 	Labels map[string]string `json:"labels,omitempty"`

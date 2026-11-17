@@ -204,6 +204,26 @@ func TestSource(t *testing.T) {
 		t.Fatalf("saved = %v", saved)
 	}
 
+	// A cancelled caller (e.g. an HTTP request that timed out) must not lose
+	// a rotated refresh token: the refresh and its save complete on their
+	// own, bounded context.
+	cancelled, cancel := context.WithCancel(ctx)
+	cancel()
+	var saveErr error
+	var saveHasDeadline bool
+	rotated := NewSource(Grant{ClientID: "cid-1", TokenURL: f.srv.URL + "/token", RefreshToken: "rt1", AuthorizedAt: "t0"},
+		func(ctx context.Context, _ Grant) error {
+			saveErr = ctx.Err()
+			_, saveHasDeadline = ctx.Deadline()
+			return nil
+		})
+	if _, err := rotated.Token(cancelled); err != nil {
+		t.Fatalf("refresh with a cancelled caller: %v", err)
+	}
+	if saveErr != nil || !saveHasDeadline {
+		t.Errorf("save ran on a context with err %v (deadline: %v), want a live, bounded one", saveErr, saveHasDeadline)
+	}
+
 	revoked := NewSource(Grant{ClientID: "cid-1", TokenURL: f.srv.URL + "/token", RefreshToken: "gone", AuthorizedAt: "t0"}, nil)
 	if _, err := revoked.Token(ctx); !errors.Is(err, ErrLoginRequired) || !strings.Contains(err.Error(), "revoked") {
 		t.Fatalf("err = %v", err)
