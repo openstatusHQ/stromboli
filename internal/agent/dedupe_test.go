@@ -46,7 +46,7 @@ func TestCreateOrReuseConcurrent(t *testing.T) {
 	for i := range n {
 		wg.Go(func() {
 			inv, reused, err := e.createOrReuse(ctx, StartRequest{Fingerprint: fp}, db.CreateInvestigationParams{
-				ID: uuid.New(), Title: "t", Source: "test", Status: StatusRunning, Alert: []byte(`{}`),
+				ID: uuid.New(), Title: "t", Source: "test", Status: StatusRunning, Alert: []byte(`{}`), Services: []string{"api"},
 				Fingerprint: pgtype.Text{String: fp, Valid: true},
 			})
 			ids[i], created[i], errs[i] = inv.ID, !reused, err
