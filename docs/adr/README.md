@@ -28,11 +28,12 @@ To record a new decision, copy [`template.md`](template.md) to the next number, 
 | [0020](0020-mit-license.md) | MIT license | Accepted |
 | [0021](0021-mcp-server.md) | stromboli as an MCP server | Proposed |
 | [0022](0022-oauth-for-remote-mcp-servers.md) | OAuth for remote MCP servers | Proposed |
+| [0023](0023-user-authentication.md) | User accounts and `stromboli login` | Proposed |
 
 ## Open questions
 
 Not decided yet; each becomes an ADR once it is.
 
 - Outputs beyond Slack: Discord, Teams, the openstatus dashboard, openstatus incident notes and status report drafts?
-- UI authentication in v1: local users only, or OIDC from the start?
+- UI authentication in v1: local users only, or OIDC from the start? Proposed in [0023](0023-user-authentication.md).
 - Telemetry: anonymous, opt-out usage stats to learn which connectors to build next?
