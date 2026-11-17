@@ -54,6 +54,48 @@ The `fly` connector has [presets](../reference/metric-presets.md#fly) (memory, O
     selectors: ['app="checker"']
 ```
 
+## Through prometheus-mcp
+
+Instead of letting stromboli call the Prometheus HTTP API, a `prometheus` or `fly` connector can go through a [prometheus-mcp](https://github.com/freepik-company/prometheus-mcp) server (v0.8.0 or later) that you run. The backend's URL and credentials then live in prometheus-mcp's config, not in stromboli.
+
+For Fly, a `config.yaml` like this one points prometheus-mcp at your org's managed Prometheus. The `token` auth type sends `Authorization: Bearer <token>`, which Fly accepts with `FlyV1 …` tokens:
+
+```yaml
+server:
+  name: prometheus-mcp
+  version: "0.8.0"
+  transport:
+    type: http
+    http:
+      host: "[::]:8080"   # Fly's private network is IPv6
+middleware:
+  access_logs:
+    redacted_headers: [Authorization]
+backends:
+  fly:
+    url: https://api.fly.io/prometheus/<org-slug>
+    auth:
+      type: token
+      token: "${FLY_PROMETHEUS_TOKEN}"   # fly tokens create readonly <org-slug>
+```
+
+Run it with `prometheus-mcp --config config.yaml` (its Helm chart uses the image `ghcr.io/freepik-company/prometheus-mcp`; or build it from the repository's Dockerfile). On Fly, deploy it as its own app with no public service and reach it on the private network. Then point the connector at it:
+
+```sh
+stromboli connector add fly fly org=<org-slug> mcp_url=http://<prometheus-mcp-app>.internal:8080/mcp \
+  token="$(fly tokens create readonly <org-slug>)"   # optional: lists machines in the brief
+```
+
+For any other backend, the same works with the `prometheus` kind:
+
+```sh
+stromboli connector add prom prometheus mcp_url=http://prometheus-mcp:8080/mcp backend=prod
+```
+
+Add `backend` when the server has several backends, `tenant_id` for a multi-tenant one, and `mcp_token` (sent as a bearer token) when the server sits behind JWT validation or an authenticating proxy. prometheus-mcp has no auth of its own beyond JWT validation, so keep it off the public internet.
+
+Presets, discovery and `get_metrics` work the same either way.
+
 ## Google Cloud Monitoring
 
 ```sh
@@ -86,3 +128,4 @@ The **Metrics** section of the brief should list series with their current value
 - [Metric presets](../reference/metric-presets.md)
 - [Enable health checks](enable-health-checks.md), which use the Fly metrics
 - [ADR 0012: metrics through the Prometheus HTTP API](../adr/0012-metrics-through-prometheus-api.md)
+- [ADR 0023: metrics through a self-hosted prometheus-mcp, opt-in](../adr/0023-metrics-through-prometheus-mcp.md)

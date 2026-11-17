@@ -8,8 +8,8 @@ Read this when adding a connector or writing a catalog entry. **Bold** keys are 
 | `axiom` | logs (OAuth in a browser: the user runs it) | `org_id`, `message_field`, `mcp_url` (`https://mcp.eu.axiom.co/mcp` for EU) |
 | `cloudwatch` | logs | `region`, `access_key_id`, `secret_access_key` 🔒, `session_token` 🔒, `log_group_prefix`, `service_field` |
 | `gcp_logging` | logs | **`project`**, `credentials_json` 🔒 (`credentials_json=@key.json`; else ADC) |
-| `prometheus` | metrics (Prometheus, Mimir, Thanos, VictoriaMetrics, Grafana Cloud) | **`url`**, `tenant_id`, `username`, `password` 🔒, `bearer_token` 🔒, `service_label` |
-| `fly` | metrics + machine list | **`org`**, **`token`** 🔒. A read-only token is enough: `fly tokens create readonly <org>` |
+| `prometheus` | metrics (Prometheus, Mimir, Thanos, VictoriaMetrics, Grafana Cloud) | `url` or `mcp_url` (a [prometheus-mcp](https://github.com/freepik-company/prometheus-mcp) server), `tenant_id`, `username`, `password` 🔒, `bearer_token` 🔒, `service_label`, `mcp_token` 🔒, `backend` |
+| `fly` | metrics + machine list | **`org`**, `token` 🔒 (required without `mcp_url`). A read-only token is enough: `fly tokens create readonly <org>`. With `mcp_url` (+ `mcp_token` 🔒, `backend`), metrics go through prometheus-mcp |
 | `gcp_monitoring` | metrics | **`project`**, `credentials_json` 🔒 |
 | `github` | deploys and commits | `token` 🔒 (read-only; without it, public repos only), `base_url` (GHES) |
 | `vercel` | logs + deploys (OAuth in a browser: the user runs it) | **`team_id`** |

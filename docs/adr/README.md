@@ -28,6 +28,7 @@ To record a new decision, copy [`template.md`](template.md) to the next number, 
 | [0020](0020-mit-license.md) | MIT license | Accepted |
 | [0021](0021-mcp-server.md) | stromboli as an MCP server | Proposed |
 | [0022](0022-oauth-for-remote-mcp-servers.md) | OAuth for remote MCP servers | Proposed |
+| [0023](0023-metrics-through-prometheus-mcp.md) | Metrics through a self-hosted prometheus-mcp, opt-in | Proposed |
 
 ## Open questions
 
