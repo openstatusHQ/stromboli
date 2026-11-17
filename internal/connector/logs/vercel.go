@@ -72,7 +72,7 @@ func (v *Vercel) lines(ctx context.Context, q Query, max int) ([]Line, error) {
 	}
 	var re *regexp.Regexp
 	if q.Filter != "" {
-		if re, err = regexp.Compile(q.Filter); err != nil {
+		if re, err = regexp.Compile(caseInsensitive(q.Filter)); err != nil {
 			return nil, fmt.Errorf("vercel: invalid filter: %w", err)
 		}
 	}

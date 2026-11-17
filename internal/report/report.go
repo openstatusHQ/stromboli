@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"sort"
 	"strings"
 	"time"
@@ -112,11 +113,17 @@ type Slack struct {
 	buttons *buttons
 }
 
+// slackTimeout bounds every Slack API call: slack-go's default client has no
+// timeout, and a hung call would pin an investigation and block shutdown.
+const slackTimeout = 30 * time.Second
+
 func NewSlack(token, channel string) *Slack {
-	return &Slack{client: slack.New(token), channel: channel}
+	client := slack.New(token, slack.OptionHTTPClient(&http.Client{Timeout: slackTimeout}))
+	return &Slack{client: client, channel: channel}
 }
 
 func (s *Slack) Started(ctx context.Context, inv db.Investigation) (string, string, error) {
+	inv = safeInv(inv)
 	text := fmt.Sprintf("🔎 Investigating *%s* · %s (%s)", serviceLabel(inv), shorten(inv.Title, 300), inv.Source)
 	ch, ts, err := s.client.PostMessageContext(ctx, s.channel, slack.MsgOptionText(text, false))
 	return ch, ts, err
@@ -153,7 +160,7 @@ func FailedText(failures map[string]string) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "⚠️ Health check: could not check %d %s", len(names), noun)
 	for _, name := range names {
-		fmt.Fprintf(&b, "\n• *%s*: %s", name, failures[name])
+		fmt.Fprintf(&b, "\n• *%s*: %s", esc(name), esc(failures[name]))
 	}
 	return clip(b.String())
 }
@@ -164,6 +171,7 @@ func (s *Slack) Mitigated(ctx context.Context, inv db.Investigation, m *strombol
 	if !inv.SlackChannel.Valid {
 		return nil
 	}
+	inv, m = safeInv(inv), safeProto(m)
 	text := mitigationText(inv, m)
 	if _, _, _, err := s.client.UpdateMessageContext(ctx, inv.SlackChannel.String, inv.SlackTs.String,
 		slack.MsgOptionText(text, false), slack.MsgOptionBlocks(s.mitigatedBlocks(ctx, inv, m)...)); err != nil {
@@ -194,6 +202,7 @@ func (s *Slack) Finished(ctx context.Context, inv db.Investigation, r *stromboli
 	if !inv.SlackChannel.Valid {
 		return nil
 	}
+	inv, r = safeInv(inv), safeProto(r)
 	if _, _, _, err := s.client.UpdateMessageContext(ctx, inv.SlackChannel.String, inv.SlackTs.String,
 		slack.MsgOptionText(fallbackText(inv, r), false), slack.MsgOptionBlocks(s.blocks(ctx, inv, r)...)); err != nil {
 		return err
@@ -219,9 +228,10 @@ func (s *Slack) refresh(ctx context.Context, inv db.Investigation) error {
 	if !inv.SlackChannel.Valid {
 		return nil
 	}
+	inv = safeInv(inv)
 	var text string
 	var out []slack.Block
-	switch m := Mitigation(inv); {
+	switch m := safeMitigation(inv); {
 	case inv.Status != "running":
 		var r *stromboliv1.Report
 		if len(inv.Report) > 0 {
@@ -230,6 +240,7 @@ func (s *Slack) refresh(ctx context.Context, inv db.Investigation) error {
 				r = nil
 			}
 		}
+		r = safeProto(r)
 		text, out = fallbackText(inv, r), s.blocks(ctx, inv, r)
 	case m != nil:
 		text = mitigationText(inv, m)
@@ -248,7 +259,7 @@ func (s *Slack) ActionFinished(ctx context.Context, inv db.Investigation, a db.A
 	if !inv.SlackChannel.Valid {
 		return nil
 	}
-	text, blocks := actionFinishedMessage(a, m)
+	text, blocks := actionFinishedMessage(safeAction(a), safeProto(m))
 	if text == "" {
 		return nil
 	}
@@ -300,10 +311,30 @@ func actionFinishedMessage(a db.Action, m *stromboliv1.MachineAction) (string, [
 func slackMention(decidedBy string) string {
 	if _, rest, ok := strings.Cut(decidedBy, "(Slack "); ok {
 		if id, _, ok := strings.Cut(rest, ")"); ok && id != "" {
-			return "<@" + id + ">"
+			if isSlackID(id) {
+				return "<@" + id + ">"
+			}
 		}
 	}
-	return decidedBy
+	return esc(decidedBy)
+}
+
+// isSlackID reports whether id looks like a Slack user ID, e.g. U024BE7LH.
+func isSlackID(id string) bool {
+	for _, r := range id {
+		if (r < 'A' || r > 'Z') && (r < '0' || r > '9') {
+			return false
+		}
+	}
+	return id != ""
+}
+
+// safeMitigation is the mitigation stored on inv, escaped for Slack, or nil.
+func safeMitigation(inv db.Investigation) *stromboliv1.Mitigation {
+	if m := Mitigation(inv); m != nil {
+		return safeProto(m)
+	}
+	return nil
 }
 
 // mitigationText is the one-line form of a mitigation, for notifications.
@@ -336,7 +367,7 @@ func serviceLabel(inv db.Investigation) string {
 // headerBlocks is a short header naming the services, then the alert that
 // started the investigation in small print: alert titles can be long.
 func headerBlocks(inv db.Investigation, emoji string) []slack.Block {
-	h := slack.NewTextBlockObject(slack.PlainTextType, shorten(emoji+" "+serviceLabel(inv), 150), true, false)
+	h := slack.NewTextBlockObject(slack.PlainTextType, shorten(emoji+" "+unesc(serviceLabel(inv)), 150), true, false)
 	alert := fmt.Sprintf("*Alert* · %s", shorten(inv.Title, 500))
 	if inv.Source != "" {
 		alert += " · via " + inv.Source
@@ -388,7 +419,7 @@ func (s *Slack) blocks(ctx context.Context, inv db.Investigation, r *stromboliv1
 		emoji = "❌"
 	}
 	out := headerBlocks(inv, emoji)
-	out = append(out, s.mitigationBlocks(ctx, inv, Mitigation(inv))...)
+	out = append(out, s.mitigationBlocks(ctx, inv, safeMitigation(inv))...)
 	out = append(out, slack.NewDividerBlock())
 
 	if r == nil {
@@ -511,6 +542,12 @@ func shorten(s string, n int) string {
 	cut := n - len(ell)
 	for cut > 0 && !utf8.RuneStart(s[cut]) {
 		cut--
+	}
+	// Do not split an entity of escaped text, which would show as "&am…".
+	if amp := strings.LastIndexByte(s[max(0, cut-4):cut], '&'); amp >= 0 {
+		if start := max(0, cut-4) + amp; !strings.Contains(s[start:cut], ";") {
+			cut = start
+		}
 	}
 	return s[:cut] + ell
 }

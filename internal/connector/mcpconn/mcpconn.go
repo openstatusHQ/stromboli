@@ -28,6 +28,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/modelcontextprotocol/go-sdk/jsonrpc"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -116,12 +117,15 @@ func (c *Client) Call(ctx context.Context, tool string, args, out any) error {
 	var res *mcp.CallToolResult
 	var err error
 	if c.readOnly(ctx, tool) {
-		res, err = c.call(ctx, tool, args)
-		if err != nil && ctx.Err() == nil && !isToolError(err) {
+		var s *mcp.ClientSession
+		res, s, err = c.call(ctx, tool, args)
+		if err != nil && ctx.Err() == nil && !isServerError(err) {
 			// The session may have expired or the process died. Calling a
 			// read-only tool again is safe: retry once on a new session.
-			c.reset()
-			res, err = c.call(ctx, tool, args)
+			// Only the session that failed is dropped: concurrent calls may
+			// already be using a newer one.
+			c.resetIf(s)
+			res, _, err = c.call(ctx, tool, args)
 		}
 	} else {
 		// A tool that changes something is never sent twice: a transport
@@ -130,7 +134,7 @@ func (c *Client) Call(ctx context.Context, tool string, args, out any) error {
 		if err := c.ensureAlive(ctx); err != nil {
 			return err
 		}
-		res, err = c.call(ctx, tool, args)
+		res, _, err = c.call(ctx, tool, args)
 	}
 	if err != nil {
 		return err
@@ -159,26 +163,30 @@ func (c *Client) ensureAlive(ctx context.Context) error {
 	if s.Ping(ctx, nil) == nil {
 		return nil
 	}
-	c.reset()
+	c.resetIf(s)
 	_, err = c.connect(ctx)
 	return err
 }
 
-func isToolError(err error) bool {
-	var te *ToolError
-	return errors.As(err, &te)
+// isServerError reports whether err is a JSON-RPC error the server answered
+// with (e.g. invalid params): the session works, so it is neither dropped nor
+// retried.
+func isServerError(err error) bool {
+	var we *jsonrpc.Error
+	return errors.As(err, &we)
 }
 
-func (c *Client) call(ctx context.Context, tool string, args any) (*mcp.CallToolResult, error) {
+// call calls tool and returns the session it used, nil if none was connected.
+func (c *Client) call(ctx context.Context, tool string, args any) (*mcp.CallToolResult, *mcp.ClientSession, error) {
 	session, err := c.connect(ctx)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	res, err := session.CallTool(ctx, &mcp.CallToolParams{Name: tool, Arguments: args})
 	if err != nil {
-		return nil, fmt.Errorf("%s: %s: %w", c.cfg.Name, tool, err)
+		return nil, session, fmt.Errorf("%s: %s: %w", c.cfg.Name, tool, err)
 	}
-	return res, nil
+	return res, session, nil
 }
 
 // Check connects and verifies the allowed tools.
@@ -215,7 +223,20 @@ func (c *Client) Close() error {
 	return err
 }
 
-func (c *Client) reset() { _ = c.Close() }
+// resetIf closes s if it is still the current session, so the next call
+// reconnects. A nil s (the call never got a session) changes nothing.
+func (c *Client) resetIf(s *mcp.ClientSession) {
+	if s == nil {
+		return
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.session != s {
+		return
+	}
+	_ = c.session.Close()
+	c.session, c.tools = nil, nil
+}
 
 func (c *Client) connect(ctx context.Context) (*mcp.ClientSession, error) {
 	c.mu.Lock()

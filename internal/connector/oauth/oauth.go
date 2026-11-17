@@ -111,6 +111,9 @@ func NewSource(g Grant, save func(context.Context, Grant) error) *Source {
 	}
 }
 
+// refreshTimeout bounds a token refresh and the save of a rotated token.
+const refreshTimeout = 30 * time.Second
+
 // Token returns a valid access token.
 func (s *Source) Token(ctx context.Context) (string, error) {
 	s.mu.Lock()
@@ -118,6 +121,12 @@ func (s *Source) Token(ctx context.Context) (string, error) {
 	if s.tok != nil && (s.tok.Expiry.IsZero() || time.Until(s.tok.Expiry) > time.Minute) {
 		return s.tok.AccessToken, nil
 	}
+	// Refreshing may rotate the refresh token, invalidating the old one: once
+	// started, the refresh and the save of its result must complete even if
+	// the caller's request is cancelled, or the grant is lost until a new
+	// login. They get their own deadline instead.
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), refreshTimeout)
+	defer cancel()
 	tok, err := s.conf.TokenSource(ctx, &oauth2.Token{RefreshToken: s.grant.RefreshToken}).Token()
 	if err != nil {
 		var re *oauth2.RetrieveError

@@ -112,7 +112,7 @@ func insightsQuery(first, commands, filter string, rest ...string) string {
 		parts = append(parts, commands)
 	}
 	if filter != "" {
-		parts = append(parts, "filter @message like /"+strings.ReplaceAll(filter, "/", `\/`)+"/")
+		parts = append(parts, "filter @message like /"+strings.ReplaceAll(caseInsensitive(filter), "/", `\/`)+"/")
 	}
 	return strings.Join(append(parts, rest...), " | ")
 }

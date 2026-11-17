@@ -142,7 +142,7 @@ func TestAxiomMessageFieldOverride(t *testing.T) {
 	if _, err := ax.Count(context.Background(), Query{Selector: "['logs']", Filter: "x", Start: time.Now().Add(-time.Hour), End: time.Now()}); err != nil {
 		t.Fatal(err)
 	}
-	if last := f.queries[len(f.queries)-1]; !strings.Contains(last, `tostring(['attributes.line']) matches regex "x"`) {
+	if last := f.queries[len(f.queries)-1]; !strings.Contains(last, `tostring(['attributes.line']) matches regex "(?i)x"`) {
 		t.Fatalf("queries = %q", f.queries)
 	}
 }
@@ -188,7 +188,7 @@ func TestAxiomHistogram(t *testing.T) {
 	if len(got) != 1 || got[0].Count != 3 || !got[0].Start.Equal(start.Add(5*time.Minute)) {
 		t.Fatalf("buckets = %+v", got)
 	}
-	want := `['logs'] | where tostring(['message']) matches regex "err" | summarize n = count() by t = bin(_time, 300s)`
+	want := `['logs'] | where tostring(['message']) matches regex "(?i)err" | summarize n = count() by t = bin(_time, 300s)`
 	if f.queries[len(f.queries)-1] != want {
 		t.Fatalf("queries = %q", f.queries)
 	}

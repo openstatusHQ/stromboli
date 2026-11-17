@@ -240,7 +240,7 @@ func (a *Axiom) withFilter(q Query, f axiomFields) string {
 	if f.level != "" {
 		target = fmt.Sprintf(`strcat("level=", tostring(%s), " ", %s)`, aplIdent(f.level), target)
 	}
-	return fmt.Sprintf("%s | where %s matches regex %s", q.Selector, target, strconv.Quote(q.Filter))
+	return fmt.Sprintf("%s | where %s matches regex %s", q.Selector, target, strconv.Quote(caseInsensitive(q.Filter)))
 }
 
 // aplIdent quotes a dataset or field name: ['service.name'].

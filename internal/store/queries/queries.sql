@@ -61,6 +61,13 @@ SELECT * FROM investigations WHERE id = $1;
 -- name: ListInvestigations :many
 SELECT * FROM investigations ORDER BY created_at DESC LIMIT $1;
 
+-- name: LockFingerprint :exec
+-- Serializes FindOpenInvestigation and CreateInvestigation for one fingerprint
+-- until the end of the transaction, so concurrent repeats of an alert (e.g.
+-- from Alertmanager replicas) start one investigation. The two-key form keeps
+-- it apart from other advisory locks, such as goose's.
+SELECT pg_advisory_xact_lock(hashtext('stromboli.fingerprint'), hashtext(@fingerprint::text));
+
 -- name: FindOpenInvestigation :one
 -- A running investigation always absorbs a repeat of its alert. A finished one
 -- does only within the window, and never once the alert resolved or one of its

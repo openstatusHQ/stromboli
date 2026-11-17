@@ -243,8 +243,10 @@ func slackUser(u slack.User) string {
 	return fmt.Sprintf("@%s (Slack %s)", name, u.ID)
 }
 
+// plain is a plain_text object. Its input may be escaped for mrkdwn (see esc);
+// Slack shows plain text verbatim, so the escaping is undone.
 func plain(s string) *slack.TextBlockObject {
-	return slack.NewTextBlockObject(slack.PlainTextType, s, false, false)
+	return slack.NewTextBlockObject(slack.PlainTextType, unesc(s), false, false)
 }
 
 func dash(s string) string {

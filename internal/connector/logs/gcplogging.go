@@ -185,7 +185,7 @@ func gcpFilter(q Query) string {
 		parts = append(parts, fmt.Sprintf("timestamp<=%q", q.End.UTC().Format(time.RFC3339Nano)))
 	}
 	if q.Filter != "" {
-		re := gcpString(q.Filter)
+		re := gcpString(caseInsensitive(q.Filter))
 		alts := []string{"textPayload=~" + re, "jsonPayload.message=~" + re, "jsonPayload.msg=~" + re}
 		if q.Filter == ErrorFilter {
 			alts = append([]string{"severity>=ERROR", "httpRequest.status>=500"}, alts...)

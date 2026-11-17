@@ -193,5 +193,5 @@ func logQL(q Query) string {
 	if q.Filter == "" {
 		return q.Selector
 	}
-	return q.Selector + " |~ " + strconv.Quote(q.Filter)
+	return q.Selector + " |~ " + strconv.Quote(caseInsensitive(q.Filter))
 }

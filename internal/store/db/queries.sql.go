@@ -724,6 +724,19 @@ func (q *Queries) ListSteps(ctx context.Context, arg ListStepsParams) ([]Step, e
 	return items, nil
 }
 
+const lockFingerprint = `-- name: LockFingerprint :exec
+SELECT pg_advisory_xact_lock(hashtext('stromboli.fingerprint'), hashtext($1::text))
+`
+
+// Serializes FindOpenInvestigation and CreateInvestigation for one fingerprint
+// until the end of the transaction, so concurrent repeats of an alert (e.g.
+// from Alertmanager replicas) start one investigation. The two-key form keeps
+// it apart from other advisory locks, such as goose's.
+func (q *Queries) LockFingerprint(ctx context.Context, fingerprint string) error {
+	_, err := q.db.Exec(ctx, lockFingerprint, fingerprint)
+	return err
+}
+
 const rejectAction = `-- name: RejectAction :one
 UPDATE actions SET status = 'rejected', decided_by = $2, note = $3, decided_at = now()
 WHERE id = $1 AND status = 'proposed'
