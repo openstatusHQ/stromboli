@@ -41,17 +41,19 @@ All read-only. `since_minutes` and `until_minutes` count back from the investiga
 
 | Tool | Arguments | Returns |
 |---|---|---|
-| `list_services` | | every service with its dependencies, tier, and whether it has logs and metrics |
+| `list_services` | | every service with its dependencies, tier, queues, and whether it has logs and metrics |
 | `get_service` | `service` | the catalog entry, upstream, downstream and blast radius |
 | `log_patterns` | `service`, `filter` (RE2; default error-like, `.` for all), `since_minutes` (30, max 1440), `until_minutes` (0) | log patterns in the window compared with the baseline (top 15) |
 | `query_logs` | `service`, `filter`, `since_minutes` (30, max 1440), `until_minutes` (0), `limit` (30, max 100) | raw lines, newest first, each truncated to 500 characters and redacted |
 | `log_timeline` | `service`, `filter` (default error-like), `since_minutes` (60, max 1440), `buckets` (12, max 24) | matching line counts per time bucket |
-| `get_metrics` | `service`, `metric` (a preset) or `query` (PromQL with `$selector`), `since_minutes` (60, max 1440), `until_minutes` (0) | series with min, max, avg, last, baseline average and 12 points, at most 10 series |
-| `list_metrics` | `service` | the connector's presets and the raw metric names with series for the service in the last hour |
+| `get_metrics` | `service`, `queue` (optional), `metric` (a preset) or `query` (PromQL with `$selector`, and `$topic_selector` for a queue), `since_minutes` (60, max 1440), `until_minutes` (0) | series with min, max, avg, last, baseline average and 12 points, at most 10 series |
+| `list_metrics` | `service`, `queue` (optional) | the presets that apply and the raw metric names with series in the last hour |
 | `recent_deploys` | `service`, `since_minutes` (240, max 10080) | deploys, or commits when no workflow or environment is configured |
 | `get_commit` | `service`, `sha` | message, author and changed files with truncated diffs |
 | `read_runbook` | `path` | the runbook's Markdown |
 | `search_past_investigations` | `service`, `query` (in the title or report) | up to 5 finished investigations, newest first, with their cause |
+
+With `queue`, `get_metrics` and `list_metrics` read one of the service's [queues](catalog.md#queues) instead of its own metrics: `$selector` expands to a consumer's subscriptions or a producer's topics, `$topic_selector` to the queue's topics, and topic presets read the topics.
 
 Log filters are case-insensitive. Tool output (log lines, patterns, commit diffs) is redacted before the model sees it: see [Redaction](#redaction).
 

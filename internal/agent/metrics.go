@@ -3,12 +3,14 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
 	"time"
 
 	stromboliv1 "github.com/openstatushq/stromboli/gen/stromboli/v1"
+	"github.com/openstatushq/stromboli/internal/catalog"
 	"github.com/openstatushq/stromboli/internal/connector/metrics"
 	"github.com/openstatushq/stromboli/internal/policy"
 )
@@ -59,6 +61,71 @@ func metricsTarget(svc *stromboliv1.Service) (source, matchers string, err error
 		return "", "", fmt.Errorf("service %q has no metrics selectors configured", svc.Name)
 	}
 	return m.Source, matchers, nil
+}
+
+// metricTarget is what a get_metrics or list_metrics call reads: the
+// service's metrics, or one of its queues.
+type metricTarget struct {
+	source string
+	// matchers are what $selector expands to: the service's selectors, a
+	// consumer queue's subscriptions or a producer queue's topics.
+	matchers string
+	// topics are a queue's topic matchers, for $topic_selector and the
+	// topic presets.
+	topics string
+}
+
+func toolTarget(svc *stromboliv1.Service, queue string) (metricTarget, error) {
+	if queue == "" {
+		source, matchers, err := metricsTarget(svc)
+		return metricTarget{source: source, matchers: matchers}, err
+	}
+	var names []string
+	for _, q := range svc.Queues {
+		if q.Name != queue {
+			names = append(names, q.Name)
+			continue
+		}
+		t := metricTarget{source: q.Source, matchers: metrics.Matchers(q.Subscriptions), topics: metrics.Matchers(q.Topics)}
+		if q.Role == catalog.QueueProducer {
+			t.matchers = t.topics
+		}
+		return t, nil
+	}
+	if len(names) == 0 {
+		return metricTarget{}, fmt.Errorf("service %q has no queues", svc.Name)
+	}
+	return metricTarget{}, fmt.Errorf("service %q has no queue %q (queues: %s)", svc.Name, queue, strings.Join(names, ", "))
+}
+
+// selectorFor is what a preset's $selector expands to.
+func (t metricTarget) selectorFor(p metrics.Preset) string {
+	if p.Requires == "topic_id" && t.topics != "" {
+		return t.topics
+	}
+	return t.matchers
+}
+
+// presets are the connector's presets that apply to the target.
+func (t metricTarget) presets(kind string) []metrics.Preset {
+	var out []metrics.Preset
+	for _, p := range metrics.PresetsFor(kind) {
+		if p.Applies(t.selectorFor(p)) {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
+// expand fills $topic_selector and $selector in a PromQL query.
+func (t metricTarget) expand(query string) (string, error) {
+	if strings.Contains(query, "$topic_selector") {
+		if t.topics == "" {
+			return "", errors.New("$topic_selector needs a queue with topics")
+		}
+		query = strings.ReplaceAll(query, "$topic_selector", t.topics)
+	}
+	return metrics.Expand(query, t.matchers), nil
 }
 
 // briefMetrics shows the brief presets of the service's metrics connector:
@@ -133,6 +200,7 @@ func formatMetricBrief(p metrics.Preset, a *metricAnalysis, err error) string {
 
 type metricArgs struct {
 	Service      string `json:"service"`
+	Queue        string `json:"queue"`
 	Metric       string `json:"metric"`
 	Query        string `json:"query"`
 	SinceMinutes int    `json:"since_minutes"`
@@ -148,11 +216,11 @@ func runGetMetrics(ctx context.Context, tc *toolContext, in json.RawMessage) (an
 	if err != nil {
 		return nil, err
 	}
-	source, matchers, err := metricsTarget(svc)
+	t, err := toolTarget(svc, args.Queue)
 	if err != nil {
 		return nil, err
 	}
-	src, kind, err := tc.engine.connectors.Metrics(ctx, source)
+	src, kind, err := tc.engine.connectors.Metrics(ctx, t.source)
 	if err != nil {
 		return nil, err
 	}
@@ -160,14 +228,16 @@ func runGetMetrics(ctx context.Context, tc *toolContext, in json.RawMessage) (an
 	switch {
 	case args.Metric != "":
 		p, ok := metrics.FindPreset(kind, args.Metric)
-		if !ok || !p.Applies(matchers) {
-			return nil, fmt.Errorf("no preset %q for service %q (presets: %s); pass a PromQL query instead", args.Metric, svc.Name, presetNames(kind, matchers))
+		if !ok || !p.Applies(t.selectorFor(p)) {
+			return nil, fmt.Errorf("no preset %q for %s (presets: %s); pass a PromQL query instead", args.Metric, targetName(svc, args.Queue), presetNames(t.presets(kind)))
 		}
-		expr, unit = metrics.Expand(p.Expr, matchers), p.Unit
+		expr, unit = metrics.Expand(p.Expr, t.selectorFor(p)), p.Unit
 	case args.Query != "":
-		expr = metrics.Expand(args.Query, matchers)
+		if expr, err = t.expand(args.Query); err != nil {
+			return nil, err
+		}
 	default:
-		return nil, fmt.Errorf("pass metric (presets: %s) or query", presetNames(kind, matchers))
+		return nil, fmt.Errorf("pass metric (presets: %s) or query", presetNames(t.presets(kind)))
 	}
 	since := clamp(args.SinceMinutes, 60, 1440)
 	until := max(0, min(args.UntilMinutes, since-1))
@@ -184,7 +254,7 @@ func runGetMetrics(ctx context.Context, tc *toolContext, in json.RawMessage) (an
 }
 
 func runListMetrics(ctx context.Context, tc *toolContext, in json.RawMessage) (any, error) {
-	var args struct{ Service string }
+	var args struct{ Service, Queue string }
 	if err := json.Unmarshal(in, &args); err != nil {
 		return nil, err
 	}
@@ -192,11 +262,11 @@ func runListMetrics(ctx context.Context, tc *toolContext, in json.RawMessage) (a
 	if err != nil {
 		return nil, err
 	}
-	source, matchers, err := metricsTarget(svc)
+	t, err := toolTarget(svc, args.Queue)
 	if err != nil {
 		return nil, err
 	}
-	src, kind, err := tc.engine.connectors.Metrics(ctx, source)
+	src, kind, err := tc.engine.connectors.Metrics(ctx, t.source)
 	if err != nil {
 		return nil, err
 	}
@@ -206,10 +276,10 @@ func runListMetrics(ctx context.Context, tc *toolContext, in json.RawMessage) (a
 		Description string `json:"description"`
 	}
 	presets := []preset{}
-	for _, p := range metrics.ApplicablePresets(kind, matchers) {
+	for _, p := range t.presets(kind) {
 		presets = append(presets, preset{p.Name, p.Unit, p.Description})
 	}
-	names, err := src.MetricNames(ctx, matchers, tc.now.Add(-time.Hour), tc.now)
+	names, err := src.MetricNames(ctx, t.matchers, tc.now.Add(-time.Hour), tc.now)
 	if err != nil {
 		return nil, err
 	}
@@ -218,17 +288,28 @@ func runListMetrics(ctx context.Context, tc *toolContext, in json.RawMessage) (a
 	if total > maxNames {
 		names = names[:maxNames]
 	}
-	return map[string]any{
-		"selector":     "{" + matchers + "}",
+	out := map[string]any{
+		"selector":     "{" + t.matchers + "}",
 		"presets":      presets,
 		"metric_names": names,
 		"total_names":  total,
-	}, nil
+	}
+	if t.topics != "" && t.topics != t.matchers {
+		out["topic_selector"] = "{" + t.topics + "}"
+	}
+	return out, nil
 }
 
-func presetNames(kind, matchers string) string {
+func targetName(svc *stromboliv1.Service, queue string) string {
+	if queue != "" {
+		return fmt.Sprintf("queue %q of service %q", queue, svc.Name)
+	}
+	return fmt.Sprintf("service %q", svc.Name)
+}
+
+func presetNames(presets []metrics.Preset) string {
 	var names []string
-	for _, p := range metrics.ApplicablePresets(kind, matchers) {
+	for _, p := range presets {
 		names = append(names, p.Name)
 	}
 	if len(names) == 0 {

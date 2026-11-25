@@ -62,6 +62,7 @@ var tools = []tool{
 				Tier      int32    `json:"tier,omitempty"`
 				HasLogs   bool     `json:"has_logs"`
 				HasMetric bool     `json:"has_metrics"`
+				Queues    []string `json:"queues,omitempty"`
 			}
 			services, _, err := catalog.Load(ctx, tc.engine.store.Queries)
 			if err != nil {
@@ -69,7 +70,11 @@ var tools = []tool{
 			}
 			out := make([]entry, 0, len(services))
 			for _, s := range services {
-				out = append(out, entry{s.Name, s.DependsOn, s.Tier, s.Logs != nil && s.Logs.Selector != "", s.Metrics != nil && s.Metrics.Source != ""})
+				var queues []string
+				for _, q := range s.Queues {
+					queues = append(queues, q.Name+" ("+q.Role+")")
+				}
+				out = append(out, entry{s.Name, s.DependsOn, s.Tier, s.Logs != nil && s.Logs.Selector != "", s.Metrics != nil && s.Metrics.Source != "", queues})
 			}
 			return out, nil
 		},
@@ -280,9 +285,12 @@ var tools = []tool{
 			"Pass a preset metric (Fly.io: memory_used_percent, memory_used_bytes, swap_used_bytes, cpu_percent, cpu_throttled_seconds_per_second, " +
 			"load_average, disk_used_percent, volume_used_percent, net_recv_bytes_per_second, net_sent_bytes_per_second, http_requests_per_second, " +
 			"http_5xx_per_second, http_p95_seconds, concurrency, oom_killed, instances_up; see list_metrics), or a PromQL query in which $selector " +
-			"expands to the service's label matchers, e.g. max by (instance) (fly_instance_memory_mem_free{$selector}).",
+			"expands to the service's label matchers, e.g. max by (instance) (fly_instance_memory_mem_free{$selector}). " +
+			"With queue, it reads one of the service's queues instead (Pub/Sub: pubsub_* presets, see list_metrics with the queue): " +
+			"$selector expands to its subscriptions (a producer's topics) and $topic_selector to its topics.",
 		properties: map[string]any{
 			"service":       str("Service name."),
+			"queue":         str("Optional queue name from the service's queues, to read the queue rather than the service's own metrics."),
 			"metric":        str("Preset name. Use this or query."),
 			"query":         str("PromQL expression; $selector expands to the service's label matchers. Aggregate (sum/max by ...) to keep the series count low."),
 			"since_minutes": integer("Window start, in minutes before now. Default 60, max 1440."),
@@ -293,8 +301,8 @@ var tools = []tool{
 	},
 	{
 		name:        "list_metrics",
-		description: "List the metric presets and the raw metric names that have series for a service in the last hour, to write get_metrics queries.",
-		properties:  map[string]any{"service": str("Service name.")},
+		description: "List the metric presets and the raw metric names that have series for a service, or one of its queues, in the last hour, to write get_metrics queries.",
+		properties:  map[string]any{"service": str("Service name."), "queue": str("Optional queue name from the service's queues.")},
 		required:    []string{"service"},
 		run:         runListMetrics,
 	},

@@ -73,6 +73,35 @@ The presets depend on the resource label in the selectors:
 
 `catalog discover gcp-metrics` proposes one service per Pub/Sub subscription, Cloud Tasks queue and Cloud Run service with data in the last hour.
 
+## Link a queue to the services that use it
+
+A worker usually runs somewhere (its `metrics` point at Fly, Prometheus...) and consumes from a queue. Add the queue to it, rather than a service per subscription:
+
+```sh
+stromboli catalog export > services.yaml
+```
+
+```yaml
+- name: checker
+  metrics: {source: fly, selectors: ['app="checker"']}
+  queues:
+    - name: checks
+      source: gcp-metrics
+      role: consumer
+      subscriptions: ['subscription_id=~"checker-.*"', 'subscription_id!="checker-dead-letter"']
+      topics: ['topic_id=~"checker-.*"']
+- name: workflows
+  queues:
+    - {name: checks, source: gcp-metrics, role: producer, topics: ['topic_id=~"checker-.*"']}
+```
+
+```sh
+stromboli catalog import services.yaml
+stromboli brief checker
+```
+
+Exclude the dead-letter subscription: its messages are the failures, and it would count as a consumer that never pulls. The brief's **Queues** section counts how many subscriptions show each failure signal, so one entry covers every region. See [queues](../reference/catalog.md#queues).
+
 ## Check it
 
 ```sh

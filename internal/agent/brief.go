@@ -47,7 +47,12 @@ func (e *Engine) Brief(ctx context.Context, service string, w Window) (string, e
 		logSection, deploySection   string
 		runbookSection, pastSection string
 		metricSection, flySection   string
+		queueSection                string
 	)
+	if len(svc.Queues) > 0 {
+		wg.Add(1)
+		go func() { defer wg.Done(); queueSection = e.briefQueues(ctx, svc, w) }()
+	}
 	if catalog.IsFly(svc) {
 		wg.Add(1)
 		go func() { defer wg.Done(); flySection = e.briefFly(ctx, svc) }()
@@ -76,6 +81,9 @@ func (e *Engine) Brief(ctx context.Context, service string, w Window) (string, e
 
 	b.WriteString("## Logs\n\n" + logSection + "\n")
 	b.WriteString("## Metrics\n\n" + metricSection + "\n")
+	if queueSection != "" {
+		b.WriteString("## Queues\n\n" + queueSection + "\n")
+	}
 	b.WriteString("## Recent changes\n\n" + deploySection + "\n")
 	if flySection != "" {
 		b.WriteString("## Fly.io\n\n" + flySection + "\n")

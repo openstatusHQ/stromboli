@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"slices"
 	"sort"
+	"strings"
 
 	"google.golang.org/protobuf/encoding/protojson"
 	yamlv3 "gopkg.in/yaml.v3"
@@ -178,6 +179,7 @@ func Validate(services []*stromboliv1.Service, opts ValidateOptions) []*strombol
 				}
 			}
 		}
+		issues = append(issues, validateQueues(s, opts)...)
 		if opts.Runbooks != nil {
 			for _, rb := range s.Runbooks {
 				if !opts.Runbooks[rb] {
@@ -192,6 +194,72 @@ func Validate(services []*stromboliv1.Service, opts ValidateOptions) []*strombol
 
 	for _, cycle := range NewGraph(services).Cycles() {
 		add(cycle[0], "depends_on", fmt.Sprintf("dependency cycle: %v", cycle), true)
+	}
+	return issues
+}
+
+// Queue roles.
+const (
+	QueueConsumer = "consumer"
+	QueueProducer = "producer"
+)
+
+// queueKinds are the connector kinds that have queue presets.
+var queueKinds = []string{"gcp_monitoring"}
+
+func validateQueues(s *stromboliv1.Service, opts ValidateOptions) []*stromboliv1.ValidationIssue {
+	var issues []*stromboliv1.ValidationIssue
+	add := func(field, msg string, warn bool) {
+		issues = append(issues, &stromboliv1.ValidationIssue{Service: s.Name, Field: field, Message: msg, Warning: warn})
+	}
+	names := map[string]bool{}
+	for i, q := range s.Queues {
+		field := fmt.Sprintf("queues[%d]", i)
+		if q.Name != "" {
+			field = fmt.Sprintf("queues[%s]", q.Name)
+		}
+		switch {
+		case !nameRe.MatchString(q.Name):
+			add(field+".name", "required: lowercase letters, digits, '.', '_' or '-' (max 63 chars)", false)
+		case names[q.Name]:
+			add(field+".name", "duplicate queue name", false)
+		}
+		names[q.Name] = true
+
+		subs, topics := metrics.Matchers(q.Subscriptions), metrics.Matchers(q.Topics)
+		switch q.Role {
+		case QueueConsumer:
+			if subs == "" {
+				add(field+".subscriptions", `required for a consumer, e.g. ['subscription_id=~"checker-.*"']`, false)
+			}
+		case QueueProducer:
+			if topics == "" {
+				add(field+".topics", `required for a producer, e.g. ['topic_id=~"checker-.*"']`, false)
+			}
+			if subs != "" {
+				add(field+".subscriptions", "ignored for a producer: only its topics are read", true)
+			}
+		default:
+			add(field+".role", fmt.Sprintf("%q: use %q or %q", q.Role, QueueConsumer, QueueProducer), false)
+		}
+		// Without a positive matcher on the resource label, the queue presets
+		// do not apply and the queries would read every subscription.
+		if subs != "" && !strings.Contains(subs, "subscription_id=") {
+			add(field+".subscriptions", `needs a subscription_id matcher, e.g. 'subscription_id=~"checker-.*"'`, false)
+		}
+		if topics != "" && !strings.Contains(topics, "topic_id=") {
+			add(field+".topics", `needs a topic_id matcher, e.g. 'topic_id=~"checker-.*"'`, false)
+		}
+
+		switch kind, known := opts.Connectors[q.Source]; {
+		case q.Source == "":
+			add(field+".source", "required: a gcp_monitoring connector", false)
+		case opts.Connectors == nil:
+		case !known:
+			add(field+".source", fmt.Sprintf("unknown connector %q", q.Source), true)
+		case !slices.Contains(queueKinds, kind):
+			add(field+".source", fmt.Sprintf("connector %q is a %s connector; queues need a gcp_monitoring connector", q.Source, kind), false)
+		}
 	}
 	return issues
 }

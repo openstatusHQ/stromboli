@@ -43,6 +43,12 @@ stromboli connector add prod-logs cloudwatch region=eu-west-1 log_group_prefix=/
     workflow: deploy.yml               # or environment: production, or branch: main
   runbooks: [runbooks/api-5xx.md]
   monitors: ["openstatus:1234"]        # matches openstatus webhook alerts
+  queues:                              # Pub/Sub queues it consumes from or publishes to
+    - name: jobs
+      source: gcp-metrics              # a gcp_monitoring connector
+      role: consumer                   # or producer (then topics only)
+      subscriptions: ['subscription_id=~"jobs-.*"', 'subscription_id!="jobs-dead-letter"']
+      topics: ['topic_id=~"jobs-.*"']
 ```
 
 | Kind | `logs.selector` / `metrics.selectors` |
