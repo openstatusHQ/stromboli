@@ -129,7 +129,7 @@ func PromQLName(metricType string) string {
 
 // gcpDiscovery lists, per product, a query whose series name the services.
 var gcpDiscovery = []struct{ label, expr string }{
-	{"service_name", `count by (service_name) (run_googleapis_com:container_instance_count)`},
+	{"service_name", `count by (service_name) (run_googleapis_com:container_instance_count{monitored_resource="cloud_run_revision"})`},
 	{"subscription_id", `count by (subscription_id) (pubsub_googleapis_com:subscription_num_undelivered_messages)`},
 	{"queue_id", `count by (queue_id) (cloudtasks_googleapis_com:queue_depth)`},
 }
@@ -220,41 +220,42 @@ var GCPPresets = []Preset{
 		Description: "95th percentile delay between a task's schedule time and its attempt, per queue.",
 		Expr:        `histogram_quantile(0.95, sum by (le, queue_id) (rate(cloudtasks_googleapis_com:queue_task_attempt_delays_bucket{$selector}[5m]))) / 1000`,
 	},
-	// Cloud Run services.
+	// Cloud Run services. Their metrics have several resource types, and Cloud
+	// Monitoring rejects queries that do not pick one.
 	{
 		Name: "http_requests_per_second", Unit: "req/s", Brief: true, Requires: "service_name",
 		Description: "Requests served per second, per revision.",
-		Expr:        `sum by (revision_name) (rate(run_googleapis_com:request_count{$selector}[5m]))`,
+		Expr:        `sum by (revision_name) (rate(run_googleapis_com:request_count{$selector, monitored_resource="cloud_run_revision"}[5m]))`,
 	},
 	{
 		Name: "http_5xx_per_second", Unit: "req/s", Brief: true, Requires: "service_name",
 		Description: "5xx responses per second, per revision.",
-		Expr:        `sum by (revision_name) (rate(run_googleapis_com:request_count{$selector, response_code_class="5xx"}[5m]))`,
+		Expr:        `sum by (revision_name) (rate(run_googleapis_com:request_count{$selector, monitored_resource="cloud_run_revision", response_code_class="5xx"}[5m]))`,
 	},
 	{
 		Name: "http_p95_seconds", Unit: "s", Brief: true, Requires: "service_name",
 		Description: "95th percentile request latency, per revision.",
-		Expr:        `histogram_quantile(0.95, sum by (le, revision_name) (rate(run_googleapis_com:request_latencies_bucket{$selector}[5m]))) / 1000`,
+		Expr:        `histogram_quantile(0.95, sum by (le, revision_name) (rate(run_googleapis_com:request_latencies_bucket{$selector, monitored_resource="cloud_run_revision"}[5m]))) / 1000`,
 	},
 	{
 		Name: "instances", Unit: "", Brief: true, Requires: "service_name",
 		Description: "Container instances, per revision and state (active or idle). Flat at max-instances means the service cannot scale further.",
-		Expr:        `sum by (revision_name, state) (run_googleapis_com:container_instance_count{$selector})`,
+		Expr:        `sum by (revision_name, state) (run_googleapis_com:container_instance_count{$selector, monitored_resource="cloud_run_revision"})`,
 	},
 	{
 		Name: "cpu_utilization_p95_percent", Unit: "%", Brief: true, Requires: "service_name",
 		Description: "95th percentile CPU utilization of the instances, per revision.",
-		Expr:        `100 * histogram_quantile(0.95, sum by (le, revision_name) (rate(run_googleapis_com:container_cpu_utilizations_bucket{$selector}[5m])))`,
+		Expr:        `100 * histogram_quantile(0.95, sum by (le, revision_name) (rate(run_googleapis_com:container_cpu_utilizations_bucket{$selector, monitored_resource="cloud_run_revision"}[5m])))`,
 	},
 	{
 		Name: "memory_utilization_p95_percent", Unit: "%", Brief: true, Requires: "service_name",
 		Description: "95th percentile memory utilization of the instances, per revision. Near 100% leads to OOM kills.",
-		Expr:        `100 * histogram_quantile(0.95, sum by (le, revision_name) (rate(run_googleapis_com:container_memory_utilizations_bucket{$selector}[5m])))`,
+		Expr:        `100 * histogram_quantile(0.95, sum by (le, revision_name) (rate(run_googleapis_com:container_memory_utilizations_bucket{$selector, monitored_resource="cloud_run_revision"}[5m])))`,
 	},
 	{
 		Name: "startup_latency_p95_seconds", Unit: "s", Requires: "service_name",
 		Description: "95th percentile container startup latency, per revision (cold starts).",
-		Expr:        `histogram_quantile(0.95, sum by (le, revision_name) (rate(run_googleapis_com:container_startup_latencies_bucket{$selector}[5m]))) / 1000`,
+		Expr:        `histogram_quantile(0.95, sum by (le, revision_name) (rate(run_googleapis_com:container_startup_latencies_bucket{$selector, monitored_resource="cloud_run_revision"}[5m]))) / 1000`,
 	},
 }
 

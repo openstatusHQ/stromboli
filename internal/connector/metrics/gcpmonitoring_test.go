@@ -82,3 +82,25 @@ func TestPresetApplies(t *testing.T) {
 		t.Error("presets without Requires always apply")
 	}
 }
+
+// Cloud Monitoring rejects Cloud Run queries that do not pick a resource type.
+func TestGCPCloudRunResourceType(t *testing.T) {
+	exprs := map[string]string{}
+	for _, p := range GCPPresets {
+		exprs[p.Name] = p.Expr
+	}
+	for _, d := range gcpDiscovery {
+		exprs["discovery by "+d.label] = d.expr
+	}
+	found := 0
+	for name, expr := range exprs {
+		n := strings.Count(expr, "run_googleapis_com:")
+		found += n
+		if strings.Count(expr, `monitored_resource="cloud_run_revision"`) != n {
+			t.Errorf("%s: no monitored_resource matcher in %s", name, expr)
+		}
+	}
+	if found != 8 {
+		t.Errorf("checked %d Cloud Run metrics, want 8", found)
+	}
+}

@@ -16,6 +16,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - `catalog discover` run in a terminal lists the services it found and adds them to the catalog after one confirmation, optionally with an owner. Redirect it to a file to get the YAML as before. `--import` adds them without asking, and `--owner` sets owners on every discovered service.
 - `catalog discover` on a Vercel connector also fills in `deploys` for each project.
 
+### Fixed
+
+- Cloud Run presets and discovery on `gcp_monitoring`: Cloud Monitoring rejected their queries because they did not pick a `monitored_resource`.
+
 ## [0.1.0] - 2026-11-13
 
 The first release.
