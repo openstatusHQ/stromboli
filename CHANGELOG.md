@@ -20,6 +20,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Fixed
 
+- Cloud Run presets and discovery on `gcp_monitoring`: Cloud Monitoring rejected their queries because they did not pick a `monitored_resource`.
 - `catalog discover` on `gcp_monitoring` no longer stops at 50 services per product.
 - The error for a query Cloud Monitoring rejects without a reason no longer blames missing data; it points at the syntax and the `monitored_resource` matcher.
 - `list_metrics` and `get_metrics` only offer the presets that apply to the service's selectors.
