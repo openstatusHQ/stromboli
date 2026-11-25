@@ -3,7 +3,8 @@
 // connector only allow-lists read-only tools, and the servers must annotate
 // them so: see mcpconn.Config.RequireReadOnly.
 //
-// The principal needs roles/mcp.toolUser plus the viewer role of each product
+// The principal needs roles/mcp.toolUser, roles/serviceusage.serviceUsageConsumer
+// (calls are billed to the project) and the viewer role of each product
 // (roles/logging.viewer, roles/monitoring.viewer, roles/pubsub.viewer,
 // roles/run.viewer).
 package gcp

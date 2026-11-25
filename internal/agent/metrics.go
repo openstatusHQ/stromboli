@@ -76,8 +76,8 @@ func (e *Engine) briefMetrics(ctx context.Context, svc *stromboliv1.Service, w W
 		return fmt.Sprintf("_Metrics source unavailable: %v_\n", err)
 	}
 	var presets []metrics.Preset
-	for _, p := range metrics.PresetsFor(kind) {
-		if p.Brief && p.Applies(matchers) {
+	for _, p := range metrics.ApplicablePresets(kind, matchers) {
+		if p.Brief {
 			presets = append(presets, p)
 		}
 	}
@@ -160,14 +160,14 @@ func runGetMetrics(ctx context.Context, tc *toolContext, in json.RawMessage) (an
 	switch {
 	case args.Metric != "":
 		p, ok := metrics.FindPreset(kind, args.Metric)
-		if !ok {
-			return nil, fmt.Errorf("unknown metric %q for %s connectors (presets: %s); pass a PromQL query instead", args.Metric, kind, presetNames(kind))
+		if !ok || !p.Applies(matchers) {
+			return nil, fmt.Errorf("no preset %q for service %q (presets: %s); pass a PromQL query instead", args.Metric, svc.Name, presetNames(kind, matchers))
 		}
 		expr, unit = metrics.Expand(p.Expr, matchers), p.Unit
 	case args.Query != "":
 		expr = metrics.Expand(args.Query, matchers)
 	default:
-		return nil, fmt.Errorf("pass metric (presets: %s) or query", presetNames(kind))
+		return nil, fmt.Errorf("pass metric (presets: %s) or query", presetNames(kind, matchers))
 	}
 	since := clamp(args.SinceMinutes, 60, 1440)
 	until := max(0, min(args.UntilMinutes, since-1))
@@ -206,7 +206,7 @@ func runListMetrics(ctx context.Context, tc *toolContext, in json.RawMessage) (a
 		Description string `json:"description"`
 	}
 	presets := []preset{}
-	for _, p := range metrics.PresetsFor(kind) {
+	for _, p := range metrics.ApplicablePresets(kind, matchers) {
 		presets = append(presets, preset{p.Name, p.Unit, p.Description})
 	}
 	names, err := src.MetricNames(ctx, matchers, tc.now.Add(-time.Hour), tc.now)
@@ -226,9 +226,9 @@ func runListMetrics(ctx context.Context, tc *toolContext, in json.RawMessage) (a
 	}, nil
 }
 
-func presetNames(kind string) string {
+func presetNames(kind, matchers string) string {
 	var names []string
-	for _, p := range metrics.PresetsFor(kind) {
+	for _, p := range metrics.ApplicablePresets(kind, matchers) {
 		names = append(names, p.Name)
 	}
 	if len(names) == 0 {
