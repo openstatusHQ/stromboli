@@ -285,13 +285,14 @@ Without `access_key_id`/`secret_access_key`, the CloudWatch connector uses the d
 
 ### Google Cloud
 
-Both GCP connectors go through Google's remote MCP servers using PromQL and the Logging query language. Without `credentials_json` (a service account key), they use Application Default Credentials: `GOOGLE_APPLICATION_CREDENTIALS`, workload identity, or `gcloud auth application-default login`. The principal needs `roles/mcp.toolUser`, `roles/logging.viewer` and `roles/monitoring.viewer`. Calls are billed to `project`.
+Both GCP connectors go through Google's remote MCP servers using PromQL and the Logging query language. Without `credentials_json` (a service account key), they use Application Default Credentials: `GOOGLE_APPLICATION_CREDENTIALS`, workload identity, or `gcloud auth application-default login`. The principal needs `roles/mcp.toolUser`, `roles/serviceusage.serviceUsageConsumer`, `roles/logging.viewer` and `roles/monitoring.viewer`. Calls are billed to `project`.
 
-`gcp_monitoring` presets depend on the resource label in the service's selectors. A selector with `subscription_id` gets the Pub/Sub presets, `queue_id` gets Cloud Tasks, and `service_name` gets Cloud Run:
+`gcp_monitoring` presets depend on the resource label in the service's selectors. A selector with `subscription_id` gets the Pub/Sub subscription presets, `topic_id` the Pub/Sub topic ones, `queue_id` gets Cloud Tasks, and `service_name` gets Cloud Run:
 
 | Product | Presets |
 |---|---|
-| Pub/Sub | `pubsub_backlog_messages`, `pubsub_oldest_unacked_seconds`, `pubsub_acks_per_second`, `pubsub_sent_per_second`, `pubsub_expired_ack_deadlines_per_second`, `pubsub_dead_letter_per_second`, `pubsub_nacks` |
+| Pub/Sub subscriptions | `pubsub_backlog_messages`, `pubsub_oldest_unacked_seconds`, `pubsub_acks_per_second`, `pubsub_sent_per_second`, `pubsub_sent_per_ack`, `pubsub_ack_latency_p50_seconds`, `pubsub_ack_latency_p99_seconds`, `pubsub_open_streaming_pulls` (by status), `pubsub_expired_ack_deadlines_per_second`, `pubsub_dead_letter_per_second` (by response code), `pubsub_nacks` |
+| Pub/Sub topics | `pubsub_published_per_second`, `pubsub_publish_errors_per_second` (by response code), `pubsub_publish_latency_p99_seconds` |
 | Cloud Tasks | `tasks_queue_depth`, `tasks_attempts_per_second` (by response code), `tasks_attempt_delay_p95_seconds` |
 | Cloud Run | `http_requests_per_second`, `http_5xx_per_second`, `http_p95_seconds`, `instances`, `cpu_utilization_p95_percent`, `memory_utilization_p95_percent`, `startup_latency_p95_seconds` (per revision) |
 

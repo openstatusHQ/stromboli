@@ -67,7 +67,7 @@ Without `credentials_json`, Application Default Credentials are used (`GOOGLE_AP
 stromboli connector add gcp-logs gcp_logging project=<project-id> credentials_json=@key.json
 ```
 
-The principal needs `roles/mcp.toolUser` and `roles/logging.viewer`. Calls are billed to `project`.
+The principal needs `roles/mcp.toolUser`, `roles/serviceusage.serviceUsageConsumer` and `roles/logging.viewer`. Calls are billed to `project`, which is what `roles/serviceusage.serviceUsageConsumer` allows.
 
 Selector: a Logging query language filter, for example `resource.type="cloud_run_revision" AND resource.labels.service_name="api"`.
 

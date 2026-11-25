@@ -54,6 +54,6 @@ stromboli connector add prod-logs cloudwatch region=eu-west-1 log_group_prefix=/
 | `vercel` | project name or ID, optional environment: `web environment=production` |
 | `prometheus` | label matchers: `job="api"` |
 | `fly` | `app="checker"` |
-| `gcp_monitoring` | `service_name="…"`, `subscription_id="…"`, `queue_id="…"` |
+| `gcp_monitoring` | `service_name="…"`, `subscription_id="…"`, `topic_id="…"`, `queue_id="…"` |
 
 Alertmanager and Grafana alerts match a service through a `service`, `service_name`, `app`, `job` or `container` label equal to its catalog name.

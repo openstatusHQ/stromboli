@@ -10,15 +10,20 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 - A Claude Code skill in [`skills/stromboli`](skills/stromboli) that operates a stromboli instance through the CLI: briefs before paid investigations, the catalog on any CLI version, connectors without inline secrets, and action approvals recorded under the user's name.
 - `catalog set <name>` changes the owners, dependencies, tier or description of one service without editing a file, e.g. `stromboli catalog set web --owner @frontend --add-depends-on api`.
+- Pub/Sub presets on `gcp_monitoring`: ack latency (p50, p99), deliveries per ack and open streaming pulls for subscriptions; publish rate, errors and latency for services with a `topic_id` selector.
 
 ### Changed
 
+- The brief of a Pub/Sub subscription shows nacks, and `pubsub_dead_letter_per_second` is split by response code, so failures to publish to the dead-letter topic are visible.
 - `catalog discover` run in a terminal lists the services it found and adds them to the catalog after one confirmation, optionally with an owner. Redirect it to a file to get the YAML as before. `--import` adds them without asking, and `--owner` sets owners on every discovered service.
 - `catalog discover` on a Vercel connector also fills in `deploys` for each project.
 
 ### Fixed
 
 - Cloud Run presets and discovery on `gcp_monitoring`: Cloud Monitoring rejected their queries because they did not pick a `monitored_resource`.
+- `catalog discover` on `gcp_monitoring` no longer stops at 50 services per product.
+- The error for a query Cloud Monitoring rejects without a reason no longer blames missing data; it points at the syntax and the `monitored_resource` matcher.
+- `list_metrics` and `get_metrics` only offer the presets that apply to the service's selectors.
 
 ## [0.1.0] - 2026-11-13
 
