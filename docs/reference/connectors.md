@@ -57,7 +57,7 @@ Without `access_key_id`/`secret_access_key`, the server's default AWS credential
 
 ### gcp_logging
 
-Without `credentials_json` (a service account key; pass `credentials_json=@key.json`), Application Default Credentials are used. The principal needs `roles/mcp.toolUser` and `roles/logging.viewer`. Calls are billed to `project`.
+Without `credentials_json` (a service account key; pass `credentials_json=@key.json`), Application Default Credentials are used. The principal needs `roles/mcp.toolUser`, `roles/serviceusage.serviceUsageConsumer` and `roles/logging.viewer`. Calls are billed to `project`.
 
 ## Metrics connectors
 
@@ -65,7 +65,7 @@ Without `credentials_json` (a service account key; pass `credentials_json=@key.j
 |---|---|---|---|
 | `prometheus` | `job="api"`, `service="api"` | none | one service per value of the first of `service_name`, `service`, `app`, `job` with values, or of `service_label` |
 | `fly` | `app="checker"` | [fly](metric-presets.md#fly) | one service per `app` label value |
-| `gcp_monitoring` | `subscription_id="…"`, `queue_id="…"`, `service_name="…"` | [gcp_monitoring](metric-presets.md#gcp_monitoring) | one service per Pub/Sub subscription, Cloud Tasks queue and Cloud Run service with data in the last hour |
+| `gcp_monitoring` | `subscription_id="…"`, `topic_id="…"`, `queue_id="…"`, `service_name="…"` | [gcp_monitoring](metric-presets.md#gcp_monitoring) | one service per Pub/Sub subscription, Cloud Tasks queue and Cloud Run service with data in the last hour |
 
 For metrics connectors, discovery also returns existing services without metrics, as their full entry with `metrics` filled in.
 
@@ -81,7 +81,7 @@ Works with anything that speaks the Prometheus HTTP API: Prometheus, Mimir, Than
 
 ### gcp_monitoring
 
-Credentials as for [`gcp_logging`](#gcp_logging); the principal needs `roles/mcp.toolUser` and `roles/monitoring.viewer`.
+Credentials as for [`gcp_logging`](#gcp_logging); the principal needs `roles/mcp.toolUser`, `roles/serviceusage.serviceUsageConsumer` and `roles/monitoring.viewer`.
 
 ## Deploy connectors
 

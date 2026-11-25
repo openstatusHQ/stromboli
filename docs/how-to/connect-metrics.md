@@ -60,13 +60,14 @@ The `fly` connector has [presets](../reference/metric-presets.md#fly) (memory, O
 stromboli connector add gcp-metrics gcp_monitoring project=<project-id>
 ```
 
-Credentials work as for [Cloud Logging](connect-logs.md#google-cloud-logging); the principal needs `roles/mcp.toolUser` and `roles/monitoring.viewer`.
+Credentials work as for [Cloud Logging](connect-logs.md#google-cloud-logging); the principal needs `roles/mcp.toolUser`, `roles/serviceusage.serviceUsageConsumer` and `roles/monitoring.viewer`.
 
 The presets depend on the resource label in the selectors:
 
 | Selector label | Product | Example |
 |---|---|---|
-| `subscription_id` | Pub/Sub | `subscription_id="checker-ams"` |
+| `subscription_id` | Pub/Sub subscriptions | `subscription_id="checker-ams"` |
+| `topic_id` | Pub/Sub topics | `topic_id="checker-ams"` |
 | `queue_id` | Cloud Tasks | `queue_id="alerting"` |
 | `service_name` | Cloud Run | `service_name="api"` |
 

@@ -31,6 +31,15 @@ func NewGCPMonitoring(project string, c *mcpconn.Client) *GCPMonitoring {
 }
 
 func (g *GCPMonitoring) Range(ctx context.Context, expr string, start, end time.Time) ([]Series, error) {
+	resp, err := g.queryRange(ctx, expr, start, end)
+	if err != nil {
+		return nil, err
+	}
+	return resp.series(), nil
+}
+
+// queryRange is Range without the cap on the number of series.
+func (g *GCPMonitoring) queryRange(ctx context.Context, expr string, start, end time.Time) (matrixResponse, error) {
 	var resp struct {
 		matrixResponse
 		Status string `json:"status"`
@@ -45,20 +54,21 @@ func (g *GCPMonitoring) Range(ctx context.Context, expr string, start, end time.
 		"step":     fmt.Sprintf("%ds", int64(rangeStep(start, end).Seconds())),
 	}, &resp)
 	if err != nil {
-		return nil, unknownMetricHint(err, expr)
+		return matrixResponse{}, emptyErrorHint(err, expr)
 	}
 	if resp.Status == "error" {
-		return nil, fmt.Errorf("cloud monitoring: %s", resp.Error)
+		return matrixResponse{}, fmt.Errorf("cloud monitoring: %s", resp.Error)
 	}
-	return resp.series(), nil
+	return resp.matrixResponse, nil
 }
 
-// unknownMetricHint explains Cloud Monitoring's empty error for a query on
-// a metric that has no data in the project.
-func unknownMetricHint(err error, expr string) error {
+// emptyErrorHint explains the empty error Cloud Monitoring's MCP server sends
+// for a query it rejects (its Prometheus API gives the reason). A metric
+// without data is not an error: it answers with no series.
+func emptyErrorHint(err error, expr string) error {
 	var te *mcpconn.ToolError
 	if ok := asToolError(err, &te); ok && te.Message == "" {
-		return fmt.Errorf("cloud monitoring rejected the query without a reason; usually a metric in %q has no data in this project (see list_metrics)", expr)
+		return fmt.Errorf("cloud monitoring rejected the query without a reason; check the PromQL syntax of %q, and add a monitored_resource label matcher if the metric has several resource types (e.g. monitored_resource=\"cloud_run_revision\")", expr)
 	}
 	return err
 }
@@ -136,19 +146,19 @@ var gcpDiscovery = []struct{ label, expr string }{
 
 // Services proposes one service per Cloud Run service, Pub/Sub subscription
 // and Cloud Tasks queue with data in the last hour. Products without data
-// are skipped.
+// are skipped. Every series names a service, so they are not capped as Range's.
 func (g *GCPMonitoring) Services(ctx context.Context) ([]Service, error) {
 	end := time.Now()
 	var out []Service
 	var errs []string
 	for _, d := range gcpDiscovery {
-		series, err := g.Range(ctx, d.expr, end.Add(-time.Hour), end)
+		resp, err := g.queryRange(ctx, d.expr, end.Add(-time.Hour), end)
 		if err != nil {
 			errs = append(errs, err.Error())
 			continue
 		}
-		for _, s := range series {
-			if v := s.Labels[d.label]; v != "" {
+		for _, s := range resp.Data.Result {
+			if v := s.Metric[d.label]; v != "" {
 				out = append(out, Service{Name: v, Selector: fmt.Sprintf("%s=%q", d.label, v)})
 			}
 		}
@@ -167,6 +177,9 @@ func (g *GCPMonitoring) Check(ctx context.Context) error {
 
 // GCPPresets cover Cloud Run, Pub/Sub and Cloud Tasks. Each needs its
 // product's resource label in the service's selectors (Requires).
+//
+// rate() is only meaningful on DELTA and CUMULATIVE metrics. Cloud Monitoring
+// also answers for GAUGE ones such as nack_requests, with misleading values.
 var GCPPresets = []Preset{
 	// Pub/Sub subscriptions.
 	{
@@ -181,7 +194,7 @@ var GCPPresets = []Preset{
 	},
 	{
 		Name: "pubsub_acks_per_second", Unit: "msg/s", Brief: true, Requires: "subscription_id",
-		Description: "Messages acknowledged per second, per subscription: the consumers' throughput.",
+		Description: "Messages acknowledged per second, per subscription: the consumers' throughput. Dead-lettered messages may count as acknowledged.",
 		Expr:        `sum by (subscription_id) (rate(pubsub_googleapis_com:subscription_ack_message_count{$selector}[5m]))`,
 	},
 	{
@@ -190,19 +203,55 @@ var GCPPresets = []Preset{
 		Expr:        `sum by (subscription_id) (rate(pubsub_googleapis_com:subscription_sent_message_count{$selector}[5m]))`,
 	},
 	{
+		Name: "pubsub_sent_per_ack", Unit: "", Brief: true, Requires: "subscription_id",
+		Description: "Deliveries per acknowledged message, per subscription. The average is about 1 when healthy; above it, messages are redelivered and processed again, even while the backlog looks fine. Short peaks (1.4) are normal: read the average, with pubsub_nacks. No data when nothing is acknowledged.",
+		Expr:        `sum by (subscription_id) (rate(pubsub_googleapis_com:subscription_sent_message_count{$selector}[5m])) / sum by (subscription_id) (rate(pubsub_googleapis_com:subscription_ack_message_count{$selector}[5m]))`,
+	},
+	{
+		Name: "pubsub_ack_latency_p50_seconds", Unit: "s", Requires: "subscription_id",
+		Description: "Median time between delivering a message and its acknowledgement, per subscription.",
+		Expr:        `histogram_quantile(0.5, sum by (le, subscription_id) (rate(pubsub_googleapis_com:subscription_ack_latencies_bucket{$selector}[5m]))) / 1000`,
+	},
+	{
+		Name: "pubsub_ack_latency_p99_seconds", Unit: "s", Brief: true, Requires: "subscription_id",
+		Description: "99th percentile time between delivering a message and its acknowledgement, per subscription. Rising means consumers are slow, often on something they call. Compare with the baseline: consumers may hold messages on purpose.",
+		Expr:        `histogram_quantile(0.99, sum by (le, subscription_id) (rate(pubsub_googleapis_com:subscription_ack_latencies_bucket{$selector}[5m]))) / 1000`,
+	},
+	{
+		Name: "pubsub_open_streaming_pulls", Unit: "", Brief: true, Requires: "subscription_id",
+		Description: "Open StreamingPull streams, per subscription and status: the connected consumers. 0 throughout the window, or no data, on a streaming pull subscription means no consumer is connected; a 0 for a minute or two is normal (streams reconnect). suspended_* statuses mean flow control or quota limits hold messages back.",
+		Expr:        `sum by (subscription_id, status) (pubsub_googleapis_com:subscription_open_streaming_pulls{$selector})`,
+	},
+	{
 		Name: "pubsub_expired_ack_deadlines_per_second", Unit: "msg/s", Brief: true, Requires: "subscription_id",
 		Description: "Messages whose ack deadline expired per second, per subscription: consumers took too long or crashed, so the messages are redelivered.",
 		Expr:        `sum by (subscription_id) (rate(pubsub_googleapis_com:subscription_expired_ack_deadlines_count{$selector}[5m]))`,
 	},
 	{
 		Name: "pubsub_dead_letter_per_second", Unit: "msg/s", Brief: true, Requires: "subscription_id",
-		Description: "Messages forwarded to the dead-letter topic per second, per subscription: they failed every delivery attempt.",
-		Expr:        `sum by (subscription_id) (rate(pubsub_googleapis_com:subscription_dead_letter_message_count{$selector}[5m]))`,
+		Description: "Messages that failed every delivery attempt and were published to the dead-letter topic per second, per subscription and response code. A code other than success means publishing to the dead-letter topic failed.",
+		Expr:        `sum by (subscription_id, response_code) (rate(pubsub_googleapis_com:subscription_dead_letter_message_count{$selector}[5m]))`,
 	},
 	{
-		Name: "pubsub_nacks", Unit: "", Requires: "subscription_id",
-		Description: "Negative acknowledgements, per subscription: consumers rejecting messages.",
+		Name: "pubsub_nacks", Unit: "", Brief: true, Requires: "subscription_id",
+		Description: "Messages nacked in the last minute (a gauge, not a counter), per subscription: consumers rejecting messages, often because something they call fails. Nacked messages are redelivered. No data means no nacks.",
 		Expr:        `max by (subscription_id) (pubsub_googleapis_com:subscription_nack_requests{$selector})`,
+	},
+	// Pub/Sub topics.
+	{
+		Name: "pubsub_published_per_second", Unit: "msg/s", Brief: true, Requires: "topic_id",
+		Description: "Messages published per second, per topic: the producers' throughput. A drop means the producer stopped or slowed down.",
+		Expr:        `sum by (topic_id) (rate(pubsub_googleapis_com:topic_message_sizes_count{$selector}[5m]))`,
+	},
+	{
+		Name: "pubsub_publish_errors_per_second", Unit: "req/s", Brief: true, Requires: "topic_id",
+		Description: "Failed publish requests per second, per topic and response code. No data means no failures.",
+		Expr:        `sum by (topic_id, response_code) (rate(pubsub_googleapis_com:topic_send_request_count{$selector, response_class!="success"}[5m]))`,
+	},
+	{
+		Name: "pubsub_publish_latency_p99_seconds", Unit: "s", Requires: "topic_id",
+		Description: "99th percentile publish request latency, per topic.",
+		Expr:        `histogram_quantile(0.99, sum by (le, topic_id) (rate(pubsub_googleapis_com:topic_send_request_latencies_bucket{$selector}[5m]))) / 1e6`,
 	},
 	// Cloud Tasks queues.
 	{

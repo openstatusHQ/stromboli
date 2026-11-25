@@ -163,6 +163,18 @@ func PresetsFor(kind string) []Preset {
 	return nil
 }
 
+// ApplicablePresets returns the connector kind's presets that fit a service
+// with these matchers.
+func ApplicablePresets(kind, matchers string) []Preset {
+	var out []Preset
+	for _, p := range PresetsFor(kind) {
+		if p.Applies(matchers) {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
 // FindPreset looks up a preset by name.
 func FindPreset(kind, name string) (Preset, bool) {
 	for _, p := range PresetsFor(kind) {

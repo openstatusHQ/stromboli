@@ -41,11 +41,27 @@ Which presets apply depends on the resource label in the service's `metrics.sele
 |---|---|---|---|
 | `pubsub_backlog_messages` | | ✓ | messages not yet acknowledged, per subscription |
 | `pubsub_oldest_unacked_seconds` | s | ✓ | age of the oldest unacknowledged message |
-| `pubsub_acks_per_second` | msg/s | ✓ | messages acknowledged per second: consumer throughput |
+| `pubsub_acks_per_second` | msg/s | ✓ | messages acknowledged per second: consumer throughput (dead-lettered messages may count) |
 | `pubsub_sent_per_second` | msg/s | | messages delivered per second, redeliveries included |
+| `pubsub_sent_per_ack` | | ✓ | deliveries per acknowledged message; an average above 1 means redeliveries (short peaks are normal) |
+| `pubsub_ack_latency_p50_seconds` | s | | median time from delivery to acknowledgement |
+| `pubsub_ack_latency_p99_seconds` | s | ✓ | p99 time from delivery to acknowledgement |
+| `pubsub_open_streaming_pulls` | | ✓ | open StreamingPull streams, by status: the connected consumers (0 for a minute or two is normal) |
 | `pubsub_expired_ack_deadlines_per_second` | msg/s | ✓ | messages whose ack deadline expired per second |
-| `pubsub_dead_letter_per_second` | msg/s | ✓ | messages forwarded to the dead-letter topic per second |
-| `pubsub_nacks` | | | negative acknowledgements |
+| `pubsub_dead_letter_per_second` | msg/s | ✓ | messages published to the dead-letter topic per second, by response code |
+| `pubsub_nacks` | | ✓ | messages nacked in the last minute; no data means none |
+
+### Pub/Sub topics (`topic_id`)
+
+| Preset | Unit | Brief | |
+|---|---|---|---|
+| `pubsub_published_per_second` | msg/s | ✓ | messages published per second: producer throughput |
+| `pubsub_publish_errors_per_second` | req/s | ✓ | failed publish requests per second, by response code |
+| `pubsub_publish_latency_p99_seconds` | s | | p99 publish request latency |
+
+Selectors are ANDed and a series has either label, so give `subscription_id` and `topic_id` to separate services.
+
+Google publishes Pub/Sub metrics 2 to 6 minutes late.
 
 ### Cloud Tasks (`queue_id`)
 
