@@ -10,10 +10,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 - A Claude Code skill in [`skills/stromboli`](skills/stromboli) that operates a stromboli instance through the CLI: briefs before paid investigations, the catalog on any CLI version, connectors without inline secrets, and action approvals recorded under the user's name.
 - `catalog set <name>` changes the owners, dependencies, tier or description of one service without editing a file, e.g. `stromboli catalog set web --owner @frontend --add-depends-on api`.
+- `queues` in the catalog link a service to the Pub/Sub subscriptions it consumes or the topics it publishes to, next to its own metrics ([ADR 0024](docs/adr/0024-queues-in-the-catalog.md)). The brief gets a Queues section that counts how many subscriptions show each failure signal, `get_metrics` and `list_metrics` take a `queue`, and the agent's prompt covers queue incidents. Once a service has `queues`, older versions cannot load the catalog: remove them before downgrading.
 - Pub/Sub presets on `gcp_monitoring`: ack latency (p50, p99), deliveries per ack and open streaming pulls for subscriptions; publish rate, errors and latency for services with a `topic_id` selector.
 
 ### Changed
 
+- A metrics query keeps up to 200 series instead of 50 before summarising, so counts across many subscriptions are right.
 - The brief of a Pub/Sub subscription shows nacks, and `pubsub_dead_letter_per_second` is split by response code, so failures to publish to the dead-letter topic are visible.
 - `catalog discover` run in a terminal lists the services it found and adds them to the catalog after one confirmation, optionally with an owner. Redirect it to a file to get the YAML as before. `--import` adds them without asking, and `--owner` sets owners on every discovered service.
 - `catalog discover` on a Vercel connector also fills in `deploys` for each project.

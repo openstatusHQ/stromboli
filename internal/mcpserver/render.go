@@ -85,6 +85,16 @@ func serviceMarkdown(r *stromboliv1.GetServiceResponse) string {
 		}
 		field("Deploys", v)
 	}
+	for _, q := range s.Queues {
+		v := fmt.Sprintf("%s, %s", q.Role, q.Source)
+		if len(q.Subscriptions) > 0 {
+			v += fmt.Sprintf(", subscriptions `%s`", strings.Join(q.Subscriptions, ", "))
+		}
+		if len(q.Topics) > 0 {
+			v += fmt.Sprintf(", topics `%s`", strings.Join(q.Topics, ", "))
+		}
+		field("Queue "+q.Name, v)
+	}
 	if f := s.Fly; f != nil {
 		field("Fly app", f.App)
 	}

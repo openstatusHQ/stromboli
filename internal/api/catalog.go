@@ -325,20 +325,35 @@ func (c *CatalogService) checkLogSelectors(ctx context.Context, services []*stro
 		if m == nil || m.Source == "" || metrics.Matchers(m.Selectors) == "" {
 			continue
 		}
-		if err := c.checkMetricSelector(ctx, m); err != nil {
+		if err := c.checkMetricSelector(ctx, m.Source, metrics.Matchers(m.Selectors)); err != nil {
 			issues = append(issues, &stromboliv1.ValidationIssue{Service: s.Name, Field: "metrics.selectors", Message: err.Error(), Warning: true})
+		}
+	}
+	for _, s := range services {
+		for _, q := range s.Queues {
+			for _, f := range []struct {
+				field string
+				sel   []string
+			}{{"subscriptions", q.Subscriptions}, {"topics", q.Topics}} {
+				field, matchers := f.field, metrics.Matchers(f.sel)
+				if q.Source == "" || matchers == "" {
+					continue
+				}
+				if err := c.checkMetricSelector(ctx, q.Source, matchers); err != nil {
+					issues = append(issues, &stromboliv1.ValidationIssue{Service: s.Name, Field: fmt.Sprintf("queues[%s].%s", q.Name, field), Message: err.Error(), Warning: true})
+				}
+			}
 		}
 	}
 	return issues
 }
 
-// checkMetricSelector reports an error when no series matched the selector in the last hour.
-func (c *CatalogService) checkMetricSelector(ctx context.Context, m *stromboliv1.MetricsConfig) error {
-	src, _, err := c.connectors.Metrics(ctx, m.Source)
+// checkMetricSelector reports an error when no series matched the matchers in the last hour.
+func (c *CatalogService) checkMetricSelector(ctx context.Context, source, matchers string) error {
+	src, _, err := c.connectors.Metrics(ctx, source)
 	if err != nil {
 		return err
 	}
-	matchers := metrics.Matchers(m.Selectors)
 	now := time.Now()
 	names, err := src.MetricNames(ctx, matchers, now.Add(-time.Hour), now)
 	if err != nil {

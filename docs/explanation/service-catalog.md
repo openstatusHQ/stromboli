@@ -5,7 +5,7 @@ An alert says "api is failing". To do anything useful, stromboli has to know wha
 ## What it is used for
 
 - **Matching alerts.** Alerts are mapped to a service by openstatus monitor ID (`monitors`) or by a label naming the service. Without a match, there is nothing to investigate.
-- **Finding the data.** Each service names its connectors and selectors: `logs`, `metrics`, `deploys`. The agent's tools take a service name, not a query, and the catalog fills in the rest. The model never needs to know your Loki labels.
+- **Finding the data.** Each service names its connectors and selectors: `logs`, `metrics`, `deploys`, and the `queues` it consumes from or publishes to. The agent's tools take a service name, not a query, and the catalog fills in the rest. The model never needs to know your Loki labels.
 - **Following dependencies.** `depends_on` builds a graph. The brief shows what a service calls (downstream), what calls it (upstream) and its blast radius (everything that transitively depends on it), and lists deploys of its dependencies too. Many incidents are a dependency's fault; the graph tells the agent where to look next.
 - **Knowledge.** Runbooks are stored with the catalog and listed in the brief, and the system prompt tells the model to prefer a runbook's mitigation. Past investigations are searched by service.
 - **Permissions.** For Fly.io, the catalog is where machine actions are allowed, per service, with the connector that may run them.

@@ -88,9 +88,11 @@ func rangeStep(start, end time.Time) time.Duration {
 	return max(end.Sub(start)/maxPoints, 15*time.Second).Truncate(time.Second)
 }
 
-// maxSeries and maxPoints bound a range query's response.
+// maxSeries and maxPoints bound a range query's response. maxSeries covers
+// every subscription of a large Pub/Sub setup, so counts across them are
+// right; what the model sees is capped much lower (Summarize).
 const (
-	maxSeries = 50
+	maxSeries = 200
 	maxPoints = 500
 )
 

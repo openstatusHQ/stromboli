@@ -193,6 +193,9 @@ func serviceSources(s *stromboliv1.Service) []string {
 	if src := s.GetDeploys().GetSource(); src != "" {
 		out = append(out, "deploys="+src)
 	}
+	for _, q := range s.GetQueues() {
+		out = append(out, "queue:"+q.GetName()+"="+q.GetSource())
+	}
 	return out
 }
 

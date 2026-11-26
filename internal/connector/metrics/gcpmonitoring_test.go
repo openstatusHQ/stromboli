@@ -87,7 +87,7 @@ func TestGCPMonitoringServicesNotCapped(t *testing.T) {
 			var result []any
 			for i := range n {
 				result = append(result, map[string]any{
-					"metric": map[string]string{"subscription_id": fmt.Sprintf("checker-%02d", i)},
+					"metric": map[string]string{"subscription_id": fmt.Sprintf("checker-%03d", i)},
 					"values": []any{[]any{1793694695.0, "1"}},
 				})
 			}
@@ -104,7 +104,8 @@ func TestGCPMonitoringServicesNotCapped(t *testing.T) {
 	if len(services) != n {
 		t.Fatalf("got %d services, want %d", len(services), n)
 	}
-	if last := services[n-1]; last.Name != "checker-53" || last.Selector != `subscription_id="checker-53"` {
+	want := fmt.Sprintf("checker-%03d", n-1)
+	if last := services[n-1]; last.Name != want || last.Selector != fmt.Sprintf("subscription_id=%q", want) {
 		t.Errorf("last = %+v", last)
 	}
 

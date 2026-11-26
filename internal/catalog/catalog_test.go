@@ -161,3 +161,78 @@ func TestValidateDeploys(t *testing.T) {
 		t.Errorf("errors = %v, want %v", errs, want)
 	}
 }
+
+func TestValidateQueues(t *testing.T) {
+	services, err := ParseYAML([]byte(`
+- name: checker
+  owners: ["@x"]
+  queues:
+    - name: checks
+      source: gcp-metrics
+      role: consumer
+      subscriptions: ['subscription_id=~"checker-.*"', 'subscription_id!="checker-dead-letter"']
+      topics: ['topic_id=~"checker-.*"']
+    - name: checks
+      source: fly
+      role: consumer
+      subscriptions: ['subscription_id!="x"']
+    - name: Out
+      source: ghost
+      role: producer
+      subscriptions: ['subscription_id="x"']
+    - source: gcp-metrics
+      role: worker
+      topics: ['region="ams"']
+- name: workflows
+  owners: ["@x"]
+  queues:
+    - {name: checks, source: gcp-metrics, role: producer, topics: ['topic_id=~"checker-.*"']}
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	issues := Validate(services, ValidateOptions{Connectors: map[string]string{"gcp-metrics": "gcp_monitoring", "fly": "fly"}})
+	var got []string
+	for _, i := range issues {
+		level := "error"
+		if i.Warning {
+			level = "warning"
+		}
+		got = append(got, fmt.Sprintf("%s %s.%s: %s", level, i.Service, i.Field, i.Message))
+	}
+	all := strings.Join(got, "\n")
+	for _, want := range []string{
+		"error checker.queues[checks].name: duplicate queue name",
+		"error checker.queues[checks].subscriptions: needs a subscription_id matcher",
+		"error checker.queues[checks].source: connector \"fly\" is a fly connector",
+		"error checker.queues[Out].name: required",
+		"error checker.queues[Out].topics: required for a producer",
+		"warning checker.queues[Out].subscriptions: ignored for a producer",
+		"warning checker.queues[Out].source: unknown connector \"ghost\"",
+		"error checker.queues[3].name: required",
+		"error checker.queues[3].role: \"worker\"",
+		"error checker.queues[3].topics: needs a topic_id matcher",
+	} {
+		if !strings.Contains(all, want) {
+			t.Errorf("missing %q in:\n%s", want, all)
+		}
+	}
+	// The first queue and the producer are valid.
+	for _, i := range issues {
+		if strings.HasPrefix(i.Field, "queues") && (i.Service == "workflows" || strings.Contains(i.Message, "dead-letter")) {
+			t.Errorf("unexpected issue: %v", i)
+		}
+	}
+	if n := strings.Count(all, "checker.queues[checks]"); n != 3 {
+		t.Errorf("want 3 issues on the duplicate queue only, got %d:\n%s", n, all)
+	}
+
+	// Queues survive the YAML round trip.
+	out, err := MarshalYAML(services)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(out), "subscription_id!=\"checker-dead-letter\"") || !strings.Contains(string(out), "role: producer") {
+		t.Errorf("queues lost in export:\n%s", out)
+	}
+}

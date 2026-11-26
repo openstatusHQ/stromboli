@@ -22,6 +22,29 @@ message Service {
   repeated SLO slos = 14;
   // Fly.io settings, for services that run on Fly machines.
   FlyConfig fly = 15;
+  // Queues the service consumes from or publishes to. The brief shows their
+  // metrics next to the service's own.
+  repeated QueueConfig queues = 16;
+}
+
+// QueueConfig links a service to a message queue, today Pub/Sub through a
+// gcp_monitoring connector.
+message QueueConfig {
+  // Name of the queue for this service, e.g. "checks". get_metrics and
+  // list_metrics take it as their queue argument.
+  string name = 1;
+  // Name of a gcp_monitoring connector.
+  string source = 2;
+  // "consumer" or "producer".
+  string role = 3;
+  // PromQL label matchers selecting the subscriptions the service consumes
+  // from, ANDed, e.g. ['subscription_id=~"checker-.*"',
+  // 'subscription_id!="checker-dead-letter"']. Required for a consumer.
+  repeated string subscriptions = 4;
+  // PromQL label matchers selecting the topics, ANDed, e.g.
+  // ['topic_id=~"checker-.*"']: those the service publishes to (required for
+  // a producer), or those feeding a consumer's subscriptions (optional).
+  repeated string topics = 5;
 }
 
 // FlyConfig describes a service deployed as a Fly.io app. The brief lists the
